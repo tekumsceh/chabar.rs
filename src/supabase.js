@@ -40,6 +40,44 @@ export function friendlyAuthError(message) {
   return text;
 }
 
+/** Strip OAuth tokens from the address bar after Supabase reads them. */
+export function clearAuthParamsFromUrl() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const hashParams = new URLSearchParams(hash);
+  const query = url.searchParams;
+  const authKeys = [
+    "access_token",
+    "refresh_token",
+    "provider_token",
+    "provider_refresh_token",
+    "expires_at",
+    "expires_in",
+    "token_type",
+    "code",
+    "state",
+    "error",
+    "error_description",
+    "sb",
+  ];
+  let dirty = false;
+  for (const key of authKeys) {
+    if (hashParams.has(key)) {
+      hashParams.delete(key);
+      dirty = true;
+    }
+    if (query.has(key)) {
+      query.delete(key);
+      dirty = true;
+    }
+  }
+  if (!dirty && !url.hash.includes("access_token") && !query.has("code")) return;
+  const nextHash = hashParams.toString();
+  const next = `${url.pathname}${query.toString() ? `?${query}` : ""}${nextHash ? `#${nextHash}` : ""}`;
+  window.history.replaceState(window.history.state, "", next || "/");
+}
+
 /**
  * Wait until Supabase finishes reading the session (including ?code= exchange).
  * Do not call exchangeCodeForSession yourself — and never pass window.location.href.
@@ -49,6 +87,7 @@ export async function waitForAuthSession() {
   const { data } = await supabase.auth.getSession();
 
   if (data.session) {
+    clearAuthParamsFromUrl();
     return { session: data.session, error: "" };
   }
 
@@ -60,5 +99,7 @@ export async function waitForAuthSession() {
   if (error) {
     return { session: null, error: friendlyAuthError(error.message) };
   }
+  // Even without a session, never leave tokens sitting in the bar.
+  clearAuthParamsFromUrl();
   return { session: null, error: "" };
 }

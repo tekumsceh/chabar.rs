@@ -1,26 +1,33 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, setApiAuth } from "./api.js";
-import { DEFAULT_RATE, numberValue, parseDate, startOfToday, todayText } from "./calculations.js";
+import BandPage from "./BandPage.jsx";
+import { DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText } from "./calculations.js";
+import LegalPage, { isLegalPage } from "./LegalPage.jsx";
 import LoginPage from "./LoginPage.jsx";
 import ReportPage from "./ReportPage.jsx";
 import SchedulePage from "./SchedulePage.jsx";
 import SettingsPage from "./SettingsPage.jsx";
 import UserMenu from "./UserMenu.jsx";
 import { log } from "./logger.js";
-import { waitForAuthSession, supabase } from "./supabase.js";
-
-const StudioPage = import.meta.env.DEV ? lazy(() => import("./studio/StudioPage.jsx")) : null;
+import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase.js";
 
 const pages = [
   ["schedule", "Raspored"],
+  ["band", "Bend"],
   ["report", "Finansije"],
-  ...(import.meta.env.DEV ? [["studio", "Studio"]] : []),
 ];
+
+const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings"]);
+const DEFAULT_PAGE = "schedule";
+
+function normalizePage(page) {
+  if (isLegalPage(page) || MAIN_PAGE_IDS.has(page)) return page;
+  return DEFAULT_PAGE;
+}
 
 const ACTIVE_BAND_KEY = "ioorganize.activeBandId.v2";
 const SCHEDULE_CACHE_STORAGE_KEY = "ioorganize.scheduleCache.v1";
 const THEME_KEY = "ioorganize.theme";
-const COMPACT_PREVIEW_KEY = "ioorganize.compactPreview";
 const FINANCE_MODE_KEY = "ioorganize.financeMode";
 const ALL_BANDS_ID = "__all__";
 
@@ -48,12 +55,16 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [profile, setProfile] = useState(null);
   const [bands, setBands] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]);
   const [activeBandId, setActiveBandId] = useState(() => localStorage.getItem(ACTIVE_BAND_KEY) || ALL_BANDS_ID);
-  const [page, setPage] = useState("schedule");
+  const [page, setPageState] = useState(DEFAULT_PAGE);
+
+  function setPage(next) {
+    setPageState(normalizePage(next));
+  }
+
+  const activePage = normalizePage(page);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || "light");
-  const [compactPreview, setCompactPreview] = useState(
-    () => localStorage.getItem(COMPACT_PREVIEW_KEY) === "1",
-  );
   const [financeMode, setFinanceMode] = useState(() => localStorage.getItem(FINANCE_MODE_KEY) || "member");
   const [events, setEvents] = useState([]);
   const [financeEvents, setFinanceEvents] = useState([]);
@@ -83,10 +94,6 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem(COMPACT_PREVIEW_KEY, compactPreview ? "1" : "0");
-  }, [compactPreview]);
-
-  useEffect(() => {
     localStorage.setItem(FINANCE_MODE_KEY, financeMode);
   }, [financeMode]);
 
@@ -94,7 +101,7 @@ export default function App() {
   const canUseBandMode = Boolean(
     activeBand &&
       activeBand.kind === "group" &&
-      (activeBand.memberRole === "owner" || activeBand.memberRole === "admin"),
+      (activeBand.memberRole === "owner" || activeBand.memberRole === "lead"),
   );
   const effectiveFinanceMode = canUseBandMode && financeMode === "band" ? "band" : "member";
 
@@ -107,8 +114,11 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
+        clearAuthParamsFromUrl();
+      }
       setSession(nextSession);
       setAuthReady(true);
     });
@@ -120,8 +130,14 @@ export default function App() {
       setAuthReady(true);
     });
 
+    const bootTimeout = window.setTimeout(() => {
+      if (!mounted) return;
+      setAuthReady(true);
+    }, 8000);
+
     return () => {
       mounted = false;
+      window.clearTimeout(bootTimeout);
       subscription.subscription.unsubscribe();
     };
   }, []);
@@ -136,6 +152,7 @@ export default function App() {
       setApiAuth({ token: "", bandId: "" });
       setProfile(null);
       setBands([]);
+      setPendingInvites([]);
       setEvents([]);
       setFinanceEvents([]);
       setPayments([]);
@@ -168,6 +185,7 @@ export default function App() {
       const me = await api("/api/me");
       setProfile(me.profile);
       setBands(me.bands);
+      setPendingInvites(me.pendingInvites || []);
 
       const stored = localStorage.getItem(ACTIVE_BAND_KEY);
       const preferred =
@@ -292,7 +310,7 @@ export default function App() {
       financeMode === "band" &&
       band &&
       band.kind === "group" &&
-      (band.memberRole === "owner" || band.memberRole === "admin") &&
+      (band.memberRole === "owner" || band.memberRole === "lead") &&
       bandId !== ALL_BANDS_ID;
 
     if (useBandMode) {
@@ -344,6 +362,51 @@ export default function App() {
     log.error(context, requestError);
   }
 
+  async function handleAcceptInvite(inviteId) {
+    try {
+      const result = await api(`/api/me/invites/${inviteId}/accept`, { method: "POST" });
+      const me = await api("/api/me");
+      setProfile(me.profile);
+      setBands(me.bands);
+      setPendingInvites(me.pendingInvites || []);
+      if (result.band?.id) {
+        setActiveBandId(result.band.id);
+        setPage("band");
+      }
+      showToast(`Pridružio/la si se: ${result.band?.name || "bend"}`);
+      await loadScheduleAndFinance({ scheduleOnly: false });
+    } catch (requestError) {
+      showToast(requestError.message || "Prihvatanje nije uspelo", "error");
+    }
+  }
+
+  async function handleDeclineInvite(inviteId) {
+    try {
+      await api(`/api/me/invites/${inviteId}/decline`, { method: "POST" });
+      setPendingInvites((current) => current.filter((invite) => invite.id !== inviteId));
+      showToast("Pozivnica odbijena");
+    } catch (requestError) {
+      showToast(requestError.message || "Odbijanje nije uspelo", "error");
+    }
+  }
+
+  async function saveInvitePreference(value) {
+    const next = value || "accept";
+    setProfile((current) => (current ? { ...current, invitePreference: next } : current));
+    try {
+      const result = await api("/api/me/preferences", {
+        method: "PATCH",
+        body: { invitePreference: next },
+      });
+      setProfile((current) =>
+        current ? { ...current, invitePreference: result.invitePreference || next } : current,
+      );
+      showToast("Sačuvano");
+    } catch (requestError) {
+      reportError(requestError, "save invite preference failed");
+    }
+  }
+
   async function saveSetting(key, value, persist = true) {
     setSettings((current) => ({ ...current, [key]: value }));
     if (!persist) return;
@@ -352,6 +415,20 @@ export default function App() {
       await api(`/api/settings/${key}`, { method: "PATCH", body: { value } });
     } catch (requestError) {
       reportError(requestError, "save setting failed");
+    }
+  }
+
+  async function fetchExchangeRate() {
+    try {
+      const result = await api("/api/exchange-rate?force=1");
+      const rate = positiveNumber(result.rate, DEFAULT_RATE);
+      await saveSetting("exchangeRate", rate, true);
+      const label = result.sourceLabel || (result.source === "nbs" ? "NBS" : "Google");
+      showToast(`Kurs: ${rate} (${label}${result.asOf ? `, ${result.asOf}` : ""})`);
+      return result;
+    } catch (error) {
+      showToast(error.message || "Kurs nije dostupan", "error");
+      throw error;
     }
   }
 
@@ -551,34 +628,36 @@ export default function App() {
     return <AppBoot />;
   }
 
-  if (!session) {
-    return <LoginPage initialError={error} />;
-  }
-
-  if (import.meta.env.DEV && page === "studio" && StudioPage) {
+  if (isLegalPage(activePage)) {
     return (
-      <div className="app-shell app-shell-studio">
-        <nav className="top-nav top-nav-studio" aria-label="Studio navigacija">
-          <button type="button" className="top-nav-logout" onClick={() => setPage("schedule")}>
-            ← Nazad
-          </button>
-        </nav>
-        <Suspense fallback={<AppBoot />}>
-          <StudioPage />
-        </Suspense>
+      <div className="app-shell" data-theme={theme}>
+        <LegalPage
+          pageId={activePage}
+          onBack={() => setPage(session ? "settings" : DEFAULT_PAGE)}
+        />
       </div>
     );
   }
 
+  if (!session) {
+    return <LoginPage initialError={error} onOpenLegal={setPage} />;
+  }
+
+  const showSchedule = activePage === "schedule";
+  const showBand = activePage === "band";
+  const showReport = activePage === "report";
+  const showSettings = activePage === "settings";
+  const forceSchedule = !showSchedule && !showBand && !showReport && !showSettings;
+
   return (
-    <div className={`app-shell ${compactPreview ? "app-shell-compact" : ""}`} data-theme={theme}>
+    <div className="app-shell" data-theme={theme}>
       <nav className="top-nav" aria-label="Glavna navigacija">
         <div className="top-nav-brand" aria-hidden="true" />
         <div className="top-nav-links">
           {pages.map(([id, label]) => (
             <button
               key={id}
-              className={`top-nav-link ${page === id ? "active" : ""}`}
+              className={`top-nav-link ${activePage === id ? "active" : ""}`}
               type="button"
               onClick={() => setPage(id)}
             >
@@ -600,6 +679,9 @@ export default function App() {
               session.user?.user_metadata?.picture ||
               ""
             }
+            pendingInvites={pendingInvites}
+            onAcceptInvite={handleAcceptInvite}
+            onDeclineInvite={handleDeclineInvite}
             onOpenSettings={() => setPage("settings")}
             onSignOut={handleSignOut}
           />
@@ -608,8 +690,10 @@ export default function App() {
 
       {error ? <div className="app-alert app-alert-global">{error}</div> : null}
 
-      {/* Keep pages mounted so top nav + page state survive tab switches */}
-      <div className={`app-page ${page === "schedule" ? "is-active" : ""}`} hidden={page !== "schedule"}>
+      <div
+        className={`app-page ${showSchedule || forceSchedule ? "is-active" : ""}`}
+        hidden={!(showSchedule || forceSchedule)}
+      >
         <SchedulePage
           events={events}
           bands={bands}
@@ -624,7 +708,24 @@ export default function App() {
         />
       </div>
 
-      <div className={`app-page ${page === "report" ? "is-active" : ""}`} hidden={page !== "report"}>
+      <div className={`app-page ${showBand ? "is-active" : ""}`} hidden={!showBand}>
+        <BandPage
+          bands={bands}
+          activeBandId={activeBandId}
+          allBandsId={ALL_BANDS_ID}
+          onBandChange={setActiveBandId}
+          onBandsChanged={async () => {
+            const me = await api("/api/me");
+            setProfile(me.profile);
+            setBands(me.bands);
+            setPendingInvites(me.pendingInvites || []);
+          }}
+          showToast={showToast}
+          profile={profile}
+        />
+      </div>
+
+      <div className={`app-page ${showReport ? "is-active" : ""}`} hidden={!showReport}>
         <ReportPage
           events={financeEvents}
           payments={payments}
@@ -640,14 +741,18 @@ export default function App() {
         />
       </div>
 
-      <div className={`app-page ${page === "settings" ? "is-active" : ""}`} hidden={page !== "settings"}>
+      <div className={`app-page ${showSettings ? "is-active" : ""}`} hidden={!showSettings}>
         <SettingsPage
           theme={theme}
           onThemeChange={setTheme}
-          compactPreview={compactPreview}
-          onCompactPreviewChange={setCompactPreview}
           settings={settings}
           onSaveSetting={saveSetting}
+          onFetchExchangeRate={fetchExchangeRate}
+          onOpenLegal={setPage}
+          invitePreference={profile?.invitePreference || "accept"}
+          onInvitePreferenceChange={saveInvitePreference}
+          ownedGroupBands={profile?.ownedGroupBands || 0}
+          ownerLimit={profile?.ownerLimit || 5}
         />
       </div>
 

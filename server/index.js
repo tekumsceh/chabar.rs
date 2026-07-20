@@ -9,7 +9,25 @@ import {
   requireAuth,
   requireBandAdmin,
   requireBandMember,
+  syncMissingProfilesFromAuth,
 } from "./auth.js";
+import {
+  acceptInvite,
+  addBandMember,
+  bandIdFromParams,
+  createBand,
+  declineInvite,
+  deleteBand,
+  getBandHome,
+  listPendingInvitesForUser,
+  removeBandMember,
+  transferBandOwnership,
+  updateMemberInvitePrivilege,
+  updateMemberRole,
+} from "./bands.js";
+import { normalizeInvitePreference, ownerBandLimit } from "../shared/bandLimits.js";
+import { searchUsers } from "./users.js";
+import { getEurRsdRate } from "./exchangeRate.js";
 import { query, startPoolWarmer } from "./db.js";
 import { logger } from "./logger.js";
 
@@ -41,23 +59,91 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
   try {
     await ensureProfileAndPersonalBand(req.user);
     const profileResult = await query(
-      `SELECT id, email, display_name, role FROM profiles WHERE id = :id`,
+      `SELECT id, email, display_name, role, invite_preference, extra_band_grants
+       FROM profiles WHERE id = :id`,
       { id: req.user.id },
     );
-    const bands = await getMemberships(req.user.id);
+    const profile = profileResult.rows[0];
+    const owned = await query(
+      `SELECT COUNT(*)::int AS n
+       FROM band_members bm
+       JOIN bands b ON b.id = bm.band_id
+       WHERE bm.user_id = :userId
+         AND bm.member_role = 'owner'
+         AND b.kind = 'group'`,
+      { userId: req.user.id },
+    );
+    const [bands, pendingInvites] = await Promise.all([
+      getMemberships(req.user.id),
+      listPendingInvitesForUser(req.user),
+    ]);
+    const extraGrants = profile.extra_band_grants || 0;
+    const limit = ownerBandLimit(extraGrants);
     res.json({
       profile: {
-        id: profileResult.rows[0].id,
-        email: profileResult.rows[0].email,
-        displayName: profileResult.rows[0].display_name,
-        role: profileResult.rows[0].role,
+        id: profile.id,
+        email: profile.email,
+        displayName: profile.display_name,
+        role: profile.role,
+        invitePreference: normalizeInvitePreference(profile.invite_preference),
+        extraBandGrants: extraGrants,
+        ownedGroupBands: owned.rows[0]?.n || 0,
+        ownerLimit: limit,
       },
       bands,
+      pendingInvites,
     });
   } catch (error) {
     next(error);
   }
 });
+
+app.post("/api/me/invites/:inviteId/accept", requireAuth, acceptInvite);
+app.post("/api/me/invites/:inviteId/decline", requireAuth, declineInvite);
+
+app.patch("/api/me/preferences", requireAuth, async (req, res, next) => {
+  try {
+    const invitePreference = normalizeInvitePreference(req.body?.invitePreference);
+    await query(
+      `UPDATE profiles
+       SET invite_preference = :invitePreference, updated_at = NOW()
+       WHERE id = :userId`,
+      { invitePreference, userId: req.user.id },
+    );
+    res.json({ invitePreference });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/users/search", requireAuth, searchUsers);
+
+app.post("/api/bands", requireAuth, createBand);
+app.get("/api/bands/:id", requireAuth, bandIdFromParams, requireBandMember, getBandHome);
+app.delete("/api/bands/:id", requireAuth, bandIdFromParams, requireBandMember, deleteBand);
+app.post("/api/bands/:id/transfer", requireAuth, bandIdFromParams, requireBandMember, transferBandOwnership);
+app.post("/api/bands/:id/members", requireAuth, bandIdFromParams, requireBandMember, addBandMember);
+app.patch(
+  "/api/bands/:id/members/:userId",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  updateMemberRole,
+);
+app.patch(
+  "/api/bands/:id/members/:userId/invite",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  updateMemberInvitePrivilege,
+);
+app.delete(
+  "/api/bands/:id/members/:userId",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  removeBandMember,
+);
 
 // Band schedule: dates for active band + my finance line on those dates
 app.get("/api/bootstrap", requireAuth, requireBandMember, async (req, res, next) => {
@@ -154,6 +240,20 @@ app.patch("/api/settings/:key", requireAuth, async (req, res, next) => {
     res.json({ key: req.params.key, value });
   } catch (error) {
     next(error);
+  }
+});
+
+/** Live EUR/RSD: NBS srednji first, Google Finance backup. */
+app.get("/api/exchange-rate", requireAuth, async (req, res, next) => {
+  try {
+    const force = String(req.query.force || "") === "1";
+    const result = await getEurRsdRate({ force });
+    res.json(result);
+  } catch (error) {
+    res.status(502).json({
+      error: "Exchange rate unavailable",
+      detail: error.message || "Kurs nije dostupan",
+    });
   }
 });
 
@@ -299,6 +399,17 @@ app.use((error, _req, res, _next) => {
 app.listen(port, host, () => {
   logger.info(`IO Organize API running on http://${host}:${port}`);
   startPoolWarmer();
+  syncMissingProfilesFromAuth()
+    .then((result) => {
+      if (result.created.length) {
+        logger.info(`Synced ${result.created.length} auth user(s) into profiles`, {
+          emails: result.created.map((row) => row.email),
+        });
+      }
+    })
+    .catch((error) => {
+      logger.warn("Auth profile sync failed", { message: error.message });
+    });
 });
 
 async function getPersonalSettings(userId) {

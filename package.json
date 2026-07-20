@@ -17,6 +17,7 @@
     "db:migrate:bands": "node scripts/migrate-bands-ownership.js",
     "db:seed:bands": "node scripts/seed-group-bands.js",
     "test:smoke": "node scripts/smoke-auth-bands.js",
+    "test:finance": "node scripts/test-finance-math.js",
     "db:reassign:notes": "node scripts/reassign-events-by-note.js",
     "db:migrate:finance": "node scripts/migrate-member-finance.js",
     "deploy": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy.ps1"
@@ -34,5 +35,8 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "vite": "^7.2.7"
+  },
+  "devDependencies": {
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

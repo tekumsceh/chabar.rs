@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
-import { calculate, formatEur, formatRsd, parseDate, pad } from "./calculations.js";
+import { calculate, formatEur, formatRsd, formatScheduleDateParts, parseDate, unpaidClaimEur } from "./calculations.js";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 
@@ -34,30 +34,46 @@ export default function ReportPage({
 
   const bandOptions = useMemo(
     () => [
-      { id: allBandsId, label: "Svi bendovi" },
-      ...bands.map((band) => ({
-        id: band.id,
-        label: band.kind === "personal" ? `${band.name} (lično)` : band.name,
-      })),
+      { id: allBandsId, label: "Svi bendovi", icon: <BandIcon /> },
+      ...bands.map((band) => {
+        const color = resolveBandColor(band, band.id);
+        return {
+          id: band.id,
+          label: band.kind === "personal" ? `${band.name} (lično)` : band.name,
+          icon: (
+            <span className="band-chip menu-band-chip" style={{ backgroundColor: color }} title={band.name}>
+              {bandInitials(band.name)}
+            </span>
+          ),
+        };
+      }),
     ],
     [bands, allBandsId],
   );
 
-  const scopedEvents = useMemo(() => {
-    if (!activeBandId || activeBandId === allBandsId) return events;
-    return events.filter((event) => event.bandId === activeBandId);
-  }, [events, activeBandId, allBandsId]);
-
+  // Waterfall always runs on the full loaded ledger (member: all bands; band-mode: that band).
+  // Band dropdown only scopes the list + Potražuje — never re-runs calculate with a partial payment pool.
   const calculations = useMemo(
-    () => calculate(scopedEvents, payments, settings),
-    [scopedEvents, payments, settings],
+    () => calculate(events, payments, settings),
+    [events, payments, settings],
   );
+
+  const bandRows = useMemo(() => {
+    if (!activeBandId || activeBandId === allBandsId) return calculations.rows;
+    return calculations.rows.filter((row) => row.bandId === activeBandId);
+  }, [calculations.rows, activeBandId, allBandsId]);
+
+  /** Potražuje for the selected band + year (statuses still come from the full-ledger waterfall). */
+  const claimEur = useMemo(() => {
+    const yearRows = bandRows.filter((row) => yearFromDate(row.date, row.parsedDate) === viewYear);
+    return unpaidClaimEur(yearRows);
+  }, [bandRows, viewYear]);
 
   const bandsById = useMemo(() => new Map(bands.map((band) => [band.id, band])), [bands]);
 
   const availableYears = useMemo(() => {
     const years = new Set();
-    for (const row of calculations.rows) {
+    for (const row of bandRows) {
       const year = yearFromDate(row.date, row.parsedDate);
       if (year != null) years.add(year);
     }
@@ -67,7 +83,7 @@ export default function ReportPage({
     }
     if (years.size === 0) years.add(new Date().getFullYear());
     return [...years].sort((a, b) => a - b);
-  }, [calculations.rows, payments]);
+  }, [bandRows, payments]);
 
   useEffect(() => {
     if (!availableYears.includes(viewYear)) {
@@ -81,12 +97,12 @@ export default function ReportPage({
 
   const visibleRows = useMemo(
     () =>
-      calculations.rows.filter((row) => {
+      bandRows.filter((row) => {
         const year = yearFromDate(row.date, row.parsedDate);
         if (year !== viewYear) return false;
         return matchesFilters(row, search, statusFilter);
       }),
-    [calculations.rows, search, statusFilter, viewYear],
+    [bandRows, search, statusFilter, viewYear],
   );
 
   const visiblePayments = useMemo(
@@ -95,8 +111,8 @@ export default function ReportPage({
   );
 
   const selectedRow = useMemo(
-    () => calculations.rows.find((row) => row.id === selectedId) || null,
-    [calculations.rows, selectedId],
+    () => bandRows.find((row) => row.id === selectedId) || null,
+    [bandRows, selectedId],
   );
 
   useEffect(() => {
@@ -212,7 +228,7 @@ export default function ReportPage({
       <div className="finansije-year-meta-bar">
         <span className="finansije-year-meta">
           {financeMode === "band" ? <em className="finansije-mode-tag">Bend mod</em> : null}
-          Potražuje <strong>{formatEur(calculations.claimEur)}</strong>
+          Potražuje <strong>{formatEur(claimEur)}</strong>
         </span>
       </div>
 
@@ -249,6 +265,7 @@ export default function ReportPage({
                 const band = bandsById.get(row.bandId);
                 const name = band?.name || row.bandName || "";
                 const color = resolveBandColor(band, row.bandId || name);
+                const dateParts = formatScheduleDateParts(row.date);
                 return (
                   <li key={row.id}>
                     <button
@@ -256,7 +273,10 @@ export default function ReportPage({
                       className={`raspored-row raspored-row-finance raspored-row-button ${row.done ? "is-past" : ""}`}
                       onClick={() => setSelectedId(row.id)}
                     >
-                      <time className="raspored-date">{formatDayMonth(row.date, row.parsedDate)}</time>
+                      <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
+                        <span className="raspored-date-day">{dateParts.day}</span>
+                        <span className="raspored-date-month">{dateParts.month}</span>
+                      </time>
                       <div className="raspored-main">
                         <strong>{row.city || "—"}</strong>
                       </div>
@@ -291,14 +311,20 @@ export default function ReportPage({
             <p className="raspored-empty">Nema uplata za {viewYear}.</p>
           ) : (
             <ul className="raspored-list">
-              {visiblePayments.map((payment) => (
-                <li key={payment.id} className="raspored-row raspored-row-pay">
-                  <time className="raspored-date">{formatDayMonth(payment.date)}</time>
-                  <span className="raspored-fee">
-                    {Number(payment.amount || 0).toLocaleString("sr-RS")} {payment.currency || "EUR"}
-                  </span>
-                </li>
-              ))}
+              {visiblePayments.map((payment) => {
+                const dateParts = formatScheduleDateParts(payment.date);
+                return (
+                  <li key={payment.id} className="raspored-row raspored-row-pay">
+                    <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
+                      <span className="raspored-date-day">{dateParts.day}</span>
+                      <span className="raspored-date-month">{dateParts.month}</span>
+                    </time>
+                    <span className="raspored-fee">
+                      {Number(payment.amount || 0).toLocaleString("sr-RS")} {payment.currency || "EUR"}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -308,7 +334,7 @@ export default function ReportPage({
         <FinanceDetailModal
           row={selectedRow}
           band={bandsById.get(selectedRow.bandId)}
-          rate={calculations.rate}
+          rate={selectedRow.rate || calculations.rate}
           onClose={() => setSelectedId(null)}
         />
       ) : null}
@@ -514,17 +540,6 @@ function yearFromDate(value, parsed) {
   const date = parsed && !Number.isNaN(parsed.getTime()) ? parsed : parseDate(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.getFullYear();
-}
-
-function formatDayMonth(value, parsed) {
-  const date = parsed && !Number.isNaN(parsed.getTime()) ? parsed : parseDate(value);
-  if (Number.isNaN(date.getTime())) {
-    const text = String(value || "").replace(/\.$/, "");
-    const parts = text.split(".").filter(Boolean);
-    if (parts.length >= 2) return `${pad(parts[0])}.${pad(parts[1])}.`;
-    return text || "—";
-  }
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.`;
 }
 
 function matchesFilters(row, search, status) {

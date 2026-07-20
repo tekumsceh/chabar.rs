@@ -1,76 +1,134 @@
+/** Fixed EUR→RSD used for all dates through LEGACY_RATE_THROUGH (inclusive). */
 export const DEFAULT_RATE = 116.5;
 
+/**
+ * Last calendar day that always converts at DEFAULT_RATE (116.5).
+ * From the next day onward, settings.exchangeRate (later: NBS) applies.
+ */
+export const LEGACY_RATE_THROUGH_TEXT = "20.07.2026.";
+
+const POOL_EPS = 0.000001;
+
+export function legacyRateThroughDate() {
+  return parseDate(LEGACY_RATE_THROUGH_TEXT);
+}
+
+/**
+ * Pick conversion rate for a calendar date.
+ * @param {Date|string} dateValue parsed Date or dd.mm.yyyy. text
+ * @param {number|{exchangeRate?: unknown}} settingsOrRate
+ */
+export function rateForDate(dateValue, settingsOrRate) {
+  const dynamic =
+    typeof settingsOrRate === "number"
+      ? positiveNumber(settingsOrRate, DEFAULT_RATE)
+      : positiveNumber(settingsOrRate?.exchangeRate, DEFAULT_RATE);
+  const when = dateValue instanceof Date ? dateValue : parseDate(dateValue);
+  if (Number.isNaN(when.getTime())) return DEFAULT_RATE;
+  return when.getTime() <= legacyRateThroughDate().getTime() ? DEFAULT_RATE : dynamic;
+}
+
+function compareFinanceRows(a, b) {
+  const aTime = a.hasDate ? a.parsedDate.getTime() : Number.POSITIVE_INFINITY;
+  const bTime = b.hasDate ? b.parsedDate.getTime() : Number.POSITIVE_INFINITY;
+  if (aTime !== bTime) return aTime - bTime;
+  return Number(a.id) - Number(b.id) || String(a.id).localeCompare(String(b.id));
+}
+
+/**
+ * Member/band ledger:
+ * - Convert RSD legs with the rate for that calendar date (legacy 116.5 through cutoff).
+ * - Apply the payment pool to dated-due gigs in calendar order (not band sort_order).
+ * - Undated / invalid dates never earn and never consume the pool.
+ */
 export function calculate(events, payments, settings) {
-  const rate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
+  const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
   const asOfDate = parseDate(settings.asOfDate);
   const calculationDate = Number.isNaN(asOfDate.getTime()) ? startOfToday() : asOfDate;
-  let paidPool = totalPaymentsEur(payments, rate);
+  let paidPool = totalPaymentsEur(payments, settings);
   let strictEur = 0;
   let strictDin = 0;
   let futureCount = 0;
   let unpaidCount = 0;
   let partialCount = 0;
 
-  const rows = events.map((event, index) => {
-    const hasDate = Boolean(String(event.date || "").trim());
+  const enriched = (events || []).map((event, index) => {
     const parsedDate = parseDate(event.date);
-    const done = hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate <= calculationDate;
+    const hasDate = Boolean(String(event.date || "").trim()) && !Number.isNaN(parsedDate.getTime());
+    const done = hasDate && parsedDate.getTime() <= calculationDate.getTime();
     const priceEur = numberValue(event.priceEur);
     const transportRsd = numberValue(event.transportRsd);
+    const rate = hasDate ? rateForDate(parsedDate, settings) : DEFAULT_RATE;
     const totalEur = hasDate ? priceEur + transportRsd / rate : 0;
-    let paymentStatus = "";
-    let paymentClass = "future";
-
-    if (done) {
-      strictEur += totalEur;
-      strictDin += transportRsd;
-
-      if (totalEur <= paidPool + 0.000001) {
-        paymentStatus = "Plaćeno";
-        paymentClass = "paid";
-        paidPool -= totalEur;
-      } else if (paidPool > 0) {
-        paymentStatus = totalEur - paidPool;
-        paymentClass = "partial";
-        partialCount += 1;
-        unpaidCount += 1;
-        paidPool = 0;
-      } else {
-        paymentStatus = totalEur;
-        paymentClass = "unpaid";
-        unpaidCount += 1;
-      }
-    } else if (hasDate) {
-      futureCount += 1;
-    }
 
     return {
       ...event,
       index,
       hasDate,
-      parsedDate,
+      parsedDate: hasDate ? parsedDate : new Date(Number.NaN),
       done,
       priceEur,
       transportRsd,
+      rate,
       totalEur,
-      paymentStatus,
-      paymentClass,
+      paymentStatus: "",
+      paymentClass: "future",
     };
   });
 
-  const paidEur = totalPaymentsEur(payments, rate);
-  const paidDin = totalPaymentsDin(payments, rate);
+  // Waterfall must follow calendar order across bands.
+  const allocationOrder = [...enriched].sort(compareFinanceRows);
+
+  for (const row of allocationOrder) {
+    if (!row.hasDate) continue;
+
+    if (!row.done) {
+      futureCount += 1;
+      continue;
+    }
+
+    strictEur += row.totalEur;
+    strictDin += row.transportRsd;
+
+    if (row.totalEur <= paidPool + POOL_EPS) {
+      row.paymentStatus = "Plaćeno";
+      row.paymentClass = "paid";
+      paidPool = Math.max(0, paidPool - row.totalEur);
+    } else if (paidPool > POOL_EPS) {
+      const remaining = row.totalEur - paidPool;
+      row.paymentStatus = remaining;
+      row.paymentClass = "partial";
+      partialCount += 1;
+      unpaidCount += 1;
+      paidPool = 0;
+    } else {
+      row.paymentStatus = row.totalEur;
+      row.paymentClass = "unpaid";
+      unpaidCount += 1;
+      paidPool = 0;
+    }
+  }
+
+  const rows = [...enriched].sort(compareFinanceRows);
+  const paidEur = totalPaymentsEur(payments, settings);
+  const paidDin = totalPaymentsDin(payments, settings);
   const claimEur = strictEur - paidEur;
+  const unpaidClaim = unpaidClaimEur(rows);
+  const claimRate = rateForDate(calculationDate, settings);
 
   return {
     rows,
-    rate,
+    rate: dynamicRate,
+    legacyRate: DEFAULT_RATE,
+    legacyThrough: LEGACY_RATE_THROUGH_TEXT,
     strictEur,
     strictDin,
     paidEur,
     paidDin,
     claimEur,
-    claimDin: claimEur * rate,
+    /** Amount still owed to the member (never negative). Matches sum of unpaid/partial remainders. */
+    unpaidClaimEur: unpaidClaim,
+    claimDin: Math.max(0, claimEur) * claimRate,
     unpaidCount,
     partialCount,
     futureCount,
@@ -78,16 +136,27 @@ export function calculate(events, payments, settings) {
   };
 }
 
-export function totalPaymentsEur(payments, rate) {
-  return payments.reduce((sum, payment) => {
+/** Sum of unpaid + partial remainders on due rows (Potražuje). */
+export function unpaidClaimEur(rows) {
+  return (rows || []).reduce((sum, row) => {
+    if (!row?.done) return sum;
+    if (row.paymentClass !== "unpaid" && row.paymentClass !== "partial") return sum;
+    return sum + numberValue(row.paymentStatus);
+  }, 0);
+}
+
+export function totalPaymentsEur(payments, settingsOrRate) {
+  return (payments || []).reduce((sum, payment) => {
     const amount = numberValue(payment.amount);
+    const rate = rateForDate(payment.date, settingsOrRate);
     return sum + (payment.currency === "RSD" ? amount / rate : amount);
   }, 0);
 }
 
-export function totalPaymentsDin(payments, rate) {
-  return payments.reduce((sum, payment) => {
+export function totalPaymentsDin(payments, settingsOrRate) {
+  return (payments || []).reduce((sum, payment) => {
     const amount = numberValue(payment.amount);
+    const rate = rateForDate(payment.date, settingsOrRate);
     return sum + (payment.currency === "RSD" ? amount : amount * rate);
   }, 0);
 }

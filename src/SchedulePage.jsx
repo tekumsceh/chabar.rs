@@ -7,6 +7,7 @@ import {
   toIsoDate,
   todayText,
 } from "./calculations.js";
+import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 
@@ -52,11 +53,19 @@ export default function SchedulePage({
 
   const bandOptions = useMemo(
     () => [
-      { id: allBandsId, label: "Svi bendovi" },
-      ...bands.map((band) => ({
-        id: band.id,
-        label: band.kind === "personal" ? `${band.name} (lično)` : band.name,
-      })),
+      { id: allBandsId, label: "Svi bendovi", icon: <BandIcon /> },
+      ...bands.map((band) => {
+        const color = resolveBandColor(band, band.id);
+        return {
+          id: band.id,
+          label: band.kind === "personal" ? `${band.name} (lično)` : band.name,
+          icon: (
+            <span className="band-chip menu-band-chip" style={{ backgroundColor: color }} title={band.name}>
+              {bandInitials(band.name)}
+            </span>
+          ),
+        };
+      }),
     ],
     [bands, allBandsId],
   );

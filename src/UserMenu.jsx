@@ -1,25 +1,40 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-/**
- * Avatar button with account dropdown.
- * Settings + logout are active; Nalog stays a placeholder.
- */
-export default function UserMenu({ email, displayName, avatarUrl, onOpenSettings, onSignOut }) {
+export default function UserMenu({
+  email,
+  displayName,
+  avatarUrl,
+  pendingInvites = [],
+  onAcceptInvite,
+  onDeclineInvite,
+  onOpenSettings,
+  onSignOut,
+}) {
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState("menu");
+  const [busyId, setBusyId] = useState("");
   const rootRef = useRef(null);
   const menuId = useId();
   const label = displayName || email || "Nalog";
   const initials = getInitials(displayName, email);
+  const inviteCount = pendingInvites.length;
+  const hasInvites = inviteCount > 0;
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) {
+      setView("menu");
+      return undefined;
+    }
 
     function onPointerDown(event) {
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     }
 
     function onKeyDown(event) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        if (view === "invites") setView("menu");
+        else setOpen(false);
+      }
     }
 
     document.addEventListener("pointerdown", onPointerDown);
@@ -28,14 +43,32 @@ export default function UserMenu({ email, displayName, avatarUrl, onOpenSettings
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, view]);
+
+  async function handleAccept(inviteId) {
+    setBusyId(inviteId);
+    try {
+      await onAcceptInvite?.(inviteId);
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleDecline(inviteId) {
+    setBusyId(inviteId);
+    try {
+      await onDeclineInvite?.(inviteId);
+    } finally {
+      setBusyId("");
+    }
+  }
 
   return (
     <div className={`user-menu ${open ? "is-open" : ""}`} ref={rootRef}>
       <button
         type="button"
         className="user-avatar-btn"
-        aria-label="Nalog"
+        aria-label={hasInvites ? `Nalog, ${inviteCount} pozivnica` : "Nalog"}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
@@ -49,52 +82,130 @@ export default function UserMenu({ email, displayName, avatarUrl, onOpenSettings
             {initials}
           </span>
         )}
+        {hasInvites ? <span className="user-avatar-dot" aria-hidden="true" /> : null}
       </button>
 
       {open ? (
         <div className="user-menu-panel" id={menuId} role="menu" aria-label="Nalog">
-          <div className="user-menu-header">
-            <p className="user-menu-name">{displayName || email?.split("@")[0] || "Korisnik"}</p>
-            {email ? <p className="user-menu-email">{email}</p> : null}
-          </div>
+          {view === "invites" ? (
+            <>
+              <div className="user-menu-header user-menu-header-row">
+                <button
+                  type="button"
+                  className="user-menu-back"
+                  onClick={() => setView("menu")}
+                  aria-label="Nazad"
+                >
+                  <BackIcon />
+                </button>
+                <p className="user-menu-name">Pozivnice</p>
+              </div>
 
-          <ul className="user-menu-list">
-            <li>
-              <button type="button" className="user-menu-item" role="menuitem" disabled>
-                Nalog
-              </button>
-            </li>
-            <li>
+              {pendingInvites.length === 0 ? (
+                <p className="user-menu-empty">Nema novih pozivnica.</p>
+              ) : (
+                <ul className="user-invite-list">
+                  {pendingInvites.map((invite) => (
+                    <li key={invite.id} className="user-invite-row">
+                      <p className="user-invite-copy">
+                        <strong>{invite.bandName}</strong>
+                        <span>{invite.invitedByName} te poziva da se pridružiš</span>
+                      </p>
+                      <div className="user-invite-actions">
+                        <button
+                          type="button"
+                          className="invite-accept"
+                          disabled={busyId === invite.id}
+                          onClick={() => handleAccept(invite.id)}
+                        >
+                          Prihvati
+                        </button>
+                        <button
+                          type="button"
+                          className="invite-decline"
+                          disabled={busyId === invite.id}
+                          onClick={() => handleDecline(invite.id)}
+                        >
+                          Odbij
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="user-menu-header">
+                <p className="user-menu-name">{displayName || email?.split("@")[0] || "Korisnik"}</p>
+                {email ? <p className="user-menu-email">{email}</p> : null}
+              </div>
+
+              <ul className="user-menu-list">
+                <li>
+                  <button type="button" className="user-menu-item" role="menuitem" disabled>
+                    Nalog
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="user-menu-item user-menu-item-invites"
+                    role="menuitem"
+                    onClick={() => setView("invites")}
+                  >
+                    <span>Pozivnice</span>
+                    {hasInvites ? <span className="user-menu-count">{inviteCount}</span> : null}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="user-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenSettings?.();
+                    }}
+                  >
+                    Podešavanja
+                  </button>
+                </li>
+              </ul>
+
+              <div className="user-menu-sep" />
+
               <button
                 type="button"
-                className="user-menu-item"
+                className="user-menu-item user-menu-item-danger"
                 role="menuitem"
-                onClick={() => {
+                onClick={async () => {
                   setOpen(false);
-                  onOpenSettings?.();
+                  await onSignOut();
                 }}
               >
-                Podešavanja
+                Odjava
               </button>
-            </li>
-          </ul>
-
-          <div className="user-menu-sep" />
-
-          <button
-            type="button"
-            className="user-menu-item user-menu-item-danger"
-            role="menuitem"
-            onClick={async () => {
-              setOpen(false);
-              await onSignOut();
-            }}
-          >
-            Odjava
-          </button>
+            </>
+          )}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M15 6 9 12l6 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 /**
  * Icon button that opens a single-choice dropdown menu.
- * options: [{ id, label }]
+ * options: [{ id, label, icon? }]
  */
 export default function MenuSelect({
   icon,
@@ -63,7 +63,10 @@ export default function MenuSelect({
                   setOpen(false);
                 }}
               >
-                <span>{option.label}</span>
+                <span className="menu-select-item-main">
+                  {option.icon ? <span className="menu-select-item-icon">{option.icon}</span> : null}
+                  <span className="menu-select-item-label">{option.label}</span>
+                </span>
                 {option.id === value ? <CheckIcon /> : null}
               </button>
             </li>

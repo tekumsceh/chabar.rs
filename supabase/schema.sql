@@ -4,7 +4,9 @@ CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL DEFAULT '',
   display_name TEXT NOT NULL DEFAULT '',
-  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('superadmin', 'user')),
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('superadmin', 'admin', 'assistant', 'editor', 'member')),
+  invite_preference TEXT NOT NULL DEFAULT 'accept' CHECK (invite_preference IN ('accept', 'digest', 'block')),
+  extra_band_grants INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -22,7 +24,7 @@ CREATE TABLE IF NOT EXISTS bands (
 CREATE TABLE IF NOT EXISTS band_members (
   band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('owner', 'admin', 'member')),
+  member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('owner', 'lead', 'member')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (band_id, user_id)
 );

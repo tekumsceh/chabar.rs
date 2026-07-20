@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import * as jose from "jose";
+import { isBandLead } from "../shared/roles.js";
 import { query } from "./db.js";
 import { logger } from "./logger.js";
 
@@ -62,6 +63,10 @@ const AUTH_CACHE_TTL_MS = 5 * 60_000;
 const MEMBERSHIP_CACHE_TTL_MS = 60_000;
 const authUserCache = new Map();
 const membershipCache = new Map();
+
+export function clearMembershipCache() {
+  membershipCache.clear();
+}
 
 let jwks = null;
 let hsSecret = null;
@@ -181,16 +186,44 @@ export async function requireAuth(req, res, next) {
     }
 
     req.accessToken = token;
+
+    try {
+      await ensureProfileAndPersonalBand(req.user);
+    } catch (setupError) {
+      logger.error("Profile/band setup failed", {
+        userId: req.user?.id,
+        email: req.user?.email,
+        message: setupError.message,
+      });
+      return res.status(500).json({
+        error: "Setup failed",
+        detail: "Nalog nije mogao da se dovrši. Pokušaj ponovo ili kontaktiraj podršku.",
+      });
+    }
+
     next();
   } catch (error) {
     next(error);
   }
 }
 
+const PROFILE_ENSURE_TTL_MS = 10 * 60_000;
+const profileEnsuredAt = new Map();
+
 export async function ensureProfileAndPersonalBand(user) {
+  if (!user?.id) return;
+
+  const cachedAt = profileEnsuredAt.get(user.id);
+  if (cachedAt && Date.now() - cachedAt < PROFILE_ENSURE_TTL_MS) {
+    return;
+  }
+
   const email = (user.email || "").toLowerCase();
-  const displayName = user.user_metadata?.display_name || user.user_metadata?.full_name || email.split("@")[0] || "User";
-  const role = email === "tekumsceh@gmail.com" ? "superadmin" : "user";
+  const meta = user.user_metadata || {};
+  const displayName =
+    meta.display_name || meta.full_name || meta.name || email.split("@")[0] || "User";
+  const ownerEmail = (process.env.OWNER_EMAIL || "tekumsceh@gmail.com").trim().toLowerCase();
+  const role = email === ownerEmail ? "superadmin" : "member";
 
   await query(
     `INSERT INTO profiles (id, email, display_name, role)
@@ -199,11 +232,12 @@ export async function ensureProfileAndPersonalBand(user) {
        SET email = EXCLUDED.email,
            display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), profiles.display_name),
            role = CASE
-             WHEN lower(EXCLUDED.email) = 'tekumsceh@gmail.com' THEN 'superadmin'
+             WHEN lower(EXCLUDED.email) = :ownerEmail THEN 'superadmin'
+             WHEN profiles.role = 'user' THEN 'member'
              ELSE profiles.role
            END,
            updated_at = NOW()`,
-    { id: user.id, email, displayName, role },
+    { id: user.id, email, displayName, role, ownerEmail },
   );
 
   const existing = await query(
@@ -239,6 +273,39 @@ export async function ensureProfileAndPersonalBand(user) {
     );
     membershipCache.clear();
   }
+
+  profileEnsuredAt.set(user.id, Date.now());
+}
+
+/** Create profiles + Personal bands for auth.users that never finished app setup. */
+export async function syncMissingProfilesFromAuth() {
+  const ownerEmail = (process.env.OWNER_EMAIL || "tekumsceh@gmail.com").trim().toLowerCase();
+  const missing = await query(
+    `SELECT u.id, u.email,
+            COALESCE(
+              NULLIF(u.raw_user_meta_data->>'full_name', ''),
+              NULLIF(u.raw_user_meta_data->>'name', ''),
+              NULLIF(u.raw_user_meta_data->>'display_name', ''),
+              split_part(COALESCE(u.email, ''), '@', 1),
+              'User'
+            ) AS display_name
+     FROM auth.users u
+     LEFT JOIN profiles p ON p.id = u.id
+     WHERE p.id IS NULL`,
+  );
+
+  const created = [];
+  for (const row of missing.rows) {
+    profileEnsuredAt.delete(row.id);
+    await ensureProfileAndPersonalBand({
+      id: row.id,
+      email: row.email || "",
+      user_metadata: { full_name: row.display_name },
+    });
+    created.push({ id: row.id, email: row.email, displayName: row.display_name });
+  }
+
+  return { ownerEmail, created };
 }
 
 export async function getMemberships(userId) {
@@ -299,10 +366,10 @@ export async function requireBandMember(req, res, next) {
   }
 }
 
-/** Owner or admin of the active band (must run after requireBandMember). */
+/** Owner or lead of the active band (must run after requireBandMember). */
 export function requireBandAdmin(req, res, next) {
-  if (req.memberRole === "owner" || req.memberRole === "admin") {
+  if (isBandLead(req.memberRole)) {
     return next();
   }
-  return res.status(403).json({ error: "Forbidden", detail: "Band admin role required" });
+  return res.status(403).json({ error: "Forbidden", detail: "Band lead role required" });
 }

@@ -21,15 +21,34 @@ export async function api(url, options = {}) {
     headers["X-Band-Id"] = bandId;
   }
 
-  const response = await fetch(url, {
-    method: options.method || "GET",
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: options.method || "GET",
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    const error = new Error("Veza sa serverom nije uspela. Sačekaj sekund i pokušaj ponovo.");
+    error.status = 0;
+    throw error;
+  }
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const error = new Error(data.detail || data.error || `Request failed: ${response.status}`);
+    const raw = await response.text().catch(() => "");
+    let data = {};
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = {};
+      }
+    }
+    const fallback =
+      response.status === 404
+        ? "Endpoint nije pronađen (možda treba deploy novog API-ja)."
+        : `Zahtev nije uspeo (${response.status})`;
+    const error = new Error(data.detail || data.error || fallback);
     error.status = response.status;
     throw error;
   }
