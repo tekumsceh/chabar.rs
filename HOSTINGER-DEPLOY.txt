@@ -1,0 +1,482 @@
+================================================================================
+IO ORGANIZE — HOSTINGER KVM VPS DEPLOYMENT GUIDE
+================================================================================
+Created for: Hostinger KVM 2 (Ubuntu 22.04 or 24.04 LTS, plain — no panel apps)
+App stack:   React (Vite build) + Express API + Supabase Postgres
+Goal:        App reachable at https://YOUR_DOMAIN.com
+
+Read this whole file once before starting. Work top to bottom.
+
+
+--------------------------------------------------------------------------------
+0) WHAT YOU ALREADY HAVE / WHAT YOU NEED
+--------------------------------------------------------------------------------
+
+Already done in the project:
+  - Express API talks to Supabase (DATABASE_URL)
+  - Frontend calls /api/... (same domain in production via Nginx)
+  - Production files in the deploy/ folder
+  - Zip helper: scripts/make-deploy-zip.ps1
+
+You need ready before deploy:
+  [ ] Hostinger VPS IP address
+  [ ] Root (or sudo) SSH password / SSH key from Hostinger
+  [ ] Domain name pointed to the VPS IP (A record) — or use IP first for testing
+  [ ] Supabase DATABASE_URL (Session pooler URI recommended)
+  [ ] This project folder on your Windows PC: c:\xampp\htdocs\ioorganize
+
+Architecture on the VPS:
+
+  Browser
+     |
+     v
+  Nginx (port 80/443)
+     |-- static files from /var/www/ioorganize/dist
+     |-- /api/*  -->  Express on 127.0.0.1:3001 (kept alive by PM2)
+                          |
+                          v
+                     Supabase Postgres (cloud)
+
+
+--------------------------------------------------------------------------------
+1) HOSTINGER PANEL — FIRST CHECKS
+--------------------------------------------------------------------------------
+
+1. Log in to Hostinger → VPS → your KVM server.
+2. Confirm OS is Ubuntu (22.04 or 24.04). If you accidentally installed
+   CyberPanel / WordPress / Docker app stacks, reinstall OS as plain Ubuntu.
+3. Note:
+   - Public IP (example: 123.45.67.89)
+   - Root password (or set up SSH key)
+4. In Hostinger firewall / VPS firewall, allow:
+   - TCP 22  (SSH)
+   - TCP 80  (HTTP)
+   - TCP 443 (HTTPS)
+   Do NOT open 3001 to the public internet. Express stays localhost-only.
+
+
+--------------------------------------------------------------------------------
+2) POINT YOUR DOMAIN (DO THIS EARLY — DNS TAKES TIME)
+--------------------------------------------------------------------------------
+
+In your domain DNS settings (Hostinger Domains or wherever the domain is):
+
+  Type   Name    Value              TTL
+  A      @       YOUR_VPS_IP        300 or Auto
+  A      www     YOUR_VPS_IP        300 or Auto
+
+Wait until DNS resolves (often 5–60 minutes).
+
+Check from Windows PowerShell:
+
+  nslookup YOUR_DOMAIN.com
+
+It should show your VPS IP.
+
+Optional temporary test without domain:
+  Use http://YOUR_VPS_IP first, then add SSL after DNS works.
+
+
+--------------------------------------------------------------------------------
+3) CONNECT TO THE VPS WITH SSH (FROM WINDOWS)
+--------------------------------------------------------------------------------
+
+Option A — PowerShell (built-in OpenSSH):
+
+  ssh root@YOUR_VPS_IP
+
+First time: type "yes" to accept the host key, then paste the root password
+(paste often works with right-click in PowerShell; characters may not show).
+
+Option B — Hostinger browser terminal (if available in VPS panel).
+
+You should see a Linux prompt like:
+  root@srvXXXXXX:~#
+
+
+--------------------------------------------------------------------------------
+4) UPDATE THE SERVER + INSTALL SOFTWARE
+--------------------------------------------------------------------------------
+
+Copy-paste these blocks one at a time on the VPS.
+
+--- 4.1 System update ---
+
+  apt update && apt upgrade -y
+
+--- 4.2 Install Nginx, unzip, curl, ufw, certbot ---
+
+  apt install -y nginx unzip curl ufw certbot python3-certbot-nginx
+
+--- 4.3 Install Node.js 22 (LTS) via NodeSource ---
+
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt install -y nodejs
+
+Check versions:
+
+  node -v
+  npm -v
+
+You want Node v22.x (or at least v20+).
+
+--- 4.4 Install PM2 (keeps Express running after reboot) ---
+
+  npm install -g pm2
+
+--- 4.5 Firewall (UFW) ---
+
+  ufw allow OpenSSH
+  ufw allow 'Nginx Full'
+  ufw --force enable
+  ufw status
+
+Expected: 22, 80, 443 allowed.
+
+
+--------------------------------------------------------------------------------
+5) CREATE APP FOLDER ON THE SERVER
+--------------------------------------------------------------------------------
+
+  mkdir -p /var/www/ioorganize/logs
+  mkdir -p /var/www/ioorganize/dist
+  chown -R root:root /var/www/ioorganize
+
+
+--------------------------------------------------------------------------------
+6) UPLOAD THE PROJECT FROM YOUR WINDOWS PC
+--------------------------------------------------------------------------------
+
+Do NOT upload node_modules or your local .env with secrets mixed into zip
+carelessly — the zip script already excludes .env and node_modules.
+
+--- 6.1 On Windows (PowerShell in project folder) ---
+
+  cd c:\xampp\htdocs\ioorganize
+  .\scripts\make-deploy-zip.ps1
+
+This creates:
+  c:\xampp\htdocs\ioorganize\ioorganize-deploy.zip
+
+--- 6.2 Upload the zip ---
+
+Easiest options:
+
+A) SCP from PowerShell:
+
+  scp c:\xampp\htdocs\ioorganize\ioorganize-deploy.zip root@YOUR_VPS_IP:/var/www/ioorganize/
+
+B) FileZilla / WinSCP:
+  - Protocol: SFTP
+  - Host: YOUR_VPS_IP
+  - User: root
+  - Password: your VPS password
+  - Upload zip into /var/www/ioorganize/
+
+--- 6.3 On the VPS — unzip ---
+
+  cd /var/www/ioorganize
+  unzip -o ioorganize-deploy.zip
+  ls -la
+
+You should see folders like: src, server, deploy, scripts, package.json, etc.
+
+
+--------------------------------------------------------------------------------
+7) CREATE THE PRODUCTION .env FILE
+--------------------------------------------------------------------------------
+
+On the VPS:
+
+  nano /var/www/ioorganize/.env
+
+Paste this template and edit values:
+
+  NODE_ENV=production
+  API_PORT=3001
+  API_HOST=127.0.0.1
+  SERVE_STATIC=0
+  DATABASE_URL=postgresql://USER:PASSWORD@HOST:6543/postgres
+
+How to get DATABASE_URL:
+  1. Open Supabase dashboard
+  2. Project Settings → Database
+  3. Connection string → URI
+  4. Prefer "Session pooler" / pooler host if direct db.*.supabase.co fails
+  5. Replace [YOUR-PASSWORD] with the real DB password
+  6. If password has special characters, URL-encode them:
+       +  →  %2B
+       ?  →  %3F
+       @  →  %40
+       #  →  %23
+       &  →  %26
+       /  →  %2F
+       space → %20
+
+Save in nano:
+  Ctrl+O  Enter
+  Ctrl+X
+
+Lock down permissions:
+
+  chmod 600 /var/www/ioorganize/.env
+
+
+--------------------------------------------------------------------------------
+8) INSTALL DEPENDENCIES + BUILD THE FRONTEND
+--------------------------------------------------------------------------------
+
+On the VPS:
+
+  cd /var/www/ioorganize
+  npm install
+  npm run build
+
+Success looks like Vite writing files into /var/www/ioorganize/dist/
+
+Check:
+
+  ls -la /var/www/ioorganize/dist
+
+
+--------------------------------------------------------------------------------
+9) START THE API WITH PM2
+--------------------------------------------------------------------------------
+
+  cd /var/www/ioorganize
+  mkdir -p logs
+  pm2 start deploy/ecosystem.config.cjs
+  pm2 status
+  pm2 logs ioorganize --lines 50
+
+Healthy log should show something like:
+  IO Organize API running on http://127.0.0.1:3001
+
+Test API locally on the server:
+
+  curl -s http://127.0.0.1:3001/api/health
+
+Expected JSON:
+  {"ok":true,"database":"supabase-postgres"}
+
+If this fails:
+  - Wrong DATABASE_URL
+  - Password not URL-encoded
+  - Supabase project paused
+  - Used IPv6-only direct host that your VPS cannot reach → switch to pooler URI
+
+Make PM2 start on reboot:
+
+  pm2 save
+  pm2 startup
+  # Run the command that pm2 prints (it starts with "sudo env PATH=...")
+
+
+--------------------------------------------------------------------------------
+10) CONFIGURE NGINX
+--------------------------------------------------------------------------------
+
+--- 10.1 Copy the site config ---
+
+  cp /var/www/ioorganize/deploy/nginx-ioorganize.conf /etc/nginx/sites-available/ioorganize
+
+Edit domain name:
+
+  nano /etc/nginx/sites-available/ioorganize
+
+Replace BOTH occurrences of:
+  YOUR_DOMAIN.com
+with your real domain, e.g.:
+  ioorganize.com
+  www.ioorganize.com
+
+If testing by IP only (no domain yet), set:
+
+  server_name YOUR_VPS_IP;
+
+--- 10.2 Enable site, disable default ---
+
+  rm -f /etc/nginx/sites-enabled/default
+  ln -sf /etc/nginx/sites-available/ioorganize /etc/nginx/sites-enabled/ioorganize
+  nginx -t
+  systemctl reload nginx
+
+--- 10.3 Test in browser ---
+
+  http://YOUR_DOMAIN.com
+  or
+  http://YOUR_VPS_IP
+
+You should see the IO Organize UI.
+Open DevTools → Network and confirm /api/bootstrap returns 200.
+
+
+--------------------------------------------------------------------------------
+11) INSTALL FREE HTTPS (LET'S ENCRYPT)
+--------------------------------------------------------------------------------
+
+Only after DNS already points to this VPS:
+
+  certbot --nginx -d YOUR_DOMAIN.com -d www.YOUR_DOMAIN.com
+
+Follow prompts:
+  - Enter email
+  - Agree to terms
+  - Choose redirect HTTP → HTTPS (recommended: yes)
+
+Certbot will edit Nginx automatically.
+
+Test:
+  https://YOUR_DOMAIN.com
+
+Renewal is automatic via certbot timer. Optional check:
+
+  certbot renew --dry-run
+
+
+--------------------------------------------------------------------------------
+12) FINAL CHECKLIST
+--------------------------------------------------------------------------------
+
+  [ ] https://YOUR_DOMAIN.com loads the app
+  [ ] Schedule page (Raspored) shows events
+  [ ] Finance page (Finansije) loads
+  [ ] Creating/editing a termin works
+  [ ] Payments work
+  [ ] curl https://YOUR_DOMAIN.com/api/health returns ok
+  [ ] pm2 status shows ioorganize online
+  [ ] After reboot test (optional):
+        reboot
+        # wait, SSH again
+        pm2 status
+        systemctl status nginx
+
+
+--------------------------------------------------------------------------------
+13) HOW TO UPDATE THE APP LATER (AFTER CODE CHANGES)
+--------------------------------------------------------------------------------
+
+On Windows:
+  1. Make your code changes locally
+  2. Run:  .\scripts\make-deploy-zip.ps1
+  3. Upload new zip to VPS (overwrite)
+
+On VPS:
+
+  cd /var/www/ioorganize
+  unzip -o ioorganize-deploy.zip
+  npm install
+  npm run build
+  pm2 reload ioorganize
+
+Notes:
+  - Do NOT overwrite .env when unzipping if your zip somehow includes one
+    (the zip script excludes .env)
+  - Dist is rebuilt on the server with npm run build — you do not need to
+    upload a local dist folder
+
+
+--------------------------------------------------------------------------------
+14) USEFUL COMMANDS (CHEAT SHEET)
+--------------------------------------------------------------------------------
+
+App status:
+  pm2 status
+  pm2 logs ioorganize
+  pm2 restart ioorganize
+  pm2 reload ioorganize
+
+Nginx:
+  nginx -t
+  systemctl reload nginx
+  systemctl status nginx
+  tail -n 100 /var/log/nginx/error.log
+
+Env / DB test:
+  curl -s http://127.0.0.1:3001/api/health
+
+Disk / memory:
+  df -h
+  free -h
+
+
+--------------------------------------------------------------------------------
+15) COMMON PROBLEMS
+--------------------------------------------------------------------------------
+
+1) Site loads but data is empty / API errors
+   - Check: curl http://127.0.0.1:3001/api/health
+   - Check: pm2 logs ioorganize
+   - Fix DATABASE_URL in /var/www/ioorganize/.env then:
+       pm2 reload ioorganize
+
+2) 502 Bad Gateway
+   - Express is down: pm2 status / pm2 restart ioorganize
+   - Wrong proxy port in Nginx (must be 3001)
+
+3) Nginx 403 / blank
+   - dist missing: run npm run build
+   - wrong root path in Nginx config
+
+4) SSL fails
+   - DNS not pointing to this VPS yet
+   - Port 80 blocked in Hostinger firewall
+
+5) Changes on PC do not show on website
+   - You forgot to upload + rebuild + pm2 reload
+   - Browser cache: hard refresh Ctrl+F5
+
+6) Permission denied on .env / logs
+   - chmod 600 .env
+   - mkdir -p logs
+
+
+--------------------------------------------------------------------------------
+16) SECURITY NOTES (IMPORTANT)
+--------------------------------------------------------------------------------
+
+  - Keep .env only on the server, never in public GitHub
+  - Do not open port 3001 in the firewall
+  - Prefer SSH keys over password when Hostinger allows it
+  - Supabase: later add Auth + RLS before inviting many users
+  - This app currently has no login — anyone with the URL can use it.
+    Until you add auth, treat the URL as private (or add a simple
+    password gate later).
+
+
+--------------------------------------------------------------------------------
+17) FILES ADDED FOR DEPLOYMENT (IN THIS PROJECT)
+--------------------------------------------------------------------------------
+
+  deploy/ecosystem.config.cjs     → PM2 process definition
+  deploy/nginx-ioorganize.conf    → Nginx site template
+  deploy/env.production.example   → .env template for VPS
+  scripts/make-deploy-zip.ps1     → Creates upload zip on Windows
+  HOSTINGER-DEPLOY.txt            → This guide
+  package.json                    → added "start" script
+  server/index.js                 → production host + optional static serve
+
+
+--------------------------------------------------------------------------------
+18) MINIMUM PATH IF YOU WANT THE SHORT VERSION
+--------------------------------------------------------------------------------
+
+  1. DNS A record → VPS IP
+  2. SSH: ssh root@IP
+  3. apt update && install nginx nodejs pm2 certbot unzip ufw
+  4. Upload zip → /var/www/ioorganize → unzip
+  5. Create .env with DATABASE_URL
+  6. npm install && npm run build
+  7. pm2 start deploy/ecosystem.config.cjs && pm2 save && pm2 startup
+  8. Configure Nginx from deploy/nginx-ioorganize.conf
+  9. certbot --nginx -d yourdomain.com
+ 10. Open https://yourdomain.com and test
+
+
+================================================================================
+If something fails, copy the exact error from:
+  - pm2 logs ioorganize
+  - /var/log/nginx/error.log
+  - the terminal command that failed
+and use that when asking for help.
+================================================================================

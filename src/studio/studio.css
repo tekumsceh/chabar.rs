@@ -1,0 +1,100 @@
+/* Studio lab shell — pages themselves reuse live .raspored / .finansije styles */
+
+.studio-lab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.studio-lab-bar {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.35rem;
+  padding: 0.45rem clamp(0.75rem, 1.5vw, 1.5rem);
+}
+
+.studio-lab-bar-spacer {
+  flex: 1;
+}
+
+.studio-lab-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-lab-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-lab-page[hidden] {
+  display: none !important;
+}
+
+.studio-lab-page > .raspored,
+.studio-lab-page > .finansije,
+.studio-lab-page > .band-chat,
+.studio-lab-stage > .termin-detail-page {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Phone frame preview */
+.studio-lab-phone {
+  align-items: stretch;
+  background: #0a0c10;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 0.65rem 0.75rem 1.25rem;
+}
+
+.studio-lab-phone .studio-lab-bar {
+  margin: 0 auto;
+  max-width: 390px;
+  width: 100%;
+}
+
+.studio-lab-phone .studio-lab-stage {
+  background: var(--bg, #f4f7fb);
+  border: 1px solid #2a3140;
+  border-radius: 1.25rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  flex: 1;
+  height: min(780px, calc(100vh - 7rem));
+  margin: 0 auto;
+  max-width: 390px;
+  min-height: 28rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.app-shell-studio[data-theme="dark"] .studio-lab-phone .studio-lab-stage {
+  background: var(--bg, #000008);
+  border-color: color-mix(in srgb, var(--neon-cyan, #00f6ff) 45%, #2a3140);
+}
+
+.app-shell-studio {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell-studio > .studio-lab {
+  flex: 1;
+  min-height: 0;
+}

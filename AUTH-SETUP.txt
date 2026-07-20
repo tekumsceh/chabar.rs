@@ -1,0 +1,108 @@
+================================================================================
+IO ORGANIZE — AUTH + BANDS SETUP
+================================================================================
+
+Owner account: tekumsceh@gmail.com
+All existing events/payments/settings are attributed to that user's PERSONAL band.
+
+--------------------------------------------------------------------------------
+1) SUPABASE DASHBOARD
+--------------------------------------------------------------------------------
+
+A) Project Settings → API
+   Copy:
+   - Project URL          → SUPABASE_URL and VITE_SUPABASE_URL
+   - anon public key      → SUPABASE_ANON_KEY and VITE_SUPABASE_ANON_KEY
+   - service_role key     → SUPABASE_SERVICE_ROLE_KEY  (server/scripts only, never in Vite)
+
+## Google login (required setup)
+
+Yes — Google login needs both **Google Cloud** and **Supabase** configured.
+
+### A) Google Cloud Console (https://console.cloud.google.com)
+1. Create/select a project
+2. APIs & Services → **OAuth consent screen** (External) → fill app name + your email → Save
+3. APIs & Services → **Credentials** → Create credentials → **OAuth client ID** → Web application
+4. Authorized JavaScript origins:
+   - http://localhost:5173
+   - https://chabar.rs
+5. Authorized redirect URIs — use the exact callback from Supabase (see B):
+   - https://ettzaadtyqmfdzpcgcpm.supabase.co/auth/v1/callback
+6. Copy **Client ID** and **Client Secret**
+
+### B) Supabase → Authentication → Providers → Google
+1. Enable Google
+2. Paste Client ID + Client Secret → Save
+3. Copy the Callback URL shown there (must match Google redirect URI)
+
+### C) Supabase → Authentication → URL Configuration
+Site URL: https://chabar.rs
+Redirect URLs include:
+  - http://localhost:5173
+  - http://localhost:5173/**
+  - https://chabar.rs
+  - https://chabar.rs/**
+  - https://www.chabar.rs
+  - https://www.chabar.rs/**
+
+Also force www → https://chabar.rs in Nginx (see deploy/nginx-ioorganize.conf).
+If www and apex both serve the app without redirect, Google login lands on login again
+(PKCE code verifier is per-origin and does not transfer).
+
+If consent screen is in Testing mode, add tekumsceh@gmail.com as a test user.
+
+
+--------------------------------------------------------------------------------
+2) LOCAL .env
+--------------------------------------------------------------------------------
+
+Add the keys from step 1 into c:\xampp\htdocs\ioorganize\.env
+(Keep existing DATABASE_URL.)
+
+--------------------------------------------------------------------------------
+3) RUN BANDS MIGRATION (attributes current data to you)
+--------------------------------------------------------------------------------
+
+  npm run db:migrate:bands
+
+This will:
+  - create profiles / bands / band_members
+  - add band_id to events & payments
+  - convert settings to per-band
+  - create/find auth user for tekumsceh@gmail.com
+  - put ALL existing rows into that user's Personal band
+  - print a temporary password if it creates the user
+
+Then sign in on the site with that email (or Google with the same Gmail).
+
+--------------------------------------------------------------------------------
+4) LOCAL DEV
+--------------------------------------------------------------------------------
+
+  npm run dev
+
+Open http://localhost:5173 → login screen.
+
+--------------------------------------------------------------------------------
+5) PRODUCTION (Hostinger VPS)
+--------------------------------------------------------------------------------
+
+1. Add the same Supabase keys to /var/www/ioorganize/.env on the VPS
+   (SUPABASE_URL, SUPABASE_ANON_KEY, VITE_* are needed at build time for Vite)
+2. Rebuild frontend on the VPS so VITE_ keys are baked in:
+     cd /var/www/ioorganize
+     npm install
+     npm run build
+     pm2 reload ioorganize
+3. Run migration once (from PC with .env, OR on VPS if DATABASE_URL + service role exist):
+     npm run db:migrate:bands
+
+--------------------------------------------------------------------------------
+6) VERIFY
+--------------------------------------------------------------------------------
+
+- Logged out visitor: sees login only, no finance data
+- tekumsceh@gmail.com: sees current schedule/finance (Personal band)
+- Another Google account: empty Personal band, cannot see your data
+
+================================================================================
