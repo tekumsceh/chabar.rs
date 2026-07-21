@@ -13,7 +13,6 @@ import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase
 
 const pages = [
   ["schedule", "Raspored"],
-  ["band", "Bend"],
   ["report", "Finansije"],
 ];
 
@@ -96,6 +95,32 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(FINANCE_MODE_KEY, financeMode);
   }, [financeMode]);
+
+  useEffect(() => {
+    if (!authReady || !session) return;
+    const params = new URLSearchParams(window.location.search);
+    const gcal = params.get("gcal");
+    const gcalError = params.get("gcal_error");
+    const pageParam = params.get("page");
+    const bandParam = params.get("band");
+    if (!gcal && !gcalError && !pageParam) return;
+
+    if (gcalError) {
+      showToast(gcalError, "error");
+    } else if (gcal === "connected") {
+      showToast("Google kalendar povezan");
+    }
+    if (pageParam === "band" && bandParam) {
+      setActiveBandId(bandParam);
+      setPage("band");
+    } else if (pageParam === "settings") {
+      setPage("settings");
+    }
+    const url = new URL(window.location.href);
+    ["gcal", "gcal_error", "page", "band"].forEach((key) => url.searchParams.delete(key));
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot OAuth return
+  }, [authReady, session?.access_token]);
 
   const activeBand = bands.find((band) => band.id === activeBandId) || null;
   const canUseBandMode = Boolean(
@@ -701,6 +726,19 @@ export default function App() {
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
           onBandChange={setActiveBandId}
+          onOpenBand={(bandId) => {
+            if (!bandId || bandId === ALL_BANDS_ID) return;
+            setActiveBandId(bandId);
+            setPage("band");
+          }}
+          onBandsChanged={async () => {
+            const me = await api("/api/me");
+            setProfile(me.profile);
+            setBands(me.bands);
+            setPendingInvites(me.pendingInvites || []);
+          }}
+          showToast={showToast}
+          profile={profile}
           onAdd={addEvent}
           onUpdate={updateEventFields}
           onRemove={removeEvent}
@@ -714,6 +752,7 @@ export default function App() {
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
           onBandChange={setActiveBandId}
+          onBack={() => setPage("schedule")}
           onBandsChanged={async () => {
             const me = await api("/api/me");
             setProfile(me.profile);
@@ -721,7 +760,6 @@ export default function App() {
             setPendingInvites(me.pendingInvites || []);
           }}
           showToast={showToast}
-          profile={profile}
         />
       </div>
 
@@ -753,6 +791,7 @@ export default function App() {
           onInvitePreferenceChange={saveInvitePreference}
           ownedGroupBands={profile?.ownedGroupBands || 0}
           ownerLimit={profile?.ownerLimit || 5}
+          showToast={showToast}
         />
       </div>
 

@@ -1,30 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
+import { useConfirm } from "./confirmDialog.jsx";
 import { bandRoleLabel } from "../shared/roles.js";
 import { parseDate, sameMonth, startOfToday } from "./calculations.js";
-import MenuSelect from "./MenuSelect.jsx";
 
 const WEEKDAYS = ["P", "U", "S", "Č", "P", "S", "N"];
-const CREATE_BAND_ID = "__new_band__";
+const SIDE_RATIO = 0.88;
+const OPEN_THRESHOLD = 0.32;
 
 /**
- * Simple band home — calendar first, then icon tools.
- * Only "Dodaj člana" is functional for now.
+ * Band home — calendar + tools on the main pane;
+ * swipe left (Viber-style) for members and more.
  */
 export default function BandPage({
   bands = [],
   activeBandId,
   allBandsId,
   onBandChange,
+  onBack,
   onBandsChanged,
   showToast,
-  profile = null,
 }) {
+  const { confirm } = useConfirm();
   const isAllBands = activeBandId === allBandsId || !activeBandId;
-  const ownerLimit = profile?.ownerLimit ?? 5;
-  const ownedGroupBands = profile?.ownedGroupBands ?? 0;
-  const canCreateBand = ownedGroupBands < ownerLimit;
 
   /** Band used for members / add-member tools (not calendar when “Svi”). */
   const manageBandId = useMemo(() => {
@@ -37,36 +36,6 @@ export default function BandPage({
     );
   }, [isAllBands, activeBandId, bands]);
 
-  const bandOptions = useMemo(
-    () => [
-      {
-        id: allBandsId,
-        label: "Svi bendovi",
-        icon: <AllBandsIcon />,
-      },
-      ...bands.map((band) => {
-        const color = resolveBandColor(band, band.id);
-        return {
-          id: band.id,
-          label: band.kind === "personal" ? `${band.name} (lično)` : band.name,
-          icon: (
-            <span className="band-chip menu-band-chip" style={{ backgroundColor: color }} title={band.name}>
-              {bandInitials(band.name)}
-            </span>
-          ),
-        };
-      }),
-      {
-        id: CREATE_BAND_ID,
-        label: canCreateBand ? "Novi bend" : `Limit ${ownedGroupBands}/${ownerLimit}`,
-        icon: <PlusIcon />,
-      },
-    ],
-    [bands, allBandsId, canCreateBand, ownedGroupBands, ownerLimit],
-  );
-
-  const selectValue = isAllBands ? allBandsId : activeBandId;
-
   const [detail, setDetail] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [cursor, setCursor] = useState(() => {
@@ -74,8 +43,6 @@ export default function BandPage({
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const [addOpen, setAddOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createName, setCreateName] = useState("");
   const [roleOpen, setRoleOpen] = useState(false);
   const [kickOpen, setKickOpen] = useState(false);
   const [ownerOpen, setOwnerOpen] = useState(false);
@@ -84,6 +51,22 @@ export default function BandPage({
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const searchSeq = useRef(0);
+
+  const [sideOpen, setSideOpen] = useState(false);
+  const [dragPx, setDragPx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const rootRef = useRef(null);
+  const panelWidthRef = useRef(280);
+  const dragRef = useRef({
+    active: false,
+    tracking: false,
+    startX: 0,
+    startY: 0,
+    origin: 0,
+    lastX: 0,
+    lastT: 0,
+    velocity: 0,
+  });
 
   const colorByBandId = useMemo(() => {
     const map = new Map();
@@ -140,18 +123,29 @@ export default function BandPage({
 
   useEffect(() => {
     setAddOpen(false);
-    setCreateOpen(false);
-    setCreateName("");
     setRoleOpen(false);
     setKickOpen(false);
     setOwnerOpen(false);
     setQuery("");
     setSearchResults([]);
+    setSideOpen(false);
+    setDragPx(0);
+    setDragging(false);
   }, [activeBandId]);
+
+  useEffect(() => {
+    const measure = () => {
+      const width = rootRef.current?.clientWidth || 320;
+      panelWidthRef.current = Math.round(width * SIDE_RATIO);
+      setDragPx(sideOpen ? panelWidthRef.current : 0);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [sideOpen, activeBandId]);
 
   function closeToolPanels() {
     setAddOpen(false);
-    setCreateOpen(false);
     setRoleOpen(false);
     setKickOpen(false);
     setOwnerOpen(false);
@@ -159,35 +153,87 @@ export default function BandPage({
     setSearchResults([]);
   }
 
-  function handleBandSelect(nextId) {
-    if (nextId === CREATE_BAND_ID) {
-      closeToolPanels();
-      setCreateOpen(true);
-      return;
-    }
-    onBandChange?.(nextId);
+  function openSide() {
+    setSideOpen(true);
+    setDragPx(panelWidthRef.current);
   }
 
-  async function handleCreateBand(event) {
-    event.preventDefault();
-    const name = createName.trim();
-    if (!name || busy) return;
-    if (!canCreateBand) {
-      showToast?.(`Limit: najviše ${ownerLimit} grupnih bendova. Zatraži grant za više.`, "error");
-      return;
+  function closeSide() {
+    setSideOpen(false);
+    setDragPx(0);
+  }
+
+  function settleFromDrag() {
+    const width = panelWidthRef.current || 1;
+    const { velocity } = dragRef.current;
+    const shouldOpen =
+      velocity > 0.45 || (velocity > -0.35 && dragPx / width > OPEN_THRESHOLD);
+    if (shouldOpen) openSide();
+    else closeSide();
+    setDragging(false);
+    dragRef.current.active = false;
+    dragRef.current.tracking = false;
+  }
+
+  function onPointerDown(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target.closest("input, textarea, select, button, a, label")) return;
+
+    const width = rootRef.current?.clientWidth || 320;
+    panelWidthRef.current = Math.round(width * SIDE_RATIO);
+    const origin = sideOpen ? panelWidthRef.current : dragPx;
+
+    dragRef.current = {
+      active: true,
+      tracking: false,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin,
+      lastX: event.clientX,
+      lastT: performance.now(),
+      velocity: 0,
+    };
+  }
+
+  function onPointerMove(event) {
+    const state = dragRef.current;
+    if (!state.active) return;
+
+    const dx = state.startX - event.clientX;
+    const dy = Math.abs(event.clientY - state.startY);
+
+    if (!state.tracking) {
+      if (Math.abs(dx) < 10 && dy < 10) return;
+      if (dy > Math.abs(dx)) {
+        state.active = false;
+        return;
+      }
+      state.tracking = true;
+      setDragging(true);
+      try {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      } catch {
+        // ignore
+      }
     }
-    setBusy(true);
-    try {
-      const created = await api("/api/bands", { method: "POST", body: { name } });
-      showToast?.(`Bend kreiran: ${created.name}`);
-      setCreateName("");
-      setCreateOpen(false);
-      await onBandsChanged?.();
-      onBandChange?.(created.id);
-    } catch (error) {
-      showToast?.(error.message || "Kreiranje benda nije uspelo", "error");
-    } finally {
-      setBusy(false);
+
+    event.preventDefault();
+    const now = performance.now();
+    const dt = Math.max(1, now - state.lastT);
+    state.velocity = (state.lastX - event.clientX) / dt;
+    state.lastX = event.clientX;
+    state.lastT = now;
+
+    const width = panelWidthRef.current;
+    setDragPx(Math.max(0, Math.min(width, state.origin + dx)));
+  }
+
+  function onPointerUp() {
+    if (!dragRef.current.active && !dragging) return;
+    if (dragRef.current.tracking || dragging) settleFromDrag();
+    else {
+      dragRef.current.active = false;
+      setDragging(false);
     }
   }
 
@@ -203,29 +249,48 @@ export default function BandPage({
   const isOwner = Boolean(permissions.isOwner) && !isAllBands;
   const isLead = Boolean(permissions.isLead) && !isAllBands;
   const members = detail?.members || [];
+  const invites = detail?.invites || [];
+  const googleCalendar = detail?.googleCalendar || null;
+  const bandColor = resolveBandColor(band, band?.id || activeBandId);
+  const [calendarList, setCalendarList] = useState([]);
+  const [calendarBusy, setCalendarBusy] = useState(false);
+  const [pickOpen, setPickOpen] = useState(false);
 
-  /** day-of-month → unique band colors for strips */
-  const stripsByDay = useMemo(() => {
+  /** day-of-month → events in the visible month */
+  const eventsByDay = useMemo(() => {
     const map = new Map();
     for (const event of calendarEvents) {
       const parsed = parseDate(event.date);
       if (Number.isNaN(parsed.getTime())) continue;
       if (!sameMonth(parsed, cursor)) continue;
       const day = parsed.getDate();
-      const color =
-        event.color ||
-        colorByBandId.get(event.bandId) ||
-        resolveBandColor({ id: event.bandId, name: event.bandName }, event.bandId);
       const list = map.get(day) || [];
-      if (!list.includes(color)) list.push(color);
+      list.push(event);
       map.set(day, list);
     }
     return map;
-  }, [calendarEvents, cursor, colorByBandId]);
+  }, [calendarEvents, cursor]);
+
+  /** day-of-month → unique band colors for strips */
+  const stripsByDay = useMemo(() => {
+    const map = new Map();
+    for (const [day, dayEvents] of eventsByDay) {
+      const colors = [];
+      for (const event of dayEvents) {
+        const color =
+          event.color ||
+          colorByBandId.get(event.bandId) ||
+          resolveBandColor({ id: event.bandId, name: event.bandName }, event.bandId);
+        if (!colors.includes(color)) colors.push(color);
+      }
+      map.set(day, colors);
+    }
+    return map;
+  }, [eventsByDay, colorByBandId]);
 
   const monthLabel = useMemo(
     () =>
-      cursor.toLocaleDateString("sr-RS", {
+      cursor.toLocaleDateString("sr-Latn-RS", {
         month: "long",
         year: "numeric",
       }),
@@ -234,6 +299,9 @@ export default function BandPage({
 
   const cells = useMemo(() => buildMonthCells(cursor), [cursor]);
   const today = startOfToday();
+  const reveal = dragging ? dragPx : sideOpen ? panelWidthRef.current : dragPx;
+  const panelWidth = panelWidthRef.current;
+  const progress = panelWidth ? reveal / panelWidth : 0;
 
   useEffect(() => {
     if (!addOpen || !activeBandId || isAllBands) {
@@ -369,7 +437,13 @@ export default function BandPage({
     if (!activeBandId || isAllBands || busy || !canKick) return;
     if (member.memberRole === "owner") return;
     if (isLead && member.memberRole !== "member") return;
-    const ok = window.confirm(`Ukloniti ${member.name} iz benda?`);
+    const ok = await confirm({
+      title: "Ukloniti člana?",
+      message: `${member.name} će biti uklonjen/a iz benda.`,
+      confirmLabel: "Ukloni",
+      cancelLabel: "Otkaži",
+      danger: true,
+    });
     if (!ok) return;
     setBusy(true);
     try {
@@ -391,9 +465,13 @@ export default function BandPage({
 
   async function handleTransfer(member) {
     if (!activeBandId || isAllBands || busy || !canTransfer) return;
-    const ok = window.confirm(
-      `Preneti vlasništvo na ${member.name}?\nTi postaješ lead. Ovo ne možeš poništiti sam/a.`,
-    );
+    const ok = await confirm({
+      title: "Preneti vlasništvo?",
+      message: `Preneti vlasništvo na ${member.name}?\nTi postaješ lead. Ovo ne možeš poništiti sam/a.`,
+      confirmLabel: "Prenesi",
+      cancelLabel: "Otkaži",
+      danger: true,
+    });
     if (!ok) return;
     setBusy(true);
     try {
@@ -417,7 +495,13 @@ export default function BandPage({
   async function handleDeleteBand() {
     if (!activeBandId || isAllBands || busy || !canDelete) return;
     const name = band?.name || "ovaj bend";
-    const ok = window.confirm(`Trajno obrisati bend „${name}“?\nTermini i članstva nestaju. Nema povratka.`);
+    const ok = await confirm({
+      title: "Obrisati bend?",
+      message: `Trajno obrisati bend „${name}“?\nTermini i članstva nestaju. Nema povratka.`,
+      confirmLabel: "Obriši bend",
+      cancelLabel: "Otkaži",
+      danger: true,
+    });
     if (!ok) return;
     setBusy(true);
     try {
@@ -426,6 +510,7 @@ export default function BandPage({
       setOwnerOpen(false);
       await onBandsChanged?.();
       onBandChange?.(allBandsId);
+      onBack?.();
     } catch (error) {
       showToast?.(error.message || "Brisanje nije uspelo", "error");
     } finally {
@@ -441,437 +526,839 @@ export default function BandPage({
       : `${members.length} ${members.length === 1 ? "član" : "članova"}`;
 
   return (
-    <section className="band-home">
-      <header className="band-home-top">
-        <MenuSelect
-          className="band-home-band-select"
-          label="Bend"
-          value={selectValue}
-          options={bandOptions}
-          onChange={handleBandSelect}
-          icon={<AllBandsIcon />}
-        />
-        <div className="band-home-title-wrap">
-          <h2 className="band-home-title">{title}</h2>
-          <p className="band-home-sub">{subtitle}</p>
-        </div>
-      </header>
+    <section
+      ref={rootRef}
+      className={`band-home ${sideOpen || reveal > 0 ? "is-side-open" : ""} ${dragging ? "is-dragging" : ""}`}
+    >
+      <div
+        className="band-home-stage"
+        style={{ transform: `translate3d(${-reveal}px, 0, 0)` }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
+        <div className="band-home-main">
+          <header className="band-home-top">
+            <button
+              type="button"
+              className="band-home-back"
+              aria-label="Nazad na raspored"
+              title="Nazad na raspored"
+              onClick={() => onBack?.()}
+            >
+              <ChevronLeftIcon />
+            </button>
+            <button type="button" className="band-home-title-tap" onClick={openSide} aria-label="Otvori info benda">
+              <div className="band-home-title-wrap">
+                <h2 className="band-home-title">{title}</h2>
+                <p className="band-home-sub">{subtitle}</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              className="band-home-info"
+              aria-label="Više o bendu"
+              title="Više"
+              onClick={openSide}
+            >
+              <InfoIcon />
+            </button>
+          </header>
 
-      <div className="band-cal" aria-label="Kalendar benda">
-        <div className="band-cal-nav">
-          <button
-            type="button"
-            className="band-cal-nav-btn"
-            aria-label="Prethodni mesec"
-            title="Prethodni mesec"
-            onClick={() => setCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
-          >
-            <ChevronLeftIcon />
-          </button>
-          <h3 className="band-cal-month">{monthLabel}</h3>
-          <button
-            type="button"
-            className="band-cal-nav-btn"
-            aria-label="Sledeći mesec"
-            title="Sledeći mesec"
-            onClick={() => setCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
-          >
-            <ChevronRightIcon />
-          </button>
-        </div>
-        <div className="band-cal-weekdays" aria-hidden="true">
-          {WEEKDAYS.map((day, index) => (
-            <span key={`${day}-${index}`}>{day}</span>
-          ))}
-        </div>
-        <div className="band-cal-grid">
-          {cells.map((cell, index) => {
-            if (!cell) return <span key={`e-${index}`} className="band-cal-cell is-empty" />;
-            const isToday =
-              cell.getFullYear() === today.getFullYear() &&
-              cell.getMonth() === today.getMonth() &&
-              cell.getDate() === today.getDate();
-            const strips = stripsByDay.get(cell.getDate()) || [];
-            return (
-              <span
-                key={`${cell.getFullYear()}-${cell.getMonth()}-${cell.getDate()}`}
-                className={["band-cal-cell", isToday ? "is-today" : "", strips.length ? "has-event" : ""]
-                  .filter(Boolean)
-                  .join(" ")}
+          <div className="band-cal" aria-label="Kalendar benda">
+            <div className="band-cal-nav">
+              <button
+                type="button"
+                className="band-cal-nav-btn"
+                aria-label="Prethodni mesec"
+                title="Prethodni mesec"
+                onClick={() => setCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
               >
-                <span className="band-cal-daynum">{cell.getDate()}</span>
-                {strips.length ? (
-                  <span className="band-cal-strips" aria-hidden="true">
-                    {strips.map((color) => (
-                      <span key={color} className="band-cal-strip" style={{ background: color }} />
-                    ))}
-                  </span>
-                ) : (
-                  <span className="band-cal-strips is-blank" aria-hidden="true" />
-                )}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="band-tools" role="toolbar" aria-label="Alati benda">
-        <button
-          type="button"
-          className={`band-tool-btn ${createOpen ? "is-active" : ""}`}
-          aria-label="Novi bend"
-          title={canCreateBand ? "Kreiraj novi bend" : `Limit ${ownedGroupBands}/${ownerLimit}`}
-          onClick={() => {
-            if (createOpen) {
-              closeToolPanels();
-              return;
-            }
-            closeToolPanels();
-            setCreateOpen(true);
-          }}
-        >
-          <NewBandIcon />
-        </button>
-        <button
-          type="button"
-          className={`band-tool-btn ${addOpen ? "is-active" : ""}`}
-          aria-label="Pozovi člana"
-          title={isAllBands ? "Izaberi bend" : canInvite ? "Pošalji pozivnicu" : "Nemaš dozvolu za pozivnice"}
-          disabled={!canInvite}
-          onClick={() => {
-            if (addOpen) {
-              closeToolPanels();
-              return;
-            }
-            closeToolPanels();
-            setAddOpen(true);
-          }}
-        >
-          <PlusIcon />
-        </button>
-        <button
-          type="button"
-          className={`band-tool-btn ${kickOpen ? "is-active" : ""}`}
-          aria-label="Ukloni člana"
-          title={canKick ? "Ukloni člana" : isAllBands ? "Izaberi bend" : "Samo vlasnik / lead"}
-          disabled={!canKick}
-          onClick={() => {
-            if (kickOpen) {
-              closeToolPanels();
-              return;
-            }
-            closeToolPanels();
-            setKickOpen(true);
-          }}
-        >
-          <MinusIcon />
-        </button>
-        <button
-          type="button"
-          className={`band-tool-btn ${roleOpen ? "is-active" : ""}`}
-          aria-label="Uloge i pozivnice"
-          title={
-            canAssignRoles
-              ? "Uloge i dozvola za pozivnice"
-              : isAllBands
-                ? "Izaberi bend"
-                : "Samo vlasnik / lead"
-          }
-          disabled={!canAssignRoles}
-          onClick={() => {
-            if (roleOpen) {
-              closeToolPanels();
-              return;
-            }
-            closeToolPanels();
-            setRoleOpen(true);
-          }}
-        >
-          <RoleIcon />
-        </button>
-        <button
-          type="button"
-          className={`band-tool-btn ${ownerOpen ? "is-active" : ""}`}
-          aria-label="Vlasništvo benda"
-          title={canTransfer || canDelete ? "Prenos vlasništva / brisanje" : "Samo vlasnik"}
-          disabled={!canTransfer && !canDelete}
-          onClick={() => {
-            if (ownerOpen) {
-              closeToolPanels();
-              return;
-            }
-            closeToolPanels();
-            setOwnerOpen(true);
-          }}
-        >
-          <CrownIcon />
-        </button>
-      </div>
-
-      {createOpen ? (
-        <form className="band-add-form" onSubmit={handleCreateBand}>
-          <label className="band-add-label" htmlFor="band-create-name">
-            Ime novog benda
-          </label>
-          <div className="band-add-row">
-            <input
-              id="band-create-name"
-              type="text"
-              autoComplete="off"
-              autoFocus
-              maxLength={80}
-              placeholder="npr. Chabar"
-              value={createName}
-              onChange={(event) => setCreateName(event.target.value)}
-              required
-            />
-            <button type="submit" className="band-add-submit" disabled={busy || !createName.trim() || !canCreateBand}>
-              {busy ? "…" : "Kreiraj"}
-            </button>
-          </div>
-          <p className="band-add-hint">
-            {canCreateBand
-              ? `Grupni bend · ti si vlasnik · ${ownedGroupBands}/${ownerLimit} zauzeto`
-              : `Dostignut limit (${ownerLimit}). Zatraži grant za više benda.`}
-          </p>
-        </form>
-      ) : null}
-
-      {addOpen && canInvite ? (
-        <form className="band-add-form" onSubmit={handleAddMember}>
-          <label className="band-add-label" htmlFor="band-add-search">
-            Traži člana
-          </label>
-          <div className="band-add-row">
-            <input
-              id="band-add-search"
-              type="search"
-              autoComplete="off"
-              autoFocus
-              placeholder="Ime ili email…"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <button type="submit" className="band-add-submit" disabled={busy || !query.trim()}>
-              {busy ? "…" : "Pozovi"}
-            </button>
-          </div>
-          <ul className="band-user-results" role="listbox" aria-label="Registrovani korisnici">
-            {searching && searchResults.length === 0 ? <li className="band-user-empty">Učitavam…</li> : null}
-            {!searching && searchResults.length === 0 ? (
-              <li className="band-user-empty">
-                Nema drugih registrovanih. Unesi email i pritisni Pozovi.
-              </li>
-            ) : null}
-            {searchResults.map((user) => (
-              <li key={user.id}>
-                <button
-                  type="button"
-                  className="band-user-result"
-                  role="option"
-                  disabled={busy}
-                  onClick={() => handlePickUser(user)}
-                >
-                  <span className="band-user-result-name">{user.displayName}</span>
-                  <span className="band-user-result-email">{user.email}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="band-add-hint">Šalje se pozivnica — ulaze tek kad potvrde.</p>
-        </form>
-      ) : null}
-
-      {kickOpen && canKick ? (
-        <div className="band-role-panel" aria-label="Ukloni člana">
-          <p className="band-add-hint">
-            {isOwner ? "Ukloni lead ili člana." : "Lead može ukloniti samo obične članove."}
-          </p>
-          <ul className="band-member-list">
-            {members
-              .filter((member) => {
-                if (member.memberRole === "owner") return false;
-                if (isLead && member.memberRole !== "member") return false;
-                return true;
-              })
-              .map((member) => (
-                <li key={member.id} className="band-member-row band-role-row">
-                  <span className="band-member-name">{member.name}</span>
-                  <button
-                    type="button"
-                    className="band-kick-btn"
-                    disabled={busy}
-                    onClick={() => handleKick(member)}
-                  >
-                    Ukloni
-                  </button>
-                </li>
+                <ChevronLeftIcon />
+              </button>
+              <h3 className="band-cal-month">{monthLabel}</h3>
+              <button
+                type="button"
+                className="band-cal-nav-btn"
+                aria-label="Sledeći mesec"
+                title="Sledeći mesec"
+                onClick={() => setCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+              >
+                <ChevronRightIcon />
+              </button>
+            </div>
+            <div className="band-cal-weekdays" aria-hidden="true">
+              {WEEKDAYS.map((day, index) => (
+                <span key={`${day}-${index}`}>{day}</span>
               ))}
-          </ul>
-          {!members.some((member) => {
-            if (member.memberRole === "owner") return false;
-            if (isLead && member.memberRole !== "member") return false;
-            return true;
-          }) ? (
-            <p className="band-home-note">Nema članova za uklanjanje.</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {roleOpen && canAssignRoles ? (
-        <div className="band-role-panel" aria-label="Uloge članova">
-          <p className="band-add-hint">
-            {isOwner
-              ? "Postavi lead / člana. Isključi pozivnice po članu."
-              : "Lead može unaprediti člana u lead. Isključi pozivnice običnim članovima."}
-          </p>
-          <ul className="band-member-list">
-            {members
-              .filter((member) => member.memberRole !== "owner")
-              .map((member) => {
-                const leadCanTouch = isOwner || (isLead && member.memberRole === "member");
-                const canDemote = isOwner;
-                const canToggleInvite =
-                  isOwner || (isLead && member.memberRole === "member");
+            </div>
+            <div className="band-cal-grid">
+              {cells.map((cell) => {
+                const inMonth = cell.getMonth() === cursor.getMonth();
+                const isToday =
+                  cell.getFullYear() === today.getFullYear() &&
+                  cell.getMonth() === today.getMonth() &&
+                  cell.getDate() === today.getDate();
+                const dayKey = `${cell.getFullYear()}-${cell.getMonth()}-${cell.getDate()}`;
+                const strips = inMonth ? stripsByDay.get(cell.getDate()) || [] : [];
+                const dayEvents = inMonth ? eventsByDay.get(cell.getDate()) || [] : [];
+                const briefs = dayEvents.map(eventLocationBrief).filter(Boolean);
                 return (
-                  <li key={member.id} className="band-member-row band-role-row band-role-row-stack">
-                    <div className="band-role-row-top">
-                      <span className="band-member-name">{member.name}</span>
-                      <span className="band-member-role">{bandRoleLabel(member.memberRole)}</span>
-                    </div>
-                    <div className="band-role-actions">
-                      <button
-                        type="button"
-                        className={member.memberRole === "lead" ? "is-active" : ""}
-                        disabled={busy || member.memberRole === "lead" || !leadCanTouch}
-                        onClick={() => handleSetRole(member, "lead")}
-                      >
-                        lead
-                      </button>
-                      <button
-                        type="button"
-                        className={member.memberRole === "member" ? "is-active" : ""}
-                        disabled={busy || member.memberRole === "member" || !canDemote}
-                        onClick={() => handleSetRole(member, "member")}
-                      >
-                        član
-                      </button>
-                      <button
-                        type="button"
-                        className={member.canInvite ? "is-active" : ""}
-                        disabled={busy || !canToggleInvite}
-                        title="Dozvola za slanje pozivnica"
-                        onClick={() => handleToggleInvite(member)}
-                      >
-                        poziv
-                      </button>
-                    </div>
-                  </li>
+                  <span
+                    key={dayKey}
+                    className={[
+                      "band-cal-cell",
+                      inMonth ? "" : "is-outside",
+                      isToday ? "is-today" : "",
+                      dayEvents.length ? "has-event" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    tabIndex={dayEvents.length ? 0 : undefined}
+                  >
+                    <span className="band-cal-daynum">{cell.getDate()}</span>
+                    {strips.length ? (
+                      <span className="band-cal-strips" aria-hidden="true">
+                        {strips.map((color) => (
+                          <span key={color} className="band-cal-strip" style={{ background: color }} />
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="band-cal-strips is-blank" aria-hidden="true" />
+                    )}
+                    {briefs.length ? (
+                      <span className="band-cal-pop" role="tooltip">
+                        {briefs.map((line, index) => (
+                          <span key={`${dayKey}-pop-${index}`} className="band-cal-pop-line">
+                            {line}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
+                  </span>
                 );
               })}
-          </ul>
-          {!members.some((member) => member.memberRole !== "owner") ? (
-            <p className="band-home-note">Nema drugih članova.</p>
-          ) : null}
-        </div>
-      ) : null}
+            </div>
+          </div>
 
-      {ownerOpen && (canTransfer || canDelete) ? (
-        <div className="band-role-panel" aria-label="Vlasništvo benda">
-          {canTransfer ? (
-            <>
-              <p className="band-add-hint">Prenesi vlasništvo na postojećeg člana. Ti postaješ lead.</p>
+          <div className="band-tools" role="toolbar" aria-label="Alati benda">
+            <button
+              type="button"
+              className={`band-tool-btn ${addOpen ? "is-active" : ""}`}
+              aria-label="Pozovi člana"
+              title={isAllBands ? "Izaberi bend" : canInvite ? "Pošalji pozivnicu" : "Nemaš dozvolu za pozivnice"}
+              disabled={!canInvite}
+              onClick={() => {
+                if (addOpen) {
+                  closeToolPanels();
+                  return;
+                }
+                closeToolPanels();
+                setAddOpen(true);
+              }}
+            >
+              <PlusIcon />
+            </button>
+            <button
+              type="button"
+              className={`band-tool-btn ${kickOpen ? "is-active" : ""}`}
+              aria-label="Ukloni člana"
+              title={canKick ? "Ukloni člana" : isAllBands ? "Izaberi bend" : "Samo vlasnik / lead"}
+              disabled={!canKick}
+              onClick={() => {
+                if (kickOpen) {
+                  closeToolPanels();
+                  return;
+                }
+                closeToolPanels();
+                setKickOpen(true);
+              }}
+            >
+              <MinusIcon />
+            </button>
+            <button
+              type="button"
+              className={`band-tool-btn ${roleOpen ? "is-active" : ""}`}
+              aria-label="Uloge i pozivnice"
+              title={
+                canAssignRoles
+                  ? "Uloge i dozvola za pozivnice"
+                  : isAllBands
+                    ? "Izaberi bend"
+                    : "Samo vlasnik / lead"
+              }
+              disabled={!canAssignRoles}
+              onClick={() => {
+                if (roleOpen) {
+                  closeToolPanels();
+                  return;
+                }
+                closeToolPanels();
+                setRoleOpen(true);
+              }}
+            >
+              <RoleIcon />
+            </button>
+            <button
+              type="button"
+              className={`band-tool-btn ${ownerOpen ? "is-active" : ""}`}
+              aria-label="Vlasništvo benda"
+              title={canTransfer || canDelete ? "Prenos vlasništva / brisanje" : "Samo vlasnik"}
+              disabled={!canTransfer && !canDelete}
+              onClick={() => {
+                if (ownerOpen) {
+                  closeToolPanels();
+                  return;
+                }
+                closeToolPanels();
+                setOwnerOpen(true);
+              }}
+            >
+              <CrownIcon />
+            </button>
+          </div>
+
+          {addOpen && canInvite ? (
+            <form className="band-add-form" onSubmit={handleAddMember}>
+              <label className="band-add-label" htmlFor="band-add-search">
+                Traži člana
+              </label>
+              <div className="band-add-row">
+                <input
+                  id="band-add-search"
+                  type="search"
+                  autoComplete="off"
+                  autoFocus
+                  placeholder="Ime ili email…"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                <button type="submit" className="band-add-submit" disabled={busy || !query.trim()}>
+                  {busy ? "…" : "Pozovi"}
+                </button>
+              </div>
+              <ul className="band-user-results" role="listbox" aria-label="Registrovani korisnici">
+                {searching && searchResults.length === 0 ? <li className="band-user-empty">Učitavam…</li> : null}
+                {!searching && searchResults.length === 0 ? (
+                  <li className="band-user-empty">
+                    Nema drugih registrovanih. Unesi email i pritisni Pozovi.
+                  </li>
+                ) : null}
+                {searchResults.map((user) => (
+                  <li key={user.id}>
+                    <button
+                      type="button"
+                      className="band-user-result"
+                      role="option"
+                      disabled={busy}
+                      onClick={() => handlePickUser(user)}
+                    >
+                      <span className="band-user-result-name">{user.displayName}</span>
+                      <span className="band-user-result-email">{user.email}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="band-add-hint">Šalje se pozivnica — ulaze tek kad potvrde.</p>
+            </form>
+          ) : null}
+
+          {kickOpen && canKick ? (
+            <div className="band-role-panel" aria-label="Ukloni člana">
+              <p className="band-add-hint">
+                {isOwner ? "Ukloni lead ili člana." : "Lead može ukloniti samo obične članove."}
+              </p>
               <ul className="band-member-list">
                 {members
-                  .filter((member) => member.memberRole !== "owner")
+                  .filter((member) => {
+                    if (member.memberRole === "owner") return false;
+                    if (isLead && member.memberRole !== "member") return false;
+                    return true;
+                  })
                   .map((member) => (
                     <li key={member.id} className="band-member-row band-role-row">
                       <span className="band-member-name">{member.name}</span>
                       <button
                         type="button"
-                        className="band-transfer-btn"
+                        className="band-kick-btn"
                         disabled={busy}
-                        onClick={() => handleTransfer(member)}
+                        onClick={() => handleKick(member)}
                       >
-                        Prenesi
+                        Ukloni
                       </button>
                     </li>
                   ))}
               </ul>
-              {!members.some((member) => member.memberRole !== "owner") ? (
-                <p className="band-home-note">Nema člana za prenos — prvo pozovi nekoga.</p>
+              {!members.some((member) => {
+                if (member.memberRole === "owner") return false;
+                if (isLead && member.memberRole !== "member") return false;
+                return true;
+              }) ? (
+                <p className="band-home-note">Nema članova za uklanjanje.</p>
               ) : null}
-            </>
-          ) : null}
-          {canDelete ? (
-            <div className="band-danger-zone">
-              <p className="band-add-hint">Brisanje je trajno (termini + članstva).</p>
-              <button type="button" className="band-delete-btn" disabled={busy} onClick={handleDeleteBand}>
-                Obriši bend
-              </button>
             </div>
           ) : null}
-        </div>
-      ) : null}
 
-      {isAllBands ? (
-        <p className="band-home-note">Izaberi bend za članove i alate.</p>
-      ) : band?.kind === "group" ? (
-        <ul className="band-member-list" aria-label="Članovi">
-          {members.map((member) => (
-            <li key={member.id} className="band-member-row">
-              <span className="band-member-name">{member.name}</span>
-              <span className="band-member-role">{bandRoleLabel(member.memberRole)}</span>
-            </li>
-          ))}
-          {(detail?.invites || []).map((invite) => (
-            <li key={invite.id} className="band-member-row is-pending">
-              <span className="band-member-name">{invite.email}</span>
-              <span className="band-member-role">pozivnica</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="band-home-note">Izaberi grupni bend da upravljaš članovima.</p>
-      )}
+          {roleOpen && canAssignRoles ? (
+            <div className="band-role-panel" aria-label="Uloge članova">
+              <p className="band-add-hint">
+                {isOwner
+                  ? "Postavi lead / člana. Isključi pozivnice po članu."
+                  : "Lead može unaprediti člana u lead. Isključi pozivnice običnim članovima."}
+              </p>
+              <ul className="band-member-list">
+                {members
+                  .filter((member) => member.memberRole !== "owner")
+                  .map((member) => {
+                    const leadCanTouch = isOwner || (isLead && member.memberRole === "member");
+                    const canDemote = isOwner;
+                    const canToggleInvite = isOwner || (isLead && member.memberRole === "member");
+                    return (
+                      <li key={member.id} className="band-member-row band-role-row band-role-row-stack">
+                        <div className="band-role-row-top">
+                          <span className="band-member-name">{member.name}</span>
+                          <span className="band-member-role">{bandRoleLabel(member.memberRole)}</span>
+                        </div>
+                        <div className="band-role-actions">
+                          <button
+                            type="button"
+                            className={member.memberRole === "lead" ? "is-active" : ""}
+                            disabled={busy || member.memberRole === "lead" || !leadCanTouch}
+                            onClick={() => handleSetRole(member, "lead")}
+                          >
+                            lead
+                          </button>
+                          <button
+                            type="button"
+                            className={member.memberRole === "member" ? "is-active" : ""}
+                            disabled={busy || member.memberRole === "member" || !canDemote}
+                            onClick={() => handleSetRole(member, "member")}
+                          >
+                            član
+                          </button>
+                          <button
+                            type="button"
+                            className={member.canInvite ? "is-active" : ""}
+                            disabled={busy || !canToggleInvite}
+                            title="Dozvola za slanje pozivnica"
+                            onClick={() => handleToggleInvite(member)}
+                          >
+                            poziv
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+              {!members.some((member) => member.memberRole !== "owner") ? (
+                <p className="band-home-note">Nema drugih članova.</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {ownerOpen && (canTransfer || canDelete) ? (
+            <div className="band-role-panel" aria-label="Vlasništvo benda">
+              {canTransfer ? (
+                <>
+                  <p className="band-add-hint">Prenesi vlasništvo na postojećeg člana. Ti postaješ lead.</p>
+                  <ul className="band-member-list">
+                    {members
+                      .filter((member) => member.memberRole !== "owner")
+                      .map((member) => (
+                        <li key={member.id} className="band-member-row band-role-row">
+                          <span className="band-member-name">{member.name}</span>
+                          <button
+                            type="button"
+                            className="band-transfer-btn"
+                            disabled={busy}
+                            onClick={() => handleTransfer(member)}
+                          >
+                            Prenesi
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                  {!members.some((member) => member.memberRole !== "owner") ? (
+                    <p className="band-home-note">Nema člana za prenos — prvo pozovi nekoga.</p>
+                  ) : null}
+                </>
+              ) : null}
+              {canDelete ? (
+                <div className="band-danger-zone">
+                  <p className="band-add-hint">Brisanje je trajno (termini + članstva).</p>
+                  <button type="button" className="band-delete-btn" disabled={busy} onClick={handleDeleteBand}>
+                    Obriši bend
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {isAllBands ? <p className="band-home-note">Izaberi bend za članove i alate.</p> : null}
+          {!isAllBands ? (
+            <p className="band-home-swipe-hint" aria-hidden="true">
+              ← prevuci za više
+            </p>
+          ) : null}
+        </div>
+
+        <aside
+          className="band-home-side"
+          style={{ width: panelWidth }}
+          aria-hidden={progress < 0.05}
+          id="band-home-side"
+        >
+          <header className="band-home-side-top">
+            <button type="button" className="band-home-back" onClick={closeSide} aria-label="Zatvori">
+              <ChevronLeftIcon />
+            </button>
+            <div className="band-home-title-wrap">
+              <h2 className="band-home-title">Više</h2>
+              <p className="band-home-sub">prevuci desno da zatvoriš</p>
+            </div>
+          </header>
+
+          <div className="band-home-side-body">
+            <div className="band-home-side-hero">
+              <span className="band-home-avatar" style={{ backgroundColor: bandColor }} aria-hidden="true">
+                {bandInitials(band?.name || title)}
+              </span>
+              <strong>{title}</strong>
+              <span>{subtitle}</span>
+            </div>
+
+            <section className="band-home-side-section">
+              <h3>
+                Članovi
+                {members.length ? ` · ${members.length}` : ""}
+              </h3>
+              {isAllBands ? (
+                <p className="band-home-note">Izaberi bend da vidiš članove.</p>
+              ) : band?.kind === "personal" ? (
+                <p className="band-home-note">Lični prostor — nema liste članova.</p>
+              ) : (
+                <ul className="band-home-side-members">
+                  {members.map((member) => (
+                    <li key={member.id}>
+                      <span className="band-home-avatar is-sm" aria-hidden="true">
+                        {bandInitials(member.name)}
+                      </span>
+                      <span className="band-home-side-member-text">
+                        <strong>{member.name}</strong>
+                        {member.email ? <small>{member.email}</small> : null}
+                      </span>
+                      <span className="band-home-side-role">{bandRoleLabel(member.memberRole)}</span>
+                    </li>
+                  ))}
+                  {invites.map((invite) => (
+                    <li key={invite.id} className="is-pending">
+                      <span className="band-home-avatar is-sm is-pending" aria-hidden="true">
+                        ?
+                      </span>
+                      <span className="band-home-side-member-text">
+                        <strong>{invite.email}</strong>
+                        <small>čeka potvrdu</small>
+                      </span>
+                      <span className="band-home-side-role">pozivnica</span>
+                    </li>
+                  ))}
+                  {!members.length && !invites.length ? (
+                    <li className="band-home-side-empty">Nema učitanih članova.</li>
+                  ) : null}
+                </ul>
+              )}
+            </section>
+
+            <section className="band-home-side-section">
+              <h3>Google kalendar</h3>
+              {!googleCalendar?.configured ? (
+                <p className="band-home-note">Sync nije konfigurisan na serveru.</p>
+              ) : !googleCalendar?.account?.connected ? (
+                <div className="band-home-side-placeholders">
+                  <p className="band-home-note">
+                    Jedan Google nalog → po bendu biraš koji kalendar (npr. Saint Louis / Marko Louis).
+                    Sync ne dira kalendare drugih članova.
+                  </p>
+                  <button
+                    type="button"
+                    className="band-home-side-action"
+                    disabled={calendarBusy || isAllBands}
+                    onClick={async () => {
+                      setCalendarBusy(true);
+                      try {
+                        const data = await api(
+                          `/api/google/calendar/connect?returnTo=band&bandId=${encodeURIComponent(activeBandId)}`,
+                        );
+                        window.location.href = data.url;
+                      } catch (error) {
+                        showToast?.(error.message || "Povezivanje nije uspelo", "error");
+                        setCalendarBusy(false);
+                      }
+                    }}
+                  >
+                    Poveži Google nalog
+                    <small>pa izaberi kalendar benda</small>
+                  </button>
+                </div>
+              ) : googleCalendar?.link ? (
+                <div className="band-home-side-placeholders">
+                  <p className="band-home-note">
+                    {googleCalendar.link.summary || googleCalendar.link.calendarId}
+                    {googleCalendar.link.syncEnabled ? " · sync uključen" : " · sync isključen"}
+                  </p>
+                  {googleCalendar.canManageLink ? (
+                    <>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={calendarBusy}
+                        onClick={async () => {
+                          setCalendarBusy(true);
+                          try {
+                            await api(`/api/bands/${activeBandId}/google-calendar`, {
+                              method: "PATCH",
+                              bandId: activeBandId,
+                              body: { syncEnabled: !googleCalendar.link.syncEnabled },
+                            });
+                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
+                            setDetail(data);
+                            showToast?.(
+                              !googleCalendar.link.syncEnabled ? "Sync uključen" : "Sync isključen",
+                            );
+                          } catch (error) {
+                            showToast?.(error.message || "Izmena nije uspela", "error");
+                          } finally {
+                            setCalendarBusy(false);
+                          }
+                        }}
+                      >
+                        {googleCalendar.link.syncEnabled ? "Isključi sync" : "Uključi sync"}
+                        <small>bend kalendar</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={calendarBusy}
+                        onClick={async () => {
+                          setCalendarBusy(true);
+                          try {
+                            const result = await api(
+                              `/api/bands/${activeBandId}/google-calendar/pull?mode=linked`,
+                              { method: "POST", bandId: activeBandId },
+                            );
+                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
+                            setDetail(data);
+                            setCalendarEvents(data.events || []);
+                            showToast?.(
+                              `Ažurirano ${result.updated} (uvezeno 0, preskočeno ${result.skipped || 0})`,
+                            );
+                          } catch (error) {
+                            showToast?.(error.message || "Sync nije uspeo", "error");
+                          } finally {
+                            setCalendarBusy(false);
+                          }
+                        }}
+                      >
+                        Ažuriraj povezane
+                        <small>bez novih termina — bezbedno</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={calendarBusy}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Pošalji u Google?",
+                            message:
+                              "Poslati Chabar datume koji još nisu u Google kalendaru?\n\n" +
+                              "• Samo ovaj bendov kalendar\n" +
+                              "• Ne dira postojeće Google događaje\n" +
+                              "• Novi imaju liniju „created via chabar.rs”",
+                            confirmLabel: "Pošalji",
+                            cancelLabel: "Otkaži",
+                          });
+                          if (!ok) return;
+                          setCalendarBusy(true);
+                          try {
+                            const result = await api(
+                              `/api/bands/${activeBandId}/google-calendar/push`,
+                              { method: "POST", bandId: activeBandId },
+                            );
+                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
+                            setDetail(data);
+                            setCalendarEvents(data.events || []);
+                            showToast?.(
+                              `Poslato ${result.created}, povezano ${result.linked || 0}, ` +
+                                `preskočeno ${result.skipped || 0}` +
+                                (result.errors ? `, greške ${result.errors}` : ""),
+                            );
+                          } catch (error) {
+                            showToast?.(error.message || "Slanje nije uspelo", "error");
+                          } finally {
+                            setCalendarBusy(false);
+                          }
+                        }}
+                      >
+                        Pošalji u Google
+                        <small>Chabar → kalendar (samo novi)</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={calendarBusy}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Uvesti iz Google-a?",
+                            message:
+                              "Uvesti BUDUĆE datume iz Google kalendara koji još nisu u Chabar-u?\n\n" +
+                              "• Ne dira prošlost\n" +
+                              "• Ne pravi duplikate ako isti datum već postoji\n" +
+                              "• Ne piše u kalendare drugih članova\n\n" +
+                              "Preporuka: prvo koristi „Ažuriraj povezane”.",
+                            confirmLabel: "Uvezi",
+                            cancelLabel: "Otkaži",
+                          });
+                          if (!ok) return;
+                          setCalendarBusy(true);
+                          try {
+                            const result = await api(
+                              `/api/bands/${activeBandId}/google-calendar/pull?mode=import`,
+                              { method: "POST", bandId: activeBandId },
+                            );
+                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
+                            setDetail(data);
+                            setCalendarEvents(data.events || []);
+                            showToast?.(
+                              `Uvezeno ${result.imported}, ažurirano ${result.updated}, preskočeno ${result.skipped || 0}` +
+                                (result.imported
+                                  ? " — možeš obrisati dugmetom „Obriši uvezeno”"
+                                  : ""),
+                            );
+                          } catch (error) {
+                            showToast?.(error.message || "Uvoz nije uspeo", "error");
+                          } finally {
+                            setCalendarBusy(false);
+                          }
+                        }}
+                      >
+                        Uvezi buduće iz Google-a
+                        <small>samo danas pa nadalje</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={calendarBusy || !(googleCalendar.importedCount > 0)}
+                        onClick={async () => {
+                          const n = googleCalendar.importedCount || 0;
+                          const ok = await confirm({
+                            title: "Obriši uvezeno?",
+                            message:
+                              `Obrisati ${n} termin(a) uvezena iz Google-a iz Chabar-a?\n\n` +
+                              "Google kalendar ostaje netaknut — briše se samo kopija u aplikaciji.",
+                            confirmLabel: "Obriši",
+                            cancelLabel: "Otkaži",
+                            danger: true,
+                          });
+                          if (!ok) return;
+                          setCalendarBusy(true);
+                          try {
+                            const result = await api(
+                              `/api/bands/${activeBandId}/google-calendar/imported`,
+                              { method: "DELETE", bandId: activeBandId },
+                            );
+                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
+                            setDetail(data);
+                            setCalendarEvents(data.events || []);
+                            showToast?.(`Obrisano ${result.deleted} uvezenih termina (Google netaknut)`);
+                          } catch (error) {
+                            showToast?.(error.message || "Brisanje nije uspelo", "error");
+                          } finally {
+                            setCalendarBusy(false);
+                          }
+                        }}
+                      >
+                        Obriši uvezeno
+                        <small>
+                          {googleCalendar.importedCount > 0
+                            ? `${googleCalendar.importedCount} u Chabar-u · Google ostaje`
+                            : "nema uvezenih (sync_source=google)"}
+                        </small>
+                      </button>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={calendarBusy}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Odvezati kalendar?",
+                            message: "Odvezati Google kalendar od ovog benda?",
+                            confirmLabel: "Odveži",
+                            cancelLabel: "Otkaži",
+                            danger: true,
+                          });
+                          if (!ok) return;
+                          setCalendarBusy(true);
+                          try {
+                            await api(`/api/bands/${activeBandId}/google-calendar`, {
+                              method: "DELETE",
+                              bandId: activeBandId,
+                            });
+                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
+                            setDetail(data);
+                            showToast?.("Kalendar odvezan");
+                          } catch (error) {
+                            showToast?.(error.message || "Odvezivanje nije uspelo", "error");
+                          } finally {
+                            setCalendarBusy(false);
+                          }
+                        }}
+                      >
+                        Odveži kalendar
+                        <small>samo connector (v1)</small>
+                      </button>
+                    </>
+                  ) : (
+                    <p className="band-home-note">Samo osoba koja je povezala može menjati link (v1).</p>
+                  )}
+                </div>
+              ) : (
+                <div className="band-home-side-placeholders">
+                  {!pickOpen ? (
+                    <button
+                      type="button"
+                      className="band-home-side-action"
+                      disabled={calendarBusy || isAllBands}
+                      onClick={async () => {
+                        setCalendarBusy(true);
+                        try {
+                          const data = await api("/api/google/calendar/calendars");
+                          setCalendarList(data.calendars || []);
+                          setPickOpen(true);
+                        } catch (error) {
+                          showToast?.(error.message || "Lista kalendara nije uspela", "error");
+                        } finally {
+                          setCalendarBusy(false);
+                        }
+                      }}
+                    >
+                      Izaberi kalendar benda
+                      <small>poveži postojeći Google calendar</small>
+                    </button>
+                  ) : (
+                    <ul className="band-home-side-members">
+                      {calendarList.map((cal) => (
+                        <li key={cal.id}>
+                          <button
+                            type="button"
+                            className="band-user-result"
+                            disabled={calendarBusy}
+                            onClick={async () => {
+                              setCalendarBusy(true);
+                              try {
+                                await api(`/api/bands/${activeBandId}/google-calendar`, {
+                                  method: "PUT",
+                                  bandId: activeBandId,
+                                  body: {
+                                    calendarId: cal.id,
+                                    summary: cal.summary,
+                                    syncEnabled: true,
+                                  },
+                                });
+                                const data = await api(`/api/bands/${activeBandId}`, {
+                                  bandId: activeBandId,
+                                });
+                                setDetail(data);
+                                setPickOpen(false);
+                                showToast?.(`Povezano: ${cal.summary}`);
+                              } catch (error) {
+                                showToast?.(error.message || "Povezivanje nije uspelo", "error");
+                              } finally {
+                                setCalendarBusy(false);
+                              }
+                            }}
+                          >
+                            <span className="band-user-result-name">{cal.summary}</span>
+                            <span className="band-user-result-email">{cal.primary ? "primary" : cal.id}</span>
+                          </button>
+                        </li>
+                      ))}
+                      {!calendarList.length ? (
+                        <li className="band-home-side-empty">Nema kalendara sa write pristupom.</li>
+                      ) : null}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section className="band-home-side-section">
+              <h3>Ostalo</h3>
+              <div className="band-home-side-placeholders">
+                <button type="button" className="band-home-side-action" disabled>
+                  Mediji
+                  <small>uskoro</small>
+                </button>
+                <button type="button" className="band-home-side-action" disabled>
+                  Obaveštenja
+                  <small>uskoro</small>
+                </button>
+                <button type="button" className="band-home-side-action" disabled>
+                  Deljenje
+                  <small>uskoro</small>
+                </button>
+                <button type="button" className="band-home-side-action" disabled>
+                  Podešavanja benda
+                  <small>uskoro</small>
+                </button>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </div>
+
+      {reveal > 8 ? (
+        <button
+          type="button"
+          className="band-home-scrim"
+          style={{ opacity: Math.min(0.45, progress * 0.45) }}
+          aria-label="Zatvori panel"
+          onClick={closeSide}
+        />
+      ) : null}
     </section>
   );
 }
 
+
+/** Always 6 weeks (42 cells), Mon–Sun, with adjacent-month days filled in. */
 function buildMonthCells(monthStart) {
   const year = monthStart.getFullYear();
   const month = monthStart.getMonth();
   const first = new Date(year, month, 1);
-  const startPad = (first.getDay() + 6) % 7;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startPad = (first.getDay() + 6) % 7; // Monday = 0
+  const gridStart = new Date(year, month, 1 - startPad);
   const cells = [];
-  for (let i = 0; i < startPad; i += 1) cells.push(null);
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push(new Date(year, month, day));
+  for (let i = 0; i < 42; i += 1) {
+    cells.push(new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i));
   }
-  while (cells.length % 7 !== 0) cells.push(null);
   return cells;
 }
 
-function AllBandsIcon() {
+/** Popup line: city · venue when venue is set, otherwise city only. */
+function eventLocationBrief(event) {
+  const city = String(event?.city || "").trim();
+  const venue = String(event?.venue || "").trim();
+  if (venue) return city ? `${city} · ${venue}` : venue;
+  return city;
+}
+
+function InfoIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <circle cx="17" cy="9" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M14.8 19c.4-2.2 1.8-3.5 3.7-3.5 1.2 0 2.2.5 2.9 1.4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 10.5v5.25" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="7.75" r="1" fill="currentColor" />
     </svg>
   );
 }
@@ -880,15 +1367,6 @@ function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function NewBandIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3.5" y="5" width="17" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M12 9v6M9 12h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -934,7 +1412,14 @@ function CrownIcon() {
 function ChevronLeftIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M15 6 9 12l6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M14.5 5.5 8 12l6.5 6.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -942,7 +1427,14 @@ function ChevronLeftIcon() {
 function ChevronRightIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M9.5 5.5 16 12l-6.5 6.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

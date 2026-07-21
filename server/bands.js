@@ -1,6 +1,12 @@
 import { clearMembershipCache, pickBandColor } from "./auth.js";
 import { query } from "./db.js";
 import {
+  getBandCalendarLink,
+  getGoogleAccountStatus,
+  googleCalendarConfigured,
+  countGoogleImportedEvents,
+} from "./googleCalendar.js";
+import {
   MAX_BAND_CREATES_PER_DAY,
   MAX_INVITES_PER_DAY,
   MAX_PENDING_INVITES_PER_BAND,
@@ -317,10 +323,26 @@ export async function getBandHome(req, res, next) {
         isOwner,
         isLead,
       },
+      googleCalendar: await buildGoogleCalendarPayload(bandId, req.user.id),
     });
   } catch (error) {
     next(error);
   }
+}
+
+async function buildGoogleCalendarPayload(bandId, userId) {
+  const [account, link, importedCount] = await Promise.all([
+    getGoogleAccountStatus(userId),
+    getBandCalendarLink(bandId),
+    countGoogleImportedEvents(bandId),
+  ]);
+  return {
+    configured: googleCalendarConfigured(),
+    account,
+    link,
+    importedCount,
+    canManageLink: !link || link.connectedByUserId === userId,
+  };
 }
 
 async function assertCanInvite(req) {

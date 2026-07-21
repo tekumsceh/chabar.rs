@@ -1,6 +1,9 @@
 import { DEFAULT_RATE, LEGACY_RATE_THROUGH_TEXT, positiveNumber } from "./calculations.js";
 import { INVITE_PREFERENCE_LABELS, INVITE_PREFERENCES } from "../shared/bandLimits.js";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "./api.js";
+import { useConfirm } from "./confirmDialog.jsx";
+import FieldSelect from "./FieldSelect.jsx";
 
 export default function SettingsPage({
   theme,
@@ -13,9 +16,34 @@ export default function SettingsPage({
   onInvitePreferenceChange,
   ownedGroupBands = 0,
   ownerLimit = 5,
+  showToast,
 }) {
+  const { confirm } = useConfirm();
   const [rateBusy, setRateBusy] = useState(false);
   const [rateMeta, setRateMeta] = useState(null);
+  const [gcal, setGcal] = useState(null);
+  const [gcalBusy, setGcalBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await api("/api/google/calendar/status");
+        if (!cancelled) setGcal(status);
+      } catch (error) {
+        if (!cancelled) {
+          setGcal({
+            configured: false,
+            connected: false,
+            loadError: error.message || "Status nije učitan",
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleFetchRate() {
     if (rateBusy || !onFetchExchangeRate) return;
@@ -27,6 +55,61 @@ export default function SettingsPage({
       // toast handled in App
     } finally {
       setRateBusy(false);
+    }
+  }
+
+  async function connectGoogle() {
+    setGcalBusy(true);
+    try {
+      const data = await api("/api/google/calendar/connect?returnTo=settings");
+      window.location.href = data.url;
+    } catch (error) {
+      showToast?.(error.message || "Povezivanje nije uspelo", "error");
+      setGcalBusy(false);
+    }
+  }
+
+  async function disconnectGoogle() {
+    const ok = await confirm({
+      title: "Odvezati Google?",
+      message: "Odvezati Google nalog za kalendar?",
+      confirmLabel: "Odveži",
+      cancelLabel: "Otkaži",
+      danger: true,
+    });
+    if (!ok) return;
+    setGcalBusy(true);
+    try {
+      await api("/api/google/calendar/account", { method: "DELETE" });
+      setGcal((current) => ({
+        ...(current || {}),
+        connected: false,
+        email: "",
+        personalSyncEnabled: false,
+      }));
+      showToast?.("Google kalendar odvezan");
+    } catch (error) {
+      showToast?.(error.message || "Odvezivanje nije uspelo", "error");
+    } finally {
+      setGcalBusy(false);
+    }
+  }
+
+  async function togglePersonalSync() {
+    if (!gcal?.connected) return;
+    setGcalBusy(true);
+    try {
+      const next = !gcal.personalSyncEnabled;
+      const status = await api("/api/google/calendar/prefs", {
+        method: "PATCH",
+        body: { personalSyncEnabled: next, personalCalendarId: "primary" },
+      });
+      setGcal(status);
+      showToast?.(next ? "Lični sync uključen" : "Lični sync isključen");
+    } catch (error) {
+      showToast?.(error.message || "Izmena nije uspela", "error");
+    } finally {
+      setGcalBusy(false);
     }
   }
 
@@ -56,6 +139,50 @@ export default function SettingsPage({
         </label>
       </section>
 
+      <section className="settings-card" aria-label="Google kalendar">
+        <h2>Google kalendar</h2>
+        <p className="settings-note">
+          Odvojeno od prijave Google-om. Ovde daješ dozvolu da Chabar piše termine u kalendar. Kako radi:
+          docs/google-calendar-sync.md
+        </p>
+        {!gcal ? (
+          <p className="settings-note">Proveravam…</p>
+        ) : gcal.loadError ? (
+          <p className="settings-note">Greška: {gcal.loadError}</p>
+        ) : !gcal.configured ? (
+          <p className="settings-note">
+            Google Calendar nije konfigurisan na serveru. Proveri `.env` i restartuj API (`npm run
+            dev` / PM2).
+          </p>
+        ) : gcal?.connected ? (
+          <>
+            <p className="settings-note">Povezano: {gcal.email || "Google nalog"}</p>
+            <label className="settings-row">
+              <span>
+                <strong>Lični sync</strong>
+                <small>Ako bend nema kalendar, termini koje TI sačuvaš idu u tvoj primary — ne u tuđe</small>
+              </span>
+              <button
+                type="button"
+                className="settings-toggle"
+                disabled={gcalBusy}
+                onClick={togglePersonalSync}
+                aria-pressed={gcal.personalSyncEnabled}
+              >
+                {gcal.personalSyncEnabled ? "Uključeno" : "Isključeno"}
+              </button>
+            </label>
+            <button type="button" className="danger" disabled={gcalBusy} onClick={disconnectGoogle}>
+              Odveži Google kalendar
+            </button>
+          </>
+        ) : (
+          <button type="button" disabled={gcalBusy} onClick={connectGoogle}>
+            {gcalBusy ? "…" : "Poveži Google kalendar"}
+          </button>
+        )}
+      </section>
+
       <section className="settings-card" aria-label="Bendovi">
         <h2>Bendovi</h2>
         <p className="settings-note">
@@ -65,18 +192,17 @@ export default function SettingsPage({
 
         <label className="settings-field" htmlFor="settingsInvitePreference">
           <span>Pozivnice u bend</span>
-          <select
+          <FieldSelect
             id="settingsInvitePreference"
-            name="invitePreference"
+            label="Pozivnice u bend"
             value={invitePreference}
-            onChange={(event) => onInvitePreferenceChange?.(event.target.value)}
-          >
-            {INVITE_PREFERENCES.map((id) => (
-              <option key={id} value={id} disabled={id === "digest"}>
-                {INVITE_PREFERENCE_LABELS[id]}
-              </option>
-            ))}
-          </select>
+            options={INVITE_PREFERENCES.map((id) => ({
+              id,
+              label: INVITE_PREFERENCE_LABELS[id],
+              disabled: id === "digest",
+            }))}
+            onChange={(id) => onInvitePreferenceChange?.(id)}
+          />
         </label>
         <p className="settings-note">
           Pozivnice uvek čekaju tvoju potvrdu. Blokiraj ako ne želiš da te iko pozove.

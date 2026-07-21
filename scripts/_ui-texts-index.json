@@ -1,0 +1,3229 @@
+[
+  {
+    "key": "App.aria.glavna_navigacija",
+    "text": "Glavna navigacija",
+    "file": "src/App.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "App.nav.report",
+    "text": "Finansije",
+    "file": "src/App.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "App.nav.schedule",
+    "text": "Raspored",
+    "file": "src/App.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "App.text.ucitavanje",
+    "text": "Učitavanje",
+    "file": "src/App.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "App.toast.created_city",
+    "text": "— {city}",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.google_kalendar_povezan",
+    "text": "Google kalendar povezan",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.json_kopiran_u_clipboard",
+    "text": "JSON kopiran u clipboard",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.kurs_nije_dostupan",
+    "text": "Kurs nije dostupan",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.kurs_rate_label",
+    "text": "Kurs: {rate} ({label}{asOf})",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": "approx template"
+  },
+  {
+    "key": "App.toast.label",
+    "text": ": {label}",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.moras_izabrati_bend_ili_personal",
+    "text": "Moraš izabrati bend ili Personal",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.nextevent_city",
+    "text": "— {city}",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.odbijanje_nije_uspelo",
+    "text": "Odbijanje nije uspelo",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.pozivnica_odbijena",
+    "text": "Pozivnica odbijena",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.pridruzio_la_si_se_result_band_name_bend",
+    "text": "Pridružio/la si se: {bend}",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.prihvatanje_nije_uspelo",
+    "text": "Prihvatanje nije uspelo",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.prosli_termini_se_ne_mogu_brisati",
+    "text": "Prošli termini se ne mogu brisati",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.result_asof",
+    "text": ", {asOf}",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.sacuvano",
+    "text": "Sačuvano",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.termin_dodat",
+    "text": "Termin dodat: {date}{city}",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.termin_obrisan",
+    "text": "Termin obrisan{label}",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.unesi_eur_ili_din_iznos",
+    "text": "Unesi EUR ili DIN iznos",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "App.toast.uplata_dodata",
+    "text": "Uplata dodata",
+    "file": "src/App.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.alati_benda",
+    "text": "Alati benda",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.kalendar_benda",
+    "text": "Kalendar benda",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.nazad_na_raspored",
+    "text": "Nazad na raspored",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.otvori_info_benda",
+    "text": "Otvori info benda",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.pozovi_clana",
+    "text": "Pozovi člana",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.prethodni_mesec",
+    "text": "Prethodni mesec",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.registrovani_korisnici",
+    "text": "Registrovani korisnici",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.sledeci_mesec",
+    "text": "Sledeći mesec",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.ukloni_clana",
+    "text": "Ukloni člana",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.ukloni_clana_2",
+    "text": "Ukloni člana",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.uloge_clanova",
+    "text": "Uloge članova",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.uloge_i_pozivnice",
+    "text": "Uloge i pozivnice",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.vise_o_bendu",
+    "text": "Više o bendu",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.vlasnistvo_benda",
+    "text": "Vlasništvo benda",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.vlasnistvo_benda_2",
+    "text": "Vlasništvo benda",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.zatvori",
+    "text": "Zatvori",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.aria.zatvori_panel",
+    "text": "Zatvori panel",
+    "file": "src/BandPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "BandPage.confirm.cancelLabel.otkazi",
+    "text": "Otkaži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "BandPage.confirm.cancelLabel.otkazi_2",
+    "text": "Otkaži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "BandPage.confirm.cancelLabel.otkazi_3",
+    "text": "Otkaži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "BandPage.confirm.cancelLabel.otkazi_4",
+    "text": "Otkaži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "BandPage.confirm.cancelLabel.otkazi_5",
+    "text": "Otkaži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "BandPage.confirm.cancelLabel.otkazi_6",
+    "text": "Otkaži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "BandPage.confirm.cancelLabel.otkazi_7",
+    "text": "Otkaži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "BandPage.confirm.confirmLabel.obrisi",
+    "text": "Obriši",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "BandPage.confirm.confirmLabel.obrisi_bend",
+    "text": "Obriši bend",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "BandPage.confirm.confirmLabel.odvezi",
+    "text": "Odveži",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "BandPage.confirm.confirmLabel.posalji",
+    "text": "Pošalji",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "BandPage.confirm.confirmLabel.prenesi",
+    "text": "Prenesi",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "BandPage.confirm.confirmLabel.ukloni",
+    "text": "Ukloni",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "BandPage.confirm.confirmLabel.uvezi",
+    "text": "Uvezi",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "BandPage.confirm.message.member_name_ce_biti_uklonjen_a_iz_benda",
+    "text": "{name} će biti uklonjen/a iz benda.",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.obrisati_n_termin_a_uvezena_iz_google_a_iz_chaba",
+    "text": "Obrisati {n} termin(a) uvezena iz Google-a iz Chabar-a?\\n\\n",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.obrisati_n_termin_a_uvezena_iz_google_a_iz_chaba_2",
+    "text": "Obrisati {n} termin(a) uvezena iz Google-a iz Chabar-a?\\n\\nGoogle kalendar ostaje netaknut — briše se samo kopija u aplikaciji.",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.odvezati_google_kalendar_od_ovog_benda",
+    "text": "Odvezati Google kalendar od ovog benda?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.poslati_chabar_datume_koji_jos_nisu_u_google_kal",
+    "text": "Poslati Chabar datume koji još nisu u Google kalendaru?\\n\\n",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.poslati_chabar_datume_koji_jos_nisu_u_google_kal_2",
+    "text": "Poslati Chabar datume koji još nisu u Google kalendaru?\\n\\n• Samo ovaj bendov kalendar\\n• Ne dira postojeće Google događaje\\n• Novi imaju liniju „created via chabar.rs”",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.preneti_vlasnistvo_na_member_name_nti_postajes_l",
+    "text": "Preneti vlasništvo na {name}?\\nTi postaješ lead. Ovo ne možeš poništiti sam/a.",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.trajno_obrisati_bend_name_ntermini_i_clanstva_ne",
+    "text": "Trajno obrisati bend „{name}“?\\nTermini i članstva nestaju. Nema povratka.",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.uvesti_buduce_datume_iz_google_kalendara_koji_jo",
+    "text": "Uvesti BUDUĆE datume iz Google kalendara koji još nisu u Chabar-u?\\n\\n",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.message.uvesti_buduce_datume_iz_google_kalendara_koji_jo_2",
+    "text": "Uvesti BUDUĆE datume iz Google kalendara koji još nisu u Chabar-u?\\n\\n• Ne dira prošlost\\n• Ne pravi duplikate ako isti datum već postoji\\n• Ne piše u kalendare drugih članova\\n\\nPreporuka: prvo koristi „Ažuriraj povezane”.",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "BandPage.confirm.title.obrisati_bend",
+    "text": "Obrisati bend?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "BandPage.confirm.title.obrisi_uvezeno",
+    "text": "Obriši uvezeno?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "BandPage.confirm.title.odvezati_kalendar",
+    "text": "Odvezati kalendar?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "BandPage.confirm.title.posalji_u_google",
+    "text": "Pošalji u Google?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "BandPage.confirm.title.preneti_vlasnistvo",
+    "text": "Preneti vlasništvo?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "BandPage.confirm.title.ukloniti_clana",
+    "text": "Ukloniti člana?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "BandPage.confirm.title.uvesti_iz_google_a",
+    "text": "Uvesti iz Google-a?",
+    "file": "src/BandPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "BandPage.note.bend_kalendar",
+    "text": "bend kalendar",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.bez_novih_termina_bezbedno",
+    "text": "bez novih termina — bezbedno",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.ceka_potvrdu",
+    "text": "čeka potvrdu",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.chabar_kalendar_samo_novi",
+    "text": "Chabar → kalendar (samo novi)",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.pa_izaberi_kalendar_benda",
+    "text": "pa izaberi kalendar benda",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.povezi_postojeci_google_calendar",
+    "text": "poveži postojeći Google calendar",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.samo_connector_v1",
+    "text": "samo connector (v1)",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.samo_danas_pa_nadalje",
+    "text": "samo danas pa nadalje",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.uskoro",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.uskoro_2",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.uskoro_3",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.note.uskoro_4",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "BandPage.placeholder.ime_ili_email",
+    "text": "Ime ili email…",
+    "file": "src/BandPage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.",
+    "text": "))}",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.bend_kalendar",
+    "text": "bend kalendar",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.bez_novih_termina_bezbedno",
+    "text": "bez novih termina — bezbedno",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.brisanje_je_trajno_termini_clanstva",
+    "text": "Brisanje je trajno (termini + članstva).",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.ceka_potvrdu",
+    "text": "čeka potvrdu",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.chabar_kalendar_samo_novi",
+    "text": "Chabar → kalendar (samo novi)",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.google_kalendar",
+    "text": "Google kalendar",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.izaberi_bend_da_vidis_clanove",
+    "text": "Izaberi bend da vidiš članove.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.izaberi_bend_za_clanove_i_alate",
+    "text": "Izaberi bend za članove i alate.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.jedan_google_nalog_po_bendu_biras_koji_kalendar_",
+    "text": "Jedan Google nalog → po bendu biraš koji kalendar (npr. Saint Louis / Marko Louis). Sync ne dira kalendare drugih članova.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.licni_prostor_nema_liste_clanova",
+    "text": "Lični prostor — nema liste članova.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.nema_clana_za_prenos_prvo_pozovi_nekoga",
+    "text": "Nema člana za prenos — prvo pozovi nekoga.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.nema_clanova_za_uklanjanje",
+    "text": "Nema članova za uklanjanje.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.nema_drugih_clanova",
+    "text": "Nema drugih članova.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.nema_drugih_registrovanih_unesi_email_i_pritisni",
+    "text": "Nema drugih registrovanih. Unesi email i pritisni Pozovi.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.nema_kalendara_sa_write_pristupom",
+    "text": "Nema kalendara sa write pristupom.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.nema_ucitanih_clanova",
+    "text": "Nema učitanih članova.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.null",
+    "text": ") : null}",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.obrisi_bend",
+    "text": "Obriši bend",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.ostalo",
+    "text": "Ostalo",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.pa_izaberi_kalendar_benda",
+    "text": "pa izaberi kalendar benda",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.povezi_postojeci_google_calendar",
+    "text": "poveži postojeći Google calendar",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.pozivnica",
+    "text": "pozivnica",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.prenesi_vlasnistvo_na_postojeceg_clana_ti_postaj",
+    "text": "Prenesi vlasništvo na postojećeg člana. Ti postaješ lead.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.prevuci_desno_da_zatvoris",
+    "text": "prevuci desno da zatvoriš",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.prevuci_za_vise",
+    "text": "← prevuci za više",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.salje_se_pozivnica_ulaze_tek_kad_potvrde",
+    "text": "Šalje se pozivnica — ulaze tek kad potvrde.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.samo_connector_v1",
+    "text": "samo connector (v1)",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.samo_danas_pa_nadalje",
+    "text": "samo danas pa nadalje",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.samo_osoba_koja_je_povezala_moze_menjati_link_v1",
+    "text": "Samo osoba koja je povezala može menjati link (v1).",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.sync_nije_konfigurisan_na_serveru",
+    "text": "Sync nije konfigurisan na serveru.",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.trazi_clana",
+    "text": "Traži člana",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.ucitavam",
+    "text": "Učitavam…",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.uskoro",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.uskoro_2",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.uskoro_3",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.uskoro_4",
+    "text": "uskoro",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.text.vise",
+    "text": "Više",
+    "file": "src/BandPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "BandPage.title.dozvola_za_slanje_pozivnica",
+    "text": "Dozvola za slanje pozivnica",
+    "file": "src/BandPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "BandPage.title.nazad_na_raspored",
+    "text": "Nazad na raspored",
+    "file": "src/BandPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "BandPage.title.prethodni_mesec",
+    "text": "Prethodni mesec",
+    "file": "src/BandPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "BandPage.title.sledeci_mesec",
+    "text": "Sledeći mesec",
+    "file": "src/BandPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "BandPage.title.vise",
+    "text": "Više",
+    "file": "src/BandPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.azurirano_result_updated_uvezeno_0_preskoceno_re",
+    "text": "Ažurirano {updated} (uvezeno 0, preskočeno {0})",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.brisanje_nije_uspelo",
+    "text": "Brisanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.brisanje_nije_uspelo_2",
+    "text": "Brisanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.dodavanje_nije_uspelo",
+    "text": "Dodavanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.dozvola_nije_promenjena",
+    "text": "Dozvola nije promenjena",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.greske_result_errors",
+    "text": ", greške {errors}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.izaberi_korisnika_iz_liste_ili_unesi_email_za_po",
+    "text": "Izaberi korisnika iz liste ili unesi email za pozivnicu.",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.izmena_nije_uspela",
+    "text": "Izmena nije uspela",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.kalendar_odvezan",
+    "text": "Kalendar odvezan",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.lista_kalendara_nije_uspela",
+    "text": "Lista kalendara nije uspela",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.member_name_bandrolelabel_memberrole",
+    "text": "{name}: {memberRole}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.member_name_bez_pozivnica",
+    "text": "{name}: bez pozivnica",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.member_name_moze_pozivati",
+    "text": "{name}: može pozivati",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.mozes_obrisati_dugmetom_obrisi_uvezeno",
+    "text": "— možeš obrisati dugmetom „Obriši uvezeno”",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.obrisan_bend_name",
+    "text": "Obrisan bend: {name}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.obrisano_result_deleted_uvezenih_termina_google_",
+    "text": "Obrisano {deleted} uvezenih termina (Google netaknut)",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.odvezivanje_nije_uspelo",
+    "text": "Odvezivanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.poslato_result_created_povezano_result_linked_0",
+    "text": "Poslato {created}, povezano {0},",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.povezano_cal_summary",
+    "text": "Povezano: {summary}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.povezivanje_nije_uspelo",
+    "text": "Povezivanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.povezivanje_nije_uspelo_2",
+    "text": "Povezivanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.pozivnica_poslata_result_email_ceka_potvrdu",
+    "text": "Pozivnica poslata: {email} (čeka potvrdu)",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.pozivnica_result_email",
+    "text": "Pozivnica: {email}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.pozivnica_sacuvana_result_email",
+    "text": "Pozivnica sačuvana: {email}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.prenos_nije_uspeo",
+    "text": "Prenos nije uspeo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.slanje_nije_uspelo",
+    "text": "Slanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.sync_iskljucen",
+    "text": "Sync isključen",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.sync_nije_uspeo",
+    "text": "Sync nije uspeo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.sync_ukljucen",
+    "text": "Sync uključen",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.uklanjanje_nije_uspelo",
+    "text": "Uklanjanje nije uspelo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.uklonjen_a_member_name",
+    "text": "Uklonjen/a: {name}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.uloga_nije_promenjena",
+    "text": "Uloga nije promenjena",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.uvezeno_result_imported_azurirano_result_updated",
+    "text": "Uvezeno {imported}, ažurirano {updated}, preskočeno {0}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.uvoz_nije_uspeo",
+    "text": "Uvoz nije uspeo",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "BandPage.toast.vlasnistvo_member_name",
+    "text": "Vlasništvo: {name}",
+    "file": "src/BandPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "confirm.defaults.alertTitle",
+    "text": "Obaveštenje",
+    "file": "src/confirmDialog.jsx",
+    "kind": "confirm",
+    "note": ""
+  },
+  {
+    "key": "confirm.defaults.cancel",
+    "text": "Otkaži",
+    "file": "src/confirmDialog.jsx",
+    "kind": "confirm",
+    "note": ""
+  },
+  {
+    "key": "confirm.defaults.confirm",
+    "text": "Potvrdi",
+    "file": "src/confirmDialog.jsx",
+    "kind": "confirm",
+    "note": ""
+  },
+  {
+    "key": "confirm.defaults.ok",
+    "text": "U redu",
+    "file": "src/confirmDialog.jsx",
+    "kind": "confirm",
+    "note": ""
+  },
+  {
+    "key": "confirm.defaults.title",
+    "text": "Potvrda",
+    "file": "src/confirmDialog.jsx",
+    "kind": "confirm",
+    "note": ""
+  },
+  {
+    "key": "ErrorBoundary.text.aplikacija_se_zaustavila_osvezi_stranicu_ili_se_",
+    "text": "Aplikacija se zaustavila. Osveži stranicu ili se vrati na početak.",
+    "file": "src/ErrorBoundary.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ErrorBoundary.text.nesto_nije_u_redu",
+    "text": "Nešto nije u redu",
+    "file": "src/ErrorBoundary.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "fieldSelect.placeholder",
+    "text": "— Izaberi —",
+    "file": "src/FieldSelect.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "gcal.event.createdVia",
+    "text": "created via chabar.rs",
+    "file": "server/googleCalendar.js",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "LegalPage.aria.nazad",
+    "text": "Nazad",
+    "file": "src/LegalPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "LegalPage.confirm.title.politika_kolacica",
+    "text": "Politika kolačića",
+    "file": "src/LegalPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "LegalPage.confirm.title.politika_privatnosti",
+    "text": "Politika privatnosti",
+    "file": "src/LegalPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "LegalPage.confirm.title.pravne_informacije",
+    "text": "Pravne informacije",
+    "file": "src/LegalPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "LegalPage.confirm.title.uslovi_koriscenja",
+    "text": "Uslovi korišćenja",
+    "file": "src/LegalPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "LegalPage.text.nazad",
+    "text": "Nazad",
+    "file": "src/LegalPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "LegalPage.text.sadrzaj_ove_stranice_bice_dopunjen_stranica_je_p",
+    "text": "Sadržaj ove stranice biće dopunjen. Stranica je pripremljena zbog zakonskih zahteva (prodavnice aplikacija, privatnost, uslovi korišćenja).",
+    "file": "src/LegalPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "LoginPage.aria.pravne_stranice",
+    "text": "Pravne stranice",
+    "file": "src/LoginPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "LoginPage.text.nastavi_sa_google",
+    "text": "Nastavi sa Google",
+    "file": "src/LoginPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "LoginPage.text.pristup_rasporedu_i_finansijama_je_vezan_za_tvoj",
+    "text": "Pristup rasporedu i finansijama je vezan za tvoj nalog i bendove.",
+    "file": "src/LoginPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "MenuSelect.title.label_selected_label",
+    "text": "{label}: {label}",
+    "file": "src/MenuSelect.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "RasporedSkeleton.aria.ucitavanje",
+    "text": "Učitavanje",
+    "file": "src/RasporedSkeleton.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "RasporedSkeleton.text.null",
+    "text": ": null}",
+    "file": "src/RasporedSkeleton.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "report.pay.open",
+    "text": "Otvoreno",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "report.pay.paid",
+    "text": "Plaćeno",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "report.pay.partial",
+    "text": "Delimično",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "report.pay.unpaid",
+    "text": "Neplaćeno",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "report.status.all",
+    "text": "Sve stavke",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "report.status.done",
+    "text": "Samo dospele",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "report.status.future",
+    "text": "Buduće",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "report.status.paid",
+    "text": "Plaćene",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "report.status.unpaid",
+    "text": "Dospele neplaćene",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.alat_uskoro",
+    "text": "Alat (uskoro)",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.alat_uskoro_2",
+    "text": "Alat (uskoro)",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.alati_finansija",
+    "text": "Alati finansija",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.datumi",
+    "text": "Datumi",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.filteri_finansija",
+    "text": "Filteri finansija",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.finansije_sekcije",
+    "text": "Finansije sekcije",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.honorari_po_clanu",
+    "text": "Honorari po članu",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.prethodna_stranica",
+    "text": "Prethodna stranica",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.pretraga",
+    "text": "Pretraga",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.sledeca_stranica",
+    "text": "Sledeća stranica",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.stranice",
+    "text": "Stranice",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.uplate",
+    "text": "Uplate",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.aria.zatvori",
+    "text": "Zatvori",
+    "file": "src/ReportPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.option.buduce",
+    "text": "Buduće",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.option.dospele_neplacene",
+    "text": "Dospele neplaćene",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.option.placene",
+    "text": "Plaćene",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.option.samo_dospele",
+    "text": "Samo dospele",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.option.sve_stavke",
+    "text": "Sve stavke",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.option.svi_bendovi",
+    "text": "Svi bendovi",
+    "file": "src/ReportPage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.placeholder.mesto_lokal",
+    "text": "mesto, lokal...",
+    "file": "src/ReportPage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.bend_mod",
+    "text": "Bend mod",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.detalj_termina",
+    "text": "Detalj termina",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.godina",
+    "text": "Godina",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.obracun",
+    "text": "Obračun",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.osnovno",
+    "text": "Osnovno",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.prevoz",
+    "text": "Prevoz",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.ukupno",
+    "text": "Ukupno",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.text.uplata_bendu",
+    "text": "Uplata bendu",
+    "file": "src/ReportPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.title.pretraga",
+    "text": "Pretraga",
+    "file": "src/ReportPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.title.uskoro",
+    "text": "Uskoro",
+    "file": "src/ReportPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.title.uskoro_2",
+    "text": "Uskoro",
+    "file": "src/ReportPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "ReportPage.title.zatvori",
+    "text": "Zatvori",
+    "file": "src/ReportPage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "schedule.filter.all",
+    "text": "Sve",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "schedule.filter.done",
+    "text": "Prošle",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "schedule.filter.month",
+    "text": "Ovaj mesec",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "schedule.filter.upcoming",
+    "text": "Buduće",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.dodaj",
+    "text": "Dodaj",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.dodaj_2",
+    "text": "Dodaj",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.filteri_rasporeda",
+    "text": "Filteri rasporeda",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.izmeni_termin",
+    "text": "Izmeni termin",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.moji_bendovi",
+    "text": "Moji bendovi",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.obrisi_termin",
+    "text": "Obriši termin",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.prethodna_stranica",
+    "text": "Prethodna stranica",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.pretraga",
+    "text": "Pretraga",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.sledeca_stranica",
+    "text": "Sledeća stranica",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.stranice",
+    "text": "Stranice",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.aria.termini",
+    "text": "Termini",
+    "file": "src/SchedulePage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.confirm.cancelLabel.ostani",
+    "text": "Ostani",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "SchedulePage.confirm.cancelLabel.otkazi",
+    "text": "Otkaži",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "SchedulePage.confirm.cancelLabel.otkazi_2",
+    "text": "Otkaži",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "SchedulePage.confirm.confirmLabel.obrisi",
+    "text": "Obriši",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "SchedulePage.confirm.confirmLabel.sacuvaj",
+    "text": "Sačuvaj",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "SchedulePage.confirm.confirmLabel.zatvori",
+    "text": "Zatvori",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "SchedulePage.confirm.message.imas_nesacuvane_izmene_zatvoriti_formu_bez_cuvan",
+    "text": "Imaš nesačuvane izmene. Zatvoriti formu bez čuvanja?",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "SchedulePage.confirm.message.label_n_nova_akcija_se_ne_moze_ponistiti",
+    "text": "{label}\\n\\nOva akcija se ne može poništiti.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "SchedulePage.confirm.title.nesacuvane_izmene",
+    "text": "Nesačuvane izmene",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "SchedulePage.confirm.title.obrisati_termin",
+    "text": "Obrisati termin?",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "SchedulePage.confirm.title.sacuvati_izmene",
+    "text": "Sačuvati izmene?",
+    "file": "src/SchedulePage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "SchedulePage.error.datum_je_obavezan",
+    "text": "Datum je obavezan.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.error.datum_nije_ispravan_izaberi_datum_iz_kalendara",
+    "text": "Datum nije ispravan. Izaberi datum iz kalendara.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.error.moras_izabrati_bend_ili_personal",
+    "text": "Moraš izabrati bend ili Personal.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.error.nema_izmena_za_cuvanje",
+    "text": "Nema izmena za čuvanje.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.error.unesi_bar_mesto_lokal_ili_napomenu",
+    "text": "Unesi bar mesto, lokal ili napomenu.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.option.band_name_band_kind_personal_licno",
+    "text": "{name}{no}",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.option.buduce",
+    "text": "Buduće",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.option.ovaj_mesec",
+    "text": "Ovaj mesec",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.option.prosle",
+    "text": "Prošle",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.option.sve",
+    "text": "Sve",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.option.svi_bendovi",
+    "text": "Svi bendovi",
+    "file": "src/SchedulePage.jsx",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.placeholder.bend_tip_doga_aja",
+    "text": "Bend, tip događaja...",
+    "file": "src/SchedulePage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.placeholder.beograd_novi_sad",
+    "text": "Beograd, Novi Sad...",
+    "file": "src/SchedulePage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.placeholder.ime_kluba_prostora",
+    "text": "Ime kluba / prostora",
+    "file": "src/SchedulePage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.placeholder.izaberi",
+    "text": "— Izaberi —",
+    "file": "src/SchedulePage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.placeholder.mesto_lokal_napomena",
+    "text": "mesto, lokal, napomena...",
+    "file": "src/SchedulePage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.placeholder.npr_chabar",
+    "text": "npr. Chabar",
+    "file": "src/SchedulePage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.text.dodaj_termin",
+    "text": "Dodaj termin",
+    "file": "src/SchedulePage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.text.nema_termina_za_ovaj_filter",
+    "text": "Nema termina za ovaj filter.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.text.novi_bend",
+    "text": "Novi bend",
+    "file": "src/SchedulePage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.text.otkazi",
+    "text": "Otkaži",
+    "file": "src/SchedulePage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.title.dodaj_termin_ili_bend",
+    "text": "Dodaj termin ili bend",
+    "file": "src/SchedulePage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.title.izmeni_termin",
+    "text": "Izmeni termin",
+    "file": "src/SchedulePage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.title.obrisi_termin",
+    "text": "Obriši termin",
+    "file": "src/SchedulePage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.title.pretraga",
+    "text": "Pretraga",
+    "file": "src/SchedulePage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.title.prosli_termin_je_zakljucan",
+    "text": "Prošli termin je zaključan",
+    "file": "src/SchedulePage.jsx",
+    "kind": "title",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.toast.bend_kreiran",
+    "text": "Bend kreiran: {name}",
+    "file": "src/SchedulePage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.toast.bend_kreiran_created_name",
+    "text": "Bend kreiran: {name}",
+    "file": "src/SchedulePage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.toast.kreiranje_benda_nije_uspelo",
+    "text": "Kreiranje benda nije uspelo",
+    "file": "src/SchedulePage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SchedulePage.toast.limit_najvise_ownerlimit_grupnih_bendova_zatrazi",
+    "text": "Limit: najviše {ownerLimit} grupnih bendova. Zatraži grant za više.",
+    "file": "src/SchedulePage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.auth_not_configured",
+    "text": "Auth not configured",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.band_lead_role_required",
+    "text": "Band lead role required",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.auth.api.forbidden",
+    "text": "Forbidden",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.forbidden_2",
+    "text": "Forbidden",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.missing_access_token",
+    "text": "Missing access token",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.auth.api.missing_band",
+    "text": "Missing band",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.missing_supabase_env_keys",
+    "text": "Missing Supabase env keys",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.auth.api.nalog_nije_mogao_da_se_dovrsi_pokusaj_ponovo_ili",
+    "text": "Nalog nije mogao da se dovrši. Pokušaj ponovo ili kontaktiraj podršku.",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.auth.api.not_a_member_of_this_band",
+    "text": "Not a member of this band",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.auth.api.setup_failed",
+    "text": "Setup failed",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.unauthorized",
+    "text": "Unauthorized",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.unauthorized_2",
+    "text": "Unauthorized",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.auth.api.x_band_id_header_required",
+    "text": "X-Band-Id header required",
+    "file": "server/auth.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.already_member",
+    "text": "Already member",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.bend_vec_ima_max_pending_invites_per_band_otvore",
+    "text": "Bend već ima {MAX_PENDING_INVITES_PER_BAND} otvorenih pozivnica.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.clan_mora_vec_biti_u_bendu",
+    "text": "Član mora već biti u bendu.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.clan_nije_prona_en",
+    "text": "Član nije pronađen.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.clan_nije_prona_en_2",
+    "text": "Član nije pronađen.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.clan_nije_prona_en_3",
+    "text": "Član nije pronađen.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.dozvoljeno_lead_ili_member",
+    "text": "Dozvoljeno: lead ili member.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.forbidden",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_10",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_2",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_3",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_4",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_5",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_6",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_7",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_8",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.forbidden_9",
+    "text": "Forbidden",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_band",
+    "text": "Invalid band",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_band_2",
+    "text": "Invalid band",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_band_3",
+    "text": "Invalid band",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_band_4",
+    "text": "Invalid band",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_email",
+    "text": "Invalid email",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_input",
+    "text": "Invalid input",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_invite",
+    "text": "Invalid invite",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_invite_2",
+    "text": "Invalid invite",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_name",
+    "text": "Invalid name",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_role",
+    "text": "Invalid role",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_role_2",
+    "text": "Invalid role",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_role_3",
+    "text": "Invalid role",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_user",
+    "text": "Invalid user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_user_2",
+    "text": "Invalid user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_user_3",
+    "text": "Invalid user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_user_4",
+    "text": "Invalid user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_user_5",
+    "text": "Invalid user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invalid_user_6",
+    "text": "Invalid user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.invites_blocked",
+    "text": "Invites blocked",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.izaberi_clana",
+    "text": "Izaberi člana.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.izaberi_korisnika_iz_pretrage_ili_unesi_validan_",
+    "text": "Izaberi korisnika iz pretrage ili unesi validan email.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.korisnik_je_vec_clan_benda",
+    "text": "Korisnik je već član benda.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.korisnik_nije_prona_en",
+    "text": "Korisnik nije pronađen.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.lead_moze_samo_unaprediti_clana_u_lead",
+    "text": "Lead može samo unaprediti člana u lead.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.lead_moze_ukloniti_samo_obicne_clanove",
+    "text": "Lead može ukloniti samo obične članove.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.lead_ne_moze_menjati_dozvole_drugog_lead_a",
+    "text": "Lead ne može menjati dozvole drugog lead-a.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.lead_ne_moze_sniziti_drugog_lead_a_to_radi_vlasn",
+    "text": "Lead ne može sniziti drugog lead-a. To radi vlasnik.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.licni_bend_nema_clanove_za_dodavanje",
+    "text": "Lični bend nema članove za dodavanje.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.licni_bend_nema_prenos_vlasnistva",
+    "text": "Lični bend nema prenos vlasništva.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.licni_bend_se_ne_brise",
+    "text": "Lični bend se ne briše.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.licni_bend_se_ne_ure_uje_ovako",
+    "text": "Lični bend se ne uređuje ovako.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.missing_user",
+    "text": "Missing user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.missing_user_2",
+    "text": "Missing user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.missing_user_3",
+    "text": "Missing user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.missing_user_4",
+    "text": "Missing user",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.mozes_biti_vlasnik_najvise_quota_ownerlimit_grup",
+    "text": "Možeš biti vlasnik najviše {ownerLimit} grupnih bendova. Zatraži grant za više.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.mozes_kreirati_najvise_max_band_creates_per_day_",
+    "text": "Možeš kreirati najviše {MAX_BAND_CREATES_PER_DAY} benda dnevno.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.najvise_max_invites_per_day_pozivnica_dnevno",
+    "text": "Najviše {MAX_INVITES_PER_DAY} pozivnica dnevno.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.ne_mozes_menjati_sopstvenu_ulogu_ovde",
+    "text": "Ne možeš menjati sopstvenu ulogu ovde.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.ne_mozes_pozvati_sebe",
+    "text": "Ne možeš pozvati sebe.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.ne_mozes_ukloniti_sebe_ovde",
+    "text": "Ne možeš ukloniti sebe ovde.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.nemas_dozvolu_za_pozivnice_u_ovom_bendu",
+    "text": "Nemaš dozvolu za pozivnice u ovom bendu.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.not_found",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_10",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_2",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_3",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_4",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_5",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_6",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_7",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_8",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.not_found_9",
+    "text": "Not found",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.ovaj_nalog_ne_prima_pozivnice_u_bendove",
+    "text": "Ovaj nalog ne prima pozivnice u bendove.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.owner_limit",
+    "text": "Owner limit",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.owner_limit_2",
+    "text": "Owner limit",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.potreban_je_validan_email",
+    "text": "Potreban je validan email.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.pozivnica_nije_prona_ena",
+    "text": "Pozivnica nije pronađena.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.pozivnica_nije_prona_ena_2",
+    "text": "Pozivnica nije pronađena.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.rate_limit",
+    "text": "Rate limit",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.rate_limit_2",
+    "text": "Rate limit",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.rate_limit_3",
+    "text": "Rate limit",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.bands.api.samo_vlasnik_ili_lead_moze_menjati_dozvolu_za_po",
+    "text": "Samo vlasnik ili lead može menjati dozvolu za pozivnice.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.samo_vlasnik_ili_lead_moze_menjati_uloge",
+    "text": "Samo vlasnik ili lead može menjati uloge.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.samo_vlasnik_ili_lead_moze_uklanjati_clanove",
+    "text": "Samo vlasnik ili lead može uklanjati članove.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.samo_vlasnik_moze_obrisati_bend",
+    "text": "Samo vlasnik može obrisati bend.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.samo_vlasnik_moze_preneti_vlasnistvo",
+    "text": "Samo vlasnik može preneti vlasništvo.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.sopstvenu_dozvolu_ne_menjas_ovde",
+    "text": "Sopstvenu dozvolu ne menjaš ovde.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.taj_nalog_vec_ima_quota_ownedgroupbands_quota_ow",
+    "text": "Taj nalog već ima {ownedGroupBands}/{ownerLimit} grupnih bendova kao vlasnik.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.uloga_vlasnika_se_ne_menja_ovde_koristi_prenos_v",
+    "text": "Uloga vlasnika se ne menja ovde — koristi prenos vlasništva.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.unesi_ime_benda",
+    "text": "Unesi ime benda.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.vec_si_vlasnik",
+    "text": "Već si vlasnik.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.vlasnik_se_ne_moze_ukloniti_prenesi_vlasnistvo",
+    "text": "Vlasnik se ne može ukloniti — prenesi vlasništvo.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.bands.api.vlasnik_uvek_moze_da_poziva",
+    "text": "Vlasnik uvek može da poziva.",
+    "file": "server/bands.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.exchangeRate.api.google_finance",
+    "text": "Google Finance",
+    "file": "server/exchangeRate.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.exchangeRate.api.nbs_srednji_kurs",
+    "text": "NBS srednji kurs",
+    "file": "server/exchangeRate.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.googleCalendar.gcal.cena_price_eur",
+    "text": "Cena: {price} EUR",
+    "file": "server/googleCalendar.js",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "server.googleCalendar.gcal.created_via_chabar_rs",
+    "text": "created via chabar.rs",
+    "file": "server/googleCalendar.js",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "server.googleCalendar.gcal.grad_string_event_city_trim",
+    "text": "Grad: {String(event.city).trim()}",
+    "file": "server/googleCalendar.js",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "server.googleCalendar.gcal.lokal_string_event_venue_trim",
+    "text": "Lokal: {String(event.venue).trim()}",
+    "file": "server/googleCalendar.js",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "server.googleCalendar.gcal.prevoz_transport_rsd",
+    "text": "Prevoz: {transport} RSD",
+    "file": "server/googleCalendar.js",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.band_mode_is_only_for_group_bands",
+    "text": "Band mode is only for group bands",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "server.index.api.bend_nema_povezan_google_kalendar",
+    "text": "Bend nema povezan Google kalendar.",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.calendarid_required",
+    "text": "calendarId required",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.exchange_rate_unavailable",
+    "text": "Exchange rate unavailable",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.invalid_band",
+    "text": "Invalid band",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.missing_personal_band",
+    "text": "Missing personal band",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.not_found",
+    "text": "Not found",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.not_found_2",
+    "text": "Not found",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.not_found_3",
+    "text": "Not found",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.not_found_4",
+    "text": "Not found",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.nothing_to_update",
+    "text": "Nothing to update",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.samo_connector_moze_obrisati_uvezeno",
+    "text": "Samo connector može obrisati uvezeno.",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.samo_connector_moze_slati_u_google",
+    "text": "Samo connector može slati u Google.",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.index.api.sync_je_iskljucen_za_ovaj_bend",
+    "text": "Sync je isključen za ovaj bend.",
+    "file": "server/index.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.users.api.forbidden",
+    "text": "Forbidden",
+    "file": "server/users.js",
+    "kind": "error",
+    "note": ""
+  },
+  {
+    "key": "server.users.api.samo_vlasnik_ili_lead_moze_traziti_korisnike_za_",
+    "text": "Samo vlasnik ili lead može tražiti korisnike za bend.",
+    "file": "server/users.js",
+    "kind": "error",
+    "note": "detail"
+  },
+  {
+    "key": "SettingsPage.aria.bendovi",
+    "text": "Bendovi",
+    "file": "src/SettingsPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.aria.google_kalendar",
+    "text": "Google kalendar",
+    "file": "src/SettingsPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.aria.izgled",
+    "text": "Izgled",
+    "file": "src/SettingsPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.aria.obracun",
+    "text": "Obračun",
+    "file": "src/SettingsPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.aria.pravno",
+    "text": "Pravno",
+    "file": "src/SettingsPage.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.confirm.cancelLabel.otkazi",
+    "text": "Otkaži",
+    "file": "src/SettingsPage.jsx",
+    "kind": "confirm",
+    "note": "cancelLabel"
+  },
+  {
+    "key": "SettingsPage.confirm.confirmLabel.odvezi",
+    "text": "Odveži",
+    "file": "src/SettingsPage.jsx",
+    "kind": "confirm",
+    "note": "confirmLabel"
+  },
+  {
+    "key": "SettingsPage.confirm.message.odvezati_google_nalog_za_kalendar",
+    "text": "Odvezati Google nalog za kalendar?",
+    "file": "src/SettingsPage.jsx",
+    "kind": "confirm",
+    "note": "message"
+  },
+  {
+    "key": "SettingsPage.confirm.title.odvezati_google",
+    "text": "Odvezati Google?",
+    "file": "src/SettingsPage.jsx",
+    "kind": "confirm",
+    "note": "title"
+  },
+  {
+    "key": "SettingsPage.note.ako_bend_nema_kalendar_termini_koje_ti_sacuvas_i",
+    "text": "Ako bend nema kalendar, termini koje TI sačuvaš idu u tvoj primary — ne u tuđe",
+    "file": "src/SettingsPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.note.svetla_ili_tamna",
+    "text": "Svetla ili tamna",
+    "file": "src/SettingsPage.jsx",
+    "kind": "note",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.placeholder.dd_mm_yyyy",
+    "text": "dd.mm.yyyy.",
+    "file": "src/SettingsPage.jsx",
+    "kind": "placeholder",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.ako_bend_nema_kalendar_termini_koje_ti_sacuvas_i",
+    "text": "Ako bend nema kalendar, termini koje TI sačuvaš idu u tvoj primary — ne u tuđe",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.bendovi",
+    "text": "Bendovi",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.google_calendar_nije_konfigurisan_na_serveru_pro",
+    "text": "Google Calendar nije konfigurisan na serveru. Proveri `.env` i restartuj API (`npm run dev` / PM2).",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.google_kalendar",
+    "text": "Google kalendar",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.izgled",
+    "text": "Izgled",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.izgled_aplikacije_i_parametri_obracuna",
+    "text": "Izgled aplikacije i parametri obračuna.",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.kurs_eur_rsd_od_21_07_2026",
+    "text": "Kurs EUR/RSD (od 21.07.2026.)",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.licni_sync",
+    "text": "Lični sync",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.obracun",
+    "text": "Obračun",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.obracun_do_datuma",
+    "text": "Obračun do datuma",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.odvezi_google_kalendar",
+    "text": "Odveži Google kalendar",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.odvojeno_od_prijave_google_om_ovde_dajes_dozvolu",
+    "text": "Odvojeno od prijave Google-om. Ovde daješ dozvolu da Chabar piše termine u kalendar. Kako radi: docs/google-calendar-sync.md",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.podesavanja",
+    "text": "Podešavanja",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.politika_kolacica",
+    "text": "Politika kolačića",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.politika_privatnosti",
+    "text": "Politika privatnosti",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.pozivnice_u_bend",
+    "text": "Pozivnice u bend",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.pozivnice_uvek_cekaju_tvoju_potvrdu_blokiraj_ako",
+    "text": "Pozivnice uvek čekaju tvoju potvrdu. Blokiraj ako ne želiš da te iko pozove.",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.pravne_informacije",
+    "text": "Pravne informacije",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.pravno",
+    "text": "Pravno",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.proveravam",
+    "text": "Proveravam…",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.svetla_ili_tamna",
+    "text": "Svetla ili tamna",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.tema",
+    "text": "Tema",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.text.uslovi_koriscenja",
+    "text": "Uslovi korišćenja",
+    "file": "src/SettingsPage.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.toast.google_kalendar_odvezan",
+    "text": "Google kalendar odvezan",
+    "file": "src/SettingsPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.toast.izmena_nije_uspela",
+    "text": "Izmena nije uspela",
+    "file": "src/SettingsPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.toast.licni_sync_iskljucen",
+    "text": "Lični sync isključen",
+    "file": "src/SettingsPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.toast.licni_sync_ukljucen",
+    "text": "Lični sync uključen",
+    "file": "src/SettingsPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.toast.odvezivanje_nije_uspelo",
+    "text": "Odvezivanje nije uspelo",
+    "file": "src/SettingsPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "SettingsPage.toast.povezivanje_nije_uspelo",
+    "text": "Povezivanje nije uspelo",
+    "file": "src/SettingsPage.jsx",
+    "kind": "toast",
+    "note": ""
+  },
+  {
+    "key": "shared.invite.accept",
+    "text": "Dozvoli pozivnice",
+    "file": "shared/bandLimits.js",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "shared.invite.block",
+    "text": "Blokiraj pozivnice",
+    "file": "shared/bandLimits.js",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "shared.invite.digest",
+    "text": "Dnevni pregled (uskoro)",
+    "file": "shared/bandLimits.js",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "shared.role.lead",
+    "text": "lead",
+    "file": "shared/roles.js",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "shared.role.member",
+    "text": "član",
+    "file": "shared/roles.js",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "shared.role.owner",
+    "text": "vlasnik",
+    "file": "shared/roles.js",
+    "kind": "option",
+    "note": ""
+  },
+  {
+    "key": "UserMenu.aria.nalog",
+    "text": "Nalog",
+    "file": "src/UserMenu.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "UserMenu.aria.nazad",
+    "text": "Nazad",
+    "file": "src/UserMenu.jsx",
+    "kind": "aria",
+    "note": ""
+  },
+  {
+    "key": "UserMenu.text.nalog",
+    "text": "Nalog",
+    "file": "src/UserMenu.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "UserMenu.text.nema_novih_pozivnica",
+    "text": "Nema novih pozivnica.",
+    "file": "src/UserMenu.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "UserMenu.text.null",
+    "text": ": null}",
+    "file": "src/UserMenu.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "UserMenu.text.pozivnice",
+    "text": "Pozivnice",
+    "file": "src/UserMenu.jsx",
+    "kind": "label",
+    "note": ""
+  },
+  {
+    "key": "UserMenu.text.pozivnice_2",
+    "text": "Pozivnice",
+    "file": "src/UserMenu.jsx",
+    "kind": "label",
+    "note": ""
+  }
+]

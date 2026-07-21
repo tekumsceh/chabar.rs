@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   formatScheduleDateParts,
   fromIsoDate,
@@ -8,8 +8,12 @@ import {
   todayText,
 } from "./calculations.js";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
+import { api } from "./api.js";
+import { useConfirm } from "./confirmDialog.jsx";
+import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
+import { ownerBandLimit } from "../shared/bandLimits.js";
 
 const scheduleFilters = [
   { id: "upcoming", label: "Buduće" },
@@ -33,11 +37,16 @@ export default function SchedulePage({
   activeBandId,
   allBandsId,
   onBandChange,
+  onOpenBand,
+  onBandsChanged,
+  showToast,
+  profile = null,
   onAdd,
   onUpdate,
   onRemove,
   loading = false,
 }) {
+  const { confirm } = useConfirm();
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [filter, setFilter] = useState("upcoming");
@@ -50,6 +59,15 @@ export default function SchedulePage({
   const [initialForm, setInitialForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [createBandOpen, setCreateBandOpen] = useState(false);
+  const [createBandName, setCreateBandName] = useState("");
+  const [createBandBusy, setCreateBandBusy] = useState(false);
+  const addMenuRef = useRef(null);
+
+  const ownedGroupBands = profile?.ownedGroupBands ?? 0;
+  const ownerLimit = profile?.ownerLimit ?? ownerBandLimit(0);
+  const canCreateBand = ownedGroupBands < ownerLimit;
 
   const bandOptions = useMemo(
     () => [
@@ -69,6 +87,8 @@ export default function SchedulePage({
     ],
     [bands, allBandsId],
   );
+
+  const bandsById = useMemo(() => new Map(bands.map((band) => [band.id, band])), [bands]);
 
   const ALL_PAGE_SIZE = 20;
 
@@ -128,6 +148,25 @@ export default function SchedulePage({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [formOpen, isDirty, saving]);
 
+  useEffect(() => {
+    if (!addMenuOpen) return undefined;
+
+    function onPointerDown(event) {
+      if (!addMenuRef.current?.contains(event.target)) setAddMenuOpen(false);
+    }
+
+    function onKeyDown(event) {
+      if (event.key === "Escape") setAddMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [addMenuOpen]);
+
   function openForm() {
     const next = { ...emptyForm, date: todayText(), bandId: "" };
     setEditingId(null);
@@ -135,6 +174,36 @@ export default function SchedulePage({
     setInitialForm(next);
     setFormError("");
     setFormOpen(true);
+    setAddMenuOpen(false);
+  }
+
+  function openCreateBand() {
+    setAddMenuOpen(false);
+    setCreateBandName("");
+    setCreateBandOpen(true);
+  }
+
+  async function submitCreateBand(event) {
+    event.preventDefault();
+    const name = createBandName.trim();
+    if (!name || createBandBusy) return;
+    if (!canCreateBand) {
+      showToast?.(`Limit: najviše ${ownerLimit} grupnih bendova. Zatraži grant za više.`, "error");
+      return;
+    }
+    setCreateBandBusy(true);
+    try {
+      const created = await api("/api/bands", { method: "POST", body: { name } });
+      showToast?.(`Bend kreiran: ${created.name}`);
+      setCreateBandOpen(false);
+      setCreateBandName("");
+      await onBandsChanged?.();
+      onBandChange?.(created.id);
+    } catch (error) {
+      showToast?.(error.message || "Kreiranje benda nije uspelo", "error");
+    } finally {
+      setCreateBandBusy(false);
+    }
   }
 
   function openEditForm(row) {
@@ -160,10 +229,16 @@ export default function SchedulePage({
     setInitialForm(emptyForm);
   }
 
-  function requestCloseForm() {
+  async function requestCloseForm() {
     if (saving) return;
     if (isDirty) {
-      const confirmed = window.confirm("Imaš nesačuvane izmene. Zatvoriti formu bez čuvanja?");
+      const confirmed = await confirm({
+        title: "Nesačuvane izmene",
+        message: "Imaš nesačuvane izmene. Zatvoriti formu bez čuvanja?",
+        confirmLabel: "Zatvori",
+        cancelLabel: "Ostani",
+        danger: true,
+      });
       if (!confirmed) return;
     }
     forceCloseForm();
@@ -174,9 +249,15 @@ export default function SchedulePage({
     if (formError) setFormError("");
   }
 
-  function requestRemove(row) {
+  async function requestRemove(row) {
     const label = [row.date, row.city, row.venue].filter(Boolean).join(" — ") || "ovaj termin";
-    const confirmed = window.confirm(`Obrisati termin?\n\n${label}\n\nOva akcija se ne može poništiti.`);
+    const confirmed = await confirm({
+      title: "Obrisati termin?",
+      message: `${label}\n\nOva akcija se ne može poništiti.`,
+      confirmLabel: "Obriši",
+      cancelLabel: "Otkaži",
+      danger: true,
+    });
     if (!confirmed) return;
     onRemove(row.id);
   }
@@ -217,7 +298,12 @@ export default function SchedulePage({
     }
 
     if (isEditing) {
-      const confirmed = window.confirm(`Sačuvati izmene termina?\n\n${date}${city ? ` — ${city}` : ""}`);
+      const confirmed = await confirm({
+        title: "Sačuvati izmene?",
+        message: `${date}${city ? ` — ${city}` : ""}`,
+        confirmLabel: "Sačuvaj",
+        cancelLabel: "Otkaži",
+      });
       if (!confirmed) return;
     }
 
@@ -298,15 +384,56 @@ export default function SchedulePage({
             ) : null}
           </div>
 
-          <button
-            type="button"
-            className="raspored-icon-btn raspored-icon-btn-accent"
-            onClick={openForm}
-            aria-label="Dodaj termin"
-            title="Dodaj termin"
-          >
-            <PlusIcon />
-          </button>
+          <div className={`menu-select menu-select-end ${addMenuOpen ? "is-open" : ""}`} ref={addMenuRef}>
+            <button
+              type="button"
+              className={`raspored-icon-btn raspored-icon-btn-accent ${addMenuOpen ? "is-active-filter" : ""}`}
+              onClick={() => setAddMenuOpen((open) => !open)}
+              aria-label="Dodaj"
+              aria-haspopup="menu"
+              aria-expanded={addMenuOpen}
+              title="Dodaj termin ili bend"
+            >
+              <PlusIcon />
+            </button>
+            {addMenuOpen ? (
+              <ul className="menu-select-list" role="menu" aria-label="Dodaj">
+                <li role="none">
+                  <button type="button" className="menu-select-item" role="menuitem" onClick={openForm}>
+                    <span className="menu-select-item-main">
+                      <span className="menu-select-item-icon">
+                        <CalendarPlusIcon />
+                      </span>
+                      <span className="menu-select-item-label">Dodaj termin</span>
+                    </span>
+                  </button>
+                </li>
+                <li role="none">
+                  <button
+                    type="button"
+                    className="menu-select-item"
+                    role="menuitem"
+                    disabled={!canCreateBand}
+                    title={
+                      canCreateBand
+                        ? "Kreiraj grupni bend"
+                        : `Limit ${ownedGroupBands}/${ownerLimit} grupnih bendova`
+                    }
+                    onClick={openCreateBand}
+                  >
+                    <span className="menu-select-item-main">
+                      <span className="menu-select-item-icon">
+                        <NewBandIcon />
+                      </span>
+                      <span className="menu-select-item-label">
+                        {canCreateBand ? "Novi bend" : `Limit ${ownedGroupBands}/${ownerLimit}`}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -319,8 +446,14 @@ export default function SchedulePage({
           <ul className="raspored-list">
             {visibleRows.map((row) => {
               const dateParts = formatScheduleDateParts(row.date);
+              const band = bandsById.get(row.bandId);
+              const bandColor = resolveBandColor(band, row.bandId || row.bandName || "");
               return (
-              <li key={row.id} className={`raspored-row ${row.done ? "is-past" : ""} ${row.id === nextId ? "is-next" : ""}`}>
+              <li
+                key={row.id}
+                className={`raspored-row ${row.done ? "is-past" : ""} ${row.id === nextId ? "is-next" : ""}`}
+                style={bandColor ? { "--band-accent": bandColor } : undefined}
+              >
                 <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
                   <span className="raspored-date-day">{dateParts.day}</span>
                   <span className="raspored-date-month">{dateParts.month}</span>
@@ -417,22 +550,19 @@ export default function SchedulePage({
                     disabled
                   />
                 ) : (
-                  <select
+                  <FieldSelect
                     id="terminBand"
-                    name="terminBand"
+                    label="Bend / Personal"
                     value={form.bandId}
-                    onChange={(event) => updateForm("bandId", event.target.value)}
-                    autoFocus
+                    placeholder="— Izaberi —"
                     required
-                  >
-                    <option value="">— Izaberi —</option>
-                    {bands.map((band) => (
-                      <option key={band.id} value={band.id}>
-                        {band.name}
-                        {band.kind === "personal" ? " (lično)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                    autoFocus
+                    options={bands.map((band) => ({
+                      id: band.id,
+                      label: `${band.name}${band.kind === "personal" ? " (lično)" : ""}`,
+                    }))}
+                    onChange={(id) => updateForm("bandId", id)}
+                  />
                 )}
               </label>
               <label htmlFor="terminDate" className="termin-form-full">
@@ -496,6 +626,83 @@ export default function SchedulePage({
             </form>
           </div>
         </div>
+      ) : null}
+
+      {createBandOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && !createBandBusy) setCreateBandOpen(false);
+          }}
+        >
+          <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="createBandTitle">
+            <div className="panel-heading compact">
+              <div>
+                <h2 id="createBandTitle">Novi bend</h2>
+              </div>
+            </div>
+            <form className="termin-form" onSubmit={submitCreateBand}>
+              <label htmlFor="createBandName" className="termin-form-full">
+                Ime benda
+                <input
+                  id="createBandName"
+                  name="createBandName"
+                  type="text"
+                  autoComplete="off"
+                  autoFocus
+                  maxLength={80}
+                  placeholder="npr. Chabar"
+                  value={createBandName}
+                  onChange={(event) => setCreateBandName(event.target.value)}
+                  required
+                />
+              </label>
+              <p className="settings-note termin-form-full">
+                {canCreateBand
+                  ? `Grupni bend · ti si vlasnik · ${ownedGroupBands}/${ownerLimit} zauzeto`
+                  : `Dostignut limit (${ownerLimit}). Zatraži grant za više benda.`}
+              </p>
+              <div className="termin-form-actions termin-form-full">
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={createBandBusy}
+                  onClick={() => setCreateBandOpen(false)}
+                >
+                  Otkaži
+                </button>
+                <button type="submit" disabled={createBandBusy || !createBandName.trim() || !canCreateBand}>
+                  {createBandBusy ? "…" : "Kreiraj"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {bands.length ? (
+        <section className="raspored-bands" aria-label="Moji bendovi">
+          <div className="raspored-bands-scroll">
+            {bands.map((band) => {
+              const color = resolveBandColor(band, band.id);
+              const label = band.kind === "personal" ? `${band.name} (lično)` : band.name;
+              return (
+                <button
+                  key={band.id}
+                  type="button"
+                  className="raspored-band-tile"
+                  style={{ "--band-tile-bg": color }}
+                  title={label}
+                  aria-label={label}
+                  onClick={() => onOpenBand?.(band.id)}
+                >
+                  <span className="raspored-band-tile-text">{bandInitials(band.name)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       ) : null}
     </div>
   );
@@ -593,6 +800,32 @@ function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CalendarPlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 3.5V7M16 3.5V7M3.5 10h17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 13v5M9.5 15.5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function NewBandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M3.5 19c.5-3 2.6-4.8 5.5-4.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path d="M17 8v6M14 11h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

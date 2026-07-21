@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { calculate, formatEur, formatRsd, formatScheduleDateParts, parseDate, unpaidClaimEur } from "./calculations.js";
+import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 
@@ -28,9 +29,14 @@ export default function ReportPage({
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
+  /** desc = novo → staro (default); asc = staro → novo */
+  const [dateSort, setDateSort] = useState("desc");
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [activeTab, setActiveTab] = useState("dates");
   const [selectedId, setSelectedId] = useState(null);
+  const [listPage, setListPage] = useState(0);
+
+  const DATES_PAGE_SIZE = 20;
 
   const bandOptions = useMemo(
     () => [
@@ -91,24 +97,54 @@ export default function ReportPage({
     }
   }, [availableYears, viewYear]);
 
-  const yearIndex = availableYears.indexOf(viewYear);
-  const prevYear = yearIndex > 0 ? availableYears[yearIndex - 1] : null;
-  const nextYear = yearIndex >= 0 && yearIndex < availableYears.length - 1 ? availableYears[yearIndex + 1] : null;
-
-  const visibleRows = useMemo(
-    () =>
-      bandRows.filter((row) => {
-        const year = yearFromDate(row.date, row.parsedDate);
-        if (year !== viewYear) return false;
-        return matchesFilters(row, search, statusFilter);
-      }),
-    [bandRows, search, statusFilter, viewYear],
+  const yearOptions = useMemo(
+    () => availableYears.map((year) => ({ id: year, label: String(year) })),
+    [availableYears],
   );
 
-  const visiblePayments = useMemo(
-    () => payments.filter((payment) => yearFromDate(payment.date) === viewYear),
-    [payments, viewYear],
-  );
+  const filteredRows = useMemo(() => {
+    const filtered = bandRows.filter((row) => {
+      const year = yearFromDate(row.date, row.parsedDate);
+      if (year !== viewYear) return false;
+      return matchesFilters(row, search, statusFilter);
+    });
+    const direction = dateSort === "desc" ? -1 : 1;
+    return [...filtered].sort((a, b) => {
+      const aOk = a.hasDate && !Number.isNaN(a.parsedDate.getTime());
+      const bOk = b.hasDate && !Number.isNaN(b.parsedDate.getTime());
+      if (!aOk && !bOk) return 0;
+      if (!aOk) return 1;
+      if (!bOk) return -1;
+      return (a.parsedDate.getTime() - b.parsedDate.getTime()) * direction;
+    });
+  }, [bandRows, search, statusFilter, viewYear, dateSort]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [viewYear, statusFilter, search, activeBandId, dateSort, activeTab]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / DATES_PAGE_SIZE));
+  const safePage = Math.min(listPage, totalPages - 1);
+
+  const visibleRows = useMemo(() => {
+    const start = safePage * DATES_PAGE_SIZE;
+    return filteredRows.slice(start, start + DATES_PAGE_SIZE);
+  }, [filteredRows, safePage]);
+
+  const visiblePayments = useMemo(() => {
+    const filtered = payments.filter((payment) => yearFromDate(payment.date) === viewYear);
+    const direction = dateSort === "desc" ? -1 : 1;
+    return [...filtered].sort((a, b) => {
+      const aParsed = parseDate(a.date);
+      const bParsed = parseDate(b.date);
+      const aOk = !Number.isNaN(aParsed.getTime());
+      const bOk = !Number.isNaN(bParsed.getTime());
+      if (!aOk && !bOk) return 0;
+      if (!aOk) return 1;
+      if (!bOk) return -1;
+      return (aParsed.getTime() - bParsed.getTime()) * direction;
+    });
+  }, [payments, viewYear, dateSort]);
 
   const selectedRow = useMemo(
     () => bandRows.find((row) => row.id === selectedId) || null,
@@ -153,37 +189,42 @@ export default function ReportPage({
               <BandModeIcon />
             </button>
           ) : null}
-          <MenuSelect
-            label="Status"
-            icon={<StatusFilterIcon />}
-            value={statusFilter}
-            options={statusOptions}
-            onChange={setStatusFilter}
-          />
+          {activeTab === "dates" ? (
+            <MenuSelect
+              label="Status"
+              icon={<StatusFilterIcon />}
+              value={statusFilter}
+              options={statusOptions}
+              onChange={setStatusFilter}
+            />
+          ) : null}
+          <button
+            type="button"
+            className={`raspored-icon-btn raspored-sort-btn ${dateSort === "asc" ? "is-asc" : "is-desc"}`}
+            aria-label={
+              dateSort === "desc"
+                ? "Sortiranje: od novijeg ka starijem — klik za obrnuto"
+                : "Sortiranje: od starijeg ka novijem — klik za obrnuto"
+            }
+            title={dateSort === "desc" ? "Novo → staro" : "Staro → novo"}
+            onClick={() => setDateSort((value) => (value === "desc" ? "asc" : "desc"))}
+          >
+            <SortArrowIcon />
+          </button>
         </div>
 
-        <div className="finansije-year-cluster" aria-label="Godina">
-          <button
-            type="button"
-            className="finansije-year-btn"
-            disabled={!prevYear}
-            onClick={() => prevYear && setViewYear(prevYear)}
-            aria-label={prevYear ? `Godina ${prevYear}` : "Nema ranije godine"}
-            title={prevYear ? String(prevYear) : undefined}
-          >
-            ←
-          </button>
-          <strong className="finansije-year-label">{viewYear}</strong>
-          <button
-            type="button"
-            className="finansije-year-btn"
-            disabled={!nextYear}
-            onClick={() => nextYear && setViewYear(nextYear)}
-            aria-label={nextYear ? `Godina ${nextYear}` : "Nema kasnije godine"}
-            title={nextYear ? String(nextYear) : undefined}
-          >
-            →
-          </button>
+        <div className="finansije-year-cluster">
+          <label className="finansije-year-select-wrap">
+            <span className="sr-only">Godina</span>
+            <FieldSelect
+              id="financeYear"
+              label="Godina"
+              className="finansije-year-field"
+              value={viewYear}
+              options={yearOptions}
+              onChange={(id) => setViewYear(Number(id))}
+            />
+          </label>
         </div>
 
         <div className="raspored-tools" aria-label="Alati finansija">
@@ -257,7 +298,7 @@ export default function ReportPage({
         <section className="raspored-panel finansije-panel-full" aria-label="Datumi" role="tabpanel">
           {loading && events.length === 0 ? (
             <RasporedSkeleton variant="finance" />
-          ) : visibleRows.length === 0 ? (
+          ) : filteredRows.length === 0 ? (
             <p className="raspored-empty">Nema stavki za {viewYear}.</p>
           ) : (
             <ul className="raspored-list">
@@ -271,6 +312,7 @@ export default function ReportPage({
                     <button
                       type="button"
                       className={`raspored-row raspored-row-finance raspored-row-button ${row.done ? "is-past" : ""}`}
+                      style={color ? { "--band-accent": color } : undefined}
                       onClick={() => setSelectedId(row.id)}
                     >
                       <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
@@ -295,7 +337,9 @@ export default function ReportPage({
                       >
                         <DollarIcon />
                       </span>
-                      <span className="raspored-fee">{row.hasDate ? formatEur(row.totalEur) : "—"}</span>
+                      <span className="raspored-fee" title={row.hasDate ? formatEur(row.totalEur) : undefined}>
+                        {row.hasDate ? formatEurCeil(row.totalEur) : "—"}
+                      </span>
                     </button>
                   </li>
                 );
@@ -329,6 +373,36 @@ export default function ReportPage({
           )}
         </section>
       )}
+
+      {activeTab === "dates" && filteredRows.length > DATES_PAGE_SIZE ? (
+        <div className="raspored-pagination" aria-label="Stranice">
+          <button
+            type="button"
+            className="finansije-year-btn"
+            disabled={safePage <= 0}
+            onClick={() => setListPage((page) => Math.max(0, page - 1))}
+            aria-label="Prethodna stranica"
+          >
+            ←
+          </button>
+          <span className="raspored-pagination-label">
+            {safePage + 1} / {totalPages}
+            <small>
+              {" "}
+              ({filteredRows.length} datuma · {viewYear})
+            </small>
+          </span>
+          <button
+            type="button"
+            className="finansije-year-btn"
+            disabled={safePage >= totalPages - 1}
+            onClick={() => setListPage((page) => Math.min(totalPages - 1, page + 1))}
+            aria-label="Sledeća stranica"
+          >
+            →
+          </button>
+        </div>
+      ) : null}
 
       {selectedRow ? (
         <FinanceDetailModal
@@ -542,6 +616,13 @@ function yearFromDate(value, parsed) {
   return date.getFullYear();
 }
 
+/** List view: whole euros rounded up. Detail modal keeps exact formatEur(). */
+function formatEurCeil(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return formatEur(0);
+  return `${Math.ceil(n - Number.EPSILON).toLocaleString("sr-RS")} EUR`;
+}
+
 function matchesFilters(row, search, status) {
   const query = search.trim().toLowerCase();
   const haystack = [row.date, row.city, row.venue, row.bandName].join(" ").toLowerCase();
@@ -635,6 +716,21 @@ function StatusFilterIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SortArrowIcon() {
+  return (
+    <svg className="raspored-sort-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 5v14M12 5l-4 4M12 5l4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

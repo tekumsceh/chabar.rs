@@ -30,6 +30,26 @@ import { searchUsers } from "./users.js";
 import { getEurRsdRate } from "./exchangeRate.js";
 import { query, startPoolWarmer } from "./db.js";
 import { logger } from "./logger.js";
+import {
+  buildAuthUrl,
+  disconnectGoogleAccount,
+  frontendReturnUrl,
+  getBandCalendarLink,
+  getGoogleAccountStatus,
+  googleCalendarConfigured,
+  handleOAuthCallback,
+  linkBandCalendar,
+  listCalendars,
+  pullBandCalendar,
+  pushBandCalendar,
+  redirectUri,
+  setBandCalendarSyncEnabled,
+  syncEventDelete,
+  syncEventUpsert,
+  unlinkBandCalendar,
+  updatePersonalPrefs,
+  deleteGoogleImportedEvents,
+} from "./googleCalendar.js";
 
 const app = express();
 const port = Number(process.env.API_PORT || 3001);
@@ -117,6 +137,221 @@ app.patch("/api/me/preferences", requireAuth, async (req, res, next) => {
 });
 
 app.get("/api/users/search", requireAuth, searchUsers);
+
+app.get("/api/google/calendar/status", requireAuth, async (req, res, next) => {
+  try {
+    res.json(await getGoogleAccountStatus(req.user.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/google/calendar/connect", requireAuth, async (req, res, next) => {
+  try {
+    const returnTo = String(req.query.returnTo || "settings");
+    const bandId = String(req.query.bandId || "");
+    const url = buildAuthUrl({ userId: req.user.id, returnTo, bandId });
+    res.json({ url, redirectUri: redirectUri() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/google/calendar/callback", async (req, res) => {
+  try {
+    const code = String(req.query.code || "");
+    const state = String(req.query.state || "");
+    if (!code) {
+      return res.redirect(frontendReturnUrl({ returnTo: "settings", error: "missing_code" }));
+    }
+    const result = await handleOAuthCallback(code, state);
+    return res.redirect(frontendReturnUrl({ returnTo: result.returnTo, bandId: result.bandId }));
+  } catch (error) {
+    logger.error("Google calendar callback failed", { detail: error.message });
+    return res.redirect(
+      frontendReturnUrl({ returnTo: "settings", error: error.message || "oauth_failed" }),
+    );
+  }
+});
+
+app.delete("/api/google/calendar/account", requireAuth, async (req, res, next) => {
+  try {
+    await disconnectGoogleAccount(req.user.id);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/google/calendar/prefs", requireAuth, async (req, res, next) => {
+  try {
+    const status = await updatePersonalPrefs(req.user.id, {
+      personalSyncEnabled: req.body?.personalSyncEnabled,
+      personalCalendarId: req.body?.personalCalendarId,
+    });
+    res.json(status);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/google/calendar/calendars", requireAuth, async (req, res, next) => {
+  try {
+    const calendars = await listCalendars(req.user.id);
+    res.json({ calendars });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get(
+  "/api/bands/:id/google-calendar",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const link = await getBandCalendarLink(req.params.id);
+      const status = await getGoogleAccountStatus(req.user.id);
+      res.json({
+        configured: googleCalendarConfigured(),
+        account: status,
+        link,
+        canManageLink: !link || link.connectedByUserId === req.user.id,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.put(
+  "/api/bands/:id/google-calendar",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const calendarId = String(req.body?.calendarId || "").trim();
+      if (!calendarId) {
+        return res.status(400).json({ error: "calendarId required" });
+      }
+      const summary = String(req.body?.summary || "").trim();
+      const syncEnabled = req.body?.syncEnabled !== false;
+      const link = await linkBandCalendar({
+        bandId: req.params.id,
+        userId: req.user.id,
+        calendarId,
+        summary,
+        syncEnabled,
+      });
+      res.json({ link });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.patch(
+  "/api/bands/:id/google-calendar",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      if (typeof req.body?.syncEnabled === "boolean") {
+        const link = await setBandCalendarSyncEnabled({
+          bandId: req.params.id,
+          userId: req.user.id,
+          syncEnabled: req.body.syncEnabled,
+        });
+        return res.json({ link });
+      }
+      return res.status(400).json({ error: "Nothing to update" });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  "/api/bands/:id/google-calendar",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      await unlinkBandCalendar({ bandId: req.params.id, userId: req.user.id });
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/api/bands/:id/google-calendar/pull",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const mode = String(req.query.mode || req.body?.mode || "linked");
+      const result = await pullBandCalendar(req.params.id, {
+        mode: mode === "import" ? "import" : "linked",
+      });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/** Push Chabar dates missing from the linked Google calendar. */
+app.post(
+  "/api/bands/:id/google-calendar/push",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const link = await getBandCalendarLink(req.params.id);
+      if (!link) {
+        return res.status(400).json({ error: "Bend nema povezan Google kalendar." });
+      }
+      if (link.connectedByUserId !== req.user.id) {
+        return res.status(403).json({ error: "Samo connector može slati u Google." });
+      }
+      if (!link.syncEnabled) {
+        return res.status(400).json({ error: "Sync je isključen za ovaj bend." });
+      }
+      const result = await pushBandCalendar(req.params.id);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/** Remove Chabar rows imported from Google (keeps Google Calendar intact). */
+app.delete(
+  "/api/bands/:id/google-calendar/imported",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const link = await getBandCalendarLink(req.params.id);
+      if (link && link.connectedByUserId !== req.user.id) {
+        return res.status(403).json({ error: "Samo connector može obrisati uvezeno." });
+      }
+      const result = await deleteGoogleImportedEvents(req.params.id);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 app.post("/api/bands", requireAuth, createBand);
 app.get("/api/bands/:id", requireAuth, bandIdFromParams, requireBandMember, getBandHome);
@@ -275,6 +510,14 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
     );
     const id = result.rows[0].id;
     await upsertMemberFinance(id, req.user.id, event.priceEur, event.transportRsd);
+    const bandName = await getBandName(req.bandId);
+    void syncEventUpsert({
+      eventId: id,
+      bandId: req.bandId,
+      event: { ...event, bandId: req.bandId },
+      bandName,
+      actorUserId: req.user.id,
+    });
     res.status(201).json({ ...event, id, bandId: req.bandId });
   } catch (error) {
     next(error);
@@ -299,6 +542,14 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
       return res.status(404).json({ error: "Not found" });
     }
     await upsertMemberFinance(Number(req.params.id), req.user.id, event.priceEur, event.transportRsd);
+    const bandName = await getBandName(req.bandId);
+    void syncEventUpsert({
+      eventId: Number(req.params.id),
+      bandId: req.bandId,
+      event: { ...event, bandId: req.bandId },
+      bandName,
+      actorUserId: req.user.id,
+    });
     res.json({ ...event, id: Number(req.params.id), bandId: req.bandId });
   } catch (error) {
     next(error);
@@ -307,6 +558,7 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
 
 app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, next) => {
   try {
+    await syncEventDelete({ eventId: Number(req.params.id), bandId: req.bandId });
     const result = await query("DELETE FROM events WHERE id = :id AND band_id = :bandId", {
       id: req.params.id,
       bandId: req.bandId,
@@ -390,8 +642,9 @@ if (process.env.NODE_ENV === "production" && process.env.SERVE_STATIC !== "0") {
 
 app.use((error, _req, res, _next) => {
   logger.error("Unhandled API error", error);
-  res.status(500).json({
-    error: "Server error",
+  const status = Number(error.status) || 500;
+  res.status(status).json({
+    error: status >= 500 ? "Server error" : "Request error",
     detail: error.message,
   });
 });
@@ -588,6 +841,12 @@ async function upsertMemberFinance(eventId, userId, priceEur, transportRsd) {
            updated_at = NOW()`,
     { eventId, userId, priceEur, transportRsd },
   );
+}
+
+async function getBandName(bandId) {
+  if (!bandId) return "";
+  const result = await query(`SELECT name FROM bands WHERE id = :bandId LIMIT 1`, { bandId });
+  return result.rows[0]?.name || "";
 }
 
 function mapEventRow(row) {
