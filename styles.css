@@ -1922,10 +1922,18 @@ td input[data-field="note"] {
 }
 
 .app-band-tiles {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
   margin: 0 auto;
   max-width: 980px;
   padding: 0.45rem clamp(0.75rem, 1.5vw, 1.5rem) 0.75rem;
   width: 100%;
+}
+
+.app-band-tiles .raspored-bands-scroll {
+  flex: 1;
+  min-width: 0;
 }
 
 .app-band-tiles .raspored-band-tile.is-active {
@@ -1933,6 +1941,58 @@ td input[data-field="note"] {
     inset 0 0 0 1px rgba(255, 255, 255, 0.22),
     0 0 0 2px color-mix(in srgb, var(--brand, #ff2bd6) 70%, transparent) !important;
   filter: brightness(1.08);
+}
+
+.app-band-tiles .raspored-band-tile.is-all {
+  background: var(--panel, #1f0730) !important;
+  border: 1px solid var(--line, rgba(255, 61, 206, 0.4)) !important;
+  box-shadow: none !important;
+  color: var(--ink, #f7f2ff) !important;
+}
+
+.app-band-tiles .raspored-band-tile.is-all.is-active {
+  background: var(--brand, #ff2bd6) !important;
+  border-color: var(--brand, #ff2bd6) !important;
+  color: var(--on-brand, #1a0020) !important;
+  filter: none;
+}
+
+.app-band-tiles-open {
+  align-items: center !important;
+  background: var(--panel, #1f0730) !important;
+  border: 1px solid var(--line, rgba(255, 61, 206, 0.4)) !important;
+  border-radius: var(--radius-sm, 2px) !important;
+  box-shadow: none !important;
+  color: var(--ink, #f7f2ff) !important;
+  display: inline-flex !important;
+  flex: 0 0 auto;
+  height: 2.85rem;
+  justify-content: center !important;
+  line-height: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  transition: background-color 140ms ease, border-color 140ms ease, opacity 140ms ease !important;
+  width: 2.85rem;
+}
+
+.app-band-tiles-open:hover:not(:disabled),
+.app-band-tiles-open:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--brand, #ff2bd6) 16%, var(--panel, #1f0730)) !important;
+  border-color: var(--brand, #ff2bd6) !important;
+  box-shadow: none !important;
+  color: var(--ink, #f7f2ff) !important;
+  transform: none !important;
+}
+
+.app-band-tiles-open:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.app-band-tiles-open svg {
+  display: block;
+  height: 1.2rem;
+  width: 1.2rem;
 }
 
 .raspored-bands-scroll {

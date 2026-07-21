@@ -20,7 +20,6 @@ export default function ReportPage({
   bands = [],
   activeBandId,
   allBandsId,
-  onBandChange,
   financeMode = "member",
   canUseBandMode = false,
   onFinanceModeChange,
@@ -40,27 +39,8 @@ export default function ReportPage({
 
   const DATES_PAGE_SIZE = 20;
 
-  const bandOptions = useMemo(
-    () => [
-      { id: allBandsId, label: "Svi bendovi", icon: <BandIcon /> },
-      ...bands.map((band) => {
-        const color = resolveBandColor(band, band.id);
-        return {
-          id: band.id,
-          label: band.kind === "personal" ? `${band.name} (lično)` : band.name,
-          icon: (
-            <span className="band-chip menu-band-chip" style={{ backgroundColor: color }} title={band.name}>
-              {bandInitials(band.name)}
-            </span>
-          ),
-        };
-      }),
-    ],
-    [bands, allBandsId],
-  );
-
   // Waterfall always runs on the full loaded ledger (member: all bands; band-mode: that band).
-  // Band dropdown only scopes the list + Potražuje — never re-runs calculate with a partial payment pool.
+  // Band tiles only scopes the list + Potražuje — never re-runs calculate with a partial payment pool.
   const calculations = useMemo(
     () => calculate(events, payments, settings),
     [events, payments, settings],
@@ -168,13 +148,6 @@ export default function ReportPage({
     <div className="raspored finansije">
       <header className="raspored-bar">
         <div className="raspored-tools raspored-tools-start" aria-label="Filteri finansija">
-          <MenuSelect
-            label="Bend"
-            icon={<BandIcon />}
-            value={activeBandId}
-            options={bandOptions}
-            onChange={onBandChange}
-          />
           {canUseBandMode ? (
             <button
               type="button"
@@ -682,29 +655,6 @@ function WrenchIcon() {
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function BandIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <circle cx="17" cy="9" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M14.8 19c.4-2.2 1.8-3.5 3.7-3.5 1.2 0 2.2.5 2.9 1.4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
       />
     </svg>
   );

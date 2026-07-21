@@ -132,14 +132,14 @@ export default function App() {
   );
   const effectiveFinanceMode = canUseBandMode && financeMode === "band" ? "band" : "member";
 
-  function goToSchedule(resetBand = false) {
-    if (resetBand) setActiveBandId(ALL_BANDS_ID);
+  function goToSchedule() {
     setPage("schedule");
   }
 
-  function openBand(bandId) {
-    if (!bandId || bandId === ALL_BANDS_ID) return;
-    setActiveBandId(bandId);
+  function openBandPage(bandId) {
+    const id = bandId || activeBandId;
+    if (!id || id === ALL_BANDS_ID) return;
+    setActiveBandId(id);
     setPage("band");
   }
 
@@ -735,13 +735,7 @@ export default function App() {
               key={id}
               className={`top-nav-link ${activePage === id ? "active" : ""}`}
               type="button"
-              onClick={() => {
-                if (id === "schedule" && activePage === "band") {
-                  goToSchedule(true);
-                  return;
-                }
-                setPage(id);
-              }}
+              onClick={() => setPage(id)}
             >
               {label}
             </button>
@@ -781,7 +775,6 @@ export default function App() {
           bands={bands}
           settings={settings}
           activeBandId={activeBandId}
-          allBandsId={ALL_BANDS_ID}
           onBandChange={setActiveBandId}
           onBandsChanged={async () => {
             const me = await api("/api/me");
@@ -804,7 +797,7 @@ export default function App() {
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
           onBandChange={setActiveBandId}
-          onBack={() => goToSchedule(true)}
+          onBack={goToSchedule}
           onBandsChanged={async () => {
             const me = await api("/api/me");
             setProfile(me.profile);
@@ -822,7 +815,6 @@ export default function App() {
           bands={bands}
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
-          onBandChange={setActiveBandId}
           financeMode={effectiveFinanceMode}
           canUseBandMode={canUseBandMode}
           onFinanceModeChange={handleFinanceModeChange}
@@ -851,8 +843,10 @@ export default function App() {
       {showSchedule || forceSchedule || showBand || showReport ? (
         <BandTiles
           bands={bands}
-          activeBandId={showBand ? activeBandId : ""}
-          onOpenBand={openBand}
+          activeBandId={activeBandId}
+          allBandsId={ALL_BANDS_ID}
+          onSelectBand={setActiveBandId}
+          onOpenBand={openBandPage}
         />
       ) : null}
 

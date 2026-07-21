@@ -35,7 +35,6 @@ export default function SchedulePage({
   bands = [],
   settings,
   activeBandId,
-  allBandsId,
   onBandChange,
   onBandsChanged,
   showToast,
@@ -67,25 +66,6 @@ export default function SchedulePage({
   const ownedGroupBands = profile?.ownedGroupBands ?? 0;
   const ownerLimit = profile?.ownerLimit ?? ownerBandLimit(0);
   const canCreateBand = ownedGroupBands < ownerLimit;
-
-  const bandOptions = useMemo(
-    () => [
-      { id: allBandsId, label: "Svi bendovi", icon: <BandIcon /> },
-      ...bands.map((band) => {
-        const color = resolveBandColor(band, band.id);
-        return {
-          id: band.id,
-          label: band.kind === "personal" ? `${band.name} (lično)` : band.name,
-          icon: (
-            <span className="band-chip menu-band-chip" style={{ backgroundColor: color }} title={band.name}>
-              {bandInitials(band.name)}
-            </span>
-          ),
-        };
-      }),
-    ],
-    [bands, allBandsId],
-  );
 
   const bandsById = useMemo(() => new Map(bands.map((band) => [band.id, band])), [bands]);
 
@@ -326,13 +306,6 @@ export default function SchedulePage({
     <div className="raspored">
       <header className="raspored-bar">
         <div className="raspored-tools raspored-tools-start" aria-label="Filteri rasporeda">
-          <MenuSelect
-            label="Bend"
-            icon={<BandIcon />}
-            value={activeBandId}
-            options={bandOptions}
-            onChange={onBandChange}
-          />
           <MenuSelect
             label="Prikaz datuma"
             icon={<CalendarFilterIcon />}
@@ -809,17 +782,6 @@ function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BandIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="17" cy="9" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M14.8 19c.4-2.2 1.8-3.5 3.7-3.5 1.2 0 2.2.5 2.9 1.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
