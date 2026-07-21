@@ -13,7 +13,12 @@ const isLocal = databaseUrl.includes("localhost") || databaseUrl.includes("127.0
 /** Keep at least one pooled connection alive so the first user request isn't a cold handshake. */
 export const pool = new pg.Pool({
   connectionString: databaseUrl,
-  ssl: isLocal ? false : { rejectUnauthorized: false },
+  ssl: isLocal
+    ? false
+    : {
+        // Supabase pooler uses a cert chain browsers trust differently; override with SSL_REJECT_UNAUTHORIZED=1 if you mount a CA.
+        rejectUnauthorized: process.env.SSL_REJECT_UNAUTHORIZED === "1",
+      },
   max: 10,
   min: 1,
   idleTimeoutMillis: 60_000,

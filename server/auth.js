@@ -61,11 +61,25 @@ const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supa
 
 const AUTH_CACHE_TTL_MS = 5 * 60_000;
 const MEMBERSHIP_CACHE_TTL_MS = 60_000;
+const AUTH_CACHE_MAX = 500;
+const MEMBERSHIP_CACHE_MAX = 2_000;
+const PROFILE_CACHE_MAX = 2_000;
 const authUserCache = new Map();
 const membershipCache = new Map();
 
 export function clearMembershipCache() {
   membershipCache.clear();
+}
+
+/** Map insertion order = LRU-ish eviction of oldest keys when over cap. */
+function setCapped(map, key, value, max) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, value);
+  while (map.size > max) {
+    const oldest = map.keys().next().value;
+    if (oldest == null) break;
+    map.delete(oldest);
+  }
 }
 
 let jwks = null;
@@ -163,7 +177,7 @@ async function resolveUser(token) {
     // keep default TTL
   }
 
-  authUserCache.set(token, { user, expiresAt });
+  setCapped(authUserCache, token, { user, expiresAt }, AUTH_CACHE_MAX);
   return user;
 }
 
@@ -274,7 +288,7 @@ export async function ensureProfileAndPersonalBand(user) {
     membershipCache.clear();
   }
 
-  profileEnsuredAt.set(user.id, Date.now());
+  setCapped(profileEnsuredAt, user.id, Date.now(), PROFILE_CACHE_MAX);
 }
 
 /** Create profiles + Personal bands for auth.users that never finished app setup. */
@@ -357,7 +371,12 @@ export async function requireBandMember(req, res, next) {
     }
 
     const memberRole = result.rows[0].member_role;
-    membershipCache.set(cacheKey, { memberRole, expiresAt: Date.now() + MEMBERSHIP_CACHE_TTL_MS });
+    setCapped(
+      membershipCache,
+      cacheKey,
+      { memberRole, expiresAt: Date.now() + MEMBERSHIP_CACHE_TTL_MS },
+      MEMBERSHIP_CACHE_MAX,
+    );
     req.bandId = bandId;
     req.memberRole = memberRole;
     next();

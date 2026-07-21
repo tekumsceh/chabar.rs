@@ -21,9 +21,19 @@ async function send(level, message, detail) {
     fn(`[ioorganize] ${message}`, detail ?? "");
   }
   try {
+    const headers = { "Content-Type": "application/json" };
+    // Prefer live session token when available (client-log requires auth).
+    try {
+      const { supabase } = await import("./supabase.js");
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch {
+      // ignore — unauthenticated client logs are dropped by the API
+    }
     await fetch("/api/client-log", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
   } catch {

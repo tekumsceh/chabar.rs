@@ -13,7 +13,7 @@
     "db:setup": "node scripts/setup-db.js",
     "db:setup:supabase": "node scripts/setup-supabase.js",
     "db:migrate:supabase": "node scripts/migrate-mysql-to-supabase.js",
-    "check": "node --check server/index.js && node --check server/auth.js && node --check scripts/setup-db.js && node --check scripts/setup-supabase.js && node --check scripts/migrate-mysql-to-supabase.js && node --check scripts/migrate-bands-ownership.js",
+    "check": "node --check server/index.js && node --check server/auth.js && node --check server/googleCalendar.js && node --check server/rateLimit.js && node --check scripts/setup-db.js && node --check scripts/setup-supabase.js && node --check scripts/migrate-mysql-to-supabase.js && node --check scripts/migrate-bands-ownership.js",
     "db:migrate:bands": "node scripts/migrate-bands-ownership.js",
     "db:seed:bands": "node scripts/seed-group-bands.js",
     "test:smoke": "node scripts/smoke-auth-bands.js",
@@ -34,9 +34,7 @@
     "pg": "^8.22.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "vite": "^7.2.7"
-  },
-  "devDependencies": {
+    "vite": "^7.2.7",
     "vite-plugin-pwa": "^1.3.0"
   }
 }

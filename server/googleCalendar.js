@@ -34,10 +34,17 @@ export function googleCalendarConfigured() {
   return Boolean(clientId() && clientSecret());
 }
 
+let encKeyWarned = false;
+
 function encKey() {
-  const raw =
-    process.env.GOOGLE_TOKEN_ENC_KEY ||
-    `${clientSecret()}:chabar-google-calendar`;
+  const explicit = String(process.env.GOOGLE_TOKEN_ENC_KEY || "").trim();
+  if (!explicit && !encKeyWarned) {
+    encKeyWarned = true;
+    logger.warn(
+      "GOOGLE_TOKEN_ENC_KEY missing — falling back to client secret hash. Set a dedicated key in production.",
+    );
+  }
+  const raw = explicit || `${clientSecret()}:chabar-google-calendar`;
   return crypto.createHash("sha256").update(raw).digest();
 }
 
@@ -455,14 +462,11 @@ function buildGoogleEventBody(event, { bandName = "", chabarEventId }) {
   if (!date) return null;
   const location = [event.city, event.venue].filter(Boolean).join(", ");
 
+  // Keep Google descriptions free of finance (wages / transport stay in Chabar only).
   const detailLines = [];
   if (event.note) detailLines.push(String(event.note).trim());
   if (event.city) detailLines.push(`Grad: ${String(event.city).trim()}`);
   if (event.venue) detailLines.push(`Lokal: ${String(event.venue).trim()}`);
-  const price = Number(event.priceEur ?? event.price_eur);
-  if (Number.isFinite(price) && price > 0) detailLines.push(`Cena: ${price} EUR`);
-  const transport = Number(event.transportRsd ?? event.transport_rsd);
-  if (Number.isFinite(transport) && transport > 0) detailLines.push(`Prevoz: ${transport} RSD`);
   detailLines.push("");
   detailLines.push("created via chabar.rs");
 
@@ -952,8 +956,8 @@ export async function pushBandCalendar(bandId) {
   let errors = 0;
   const createdIds = [];
 
+  const work = [];
   for (const row of events.rows) {
-    // Already live on Google (imported or previously pushed) — leave alone
     if (row.sync_source === "google") {
       skipped += 1;
       continue;
@@ -962,7 +966,13 @@ export async function pushBandCalendar(bandId) {
       skipped += 1;
       continue;
     }
+    work.push(row);
+  }
 
+  const CONCURRENCY = 3;
+  let cursor = 0;
+
+  async function pushOne(row) {
     const event = {
       bandId,
       date: row.event_date_text,
@@ -975,7 +985,7 @@ export async function pushBandCalendar(bandId) {
     const body = buildGoogleEventBody(event, { bandName, chabarEventId: row.id });
     if (!body) {
       skipped += 1;
-      continue;
+      return;
     }
 
     try {
@@ -990,7 +1000,7 @@ export async function pushBandCalendar(bandId) {
           { id: row.id, googleEventId: found.id, calendarId: link.calendarId },
         );
         linked += 1;
-        continue;
+        return;
       }
 
       const data = await googleFetch(
@@ -1019,6 +1029,18 @@ export async function pushBandCalendar(bandId) {
     }
   }
 
+  async function worker() {
+    while (cursor < work.length) {
+      const index = cursor;
+      cursor += 1;
+      await pushOne(work[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, Math.max(work.length, 1)) }, () => worker()),
+  );
+
   await query(
     `UPDATE band_google_calendars SET last_synced_at = NOW(), updated_at = NOW()
      WHERE band_id = :bandId`,
@@ -1028,11 +1050,24 @@ export async function pushBandCalendar(bandId) {
   return { created, linked, skipped, errors, createdIds };
 }
 
+/** Map OAuth failures to opaque codes — never put raw error.message in the redirect URL. */
+export function oauthErrorCode(error) {
+  const raw = String(error?.message || error || "").toLowerCase();
+  if (raw.includes("state") || raw.includes("expired")) return "invalid_state";
+  if (raw.includes("token")) return "token_exchange";
+  if (raw.includes("konfigurisan") || raw.includes("configured")) return "not_configured";
+  return "oauth_failed";
+}
+
 export function frontendReturnUrl({ returnTo, bandId, error = "" }) {
   const base = publicAppUrl();
   const params = new URLSearchParams();
-  if (error) params.set("gcal_error", error);
-  else params.set("gcal", "connected");
+  if (error) {
+    const safe = String(error)
+      .replace(/[^a-z0-9_-]/gi, "")
+      .slice(0, 64);
+    params.set("gcal_error", safe || "oauth_failed");
+  } else params.set("gcal", "connected");
   if (returnTo === "band" && bandId) {
     params.set("page", "band");
     params.set("band", bandId);

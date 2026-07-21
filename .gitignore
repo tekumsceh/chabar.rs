@@ -2,8 +2,9 @@ node_modules/
 dist/
 dev-dist/
 .env
-.env.deploy
-.env.smoke
+.env.*
+!.env.example
+!.env.smoke.example
 logs/
 *.log
 .DS_Store

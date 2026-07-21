@@ -13,18 +13,23 @@ export async function searchUsers(req, res, next) {
     const q = String(req.query.q || "").trim();
 
     const bandId = String(req.query.bandId || req.bandId || "").trim();
-    if (bandId) {
-      const membership = await query(
-        `SELECT member_role FROM band_members
-         WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
-        { bandId, userId: req.user.id },
-      );
-      if (!membership.rows[0] || !isBandLead(membership.rows[0].member_role)) {
-        return res.status(403).json({
-          error: "Forbidden",
-          detail: "Samo vlasnik ili lead može tražiti korisnike za bend.",
-        });
-      }
+    if (!bandId) {
+      return res.status(400).json({
+        error: "Missing band",
+        detail: "bandId je obavezan za pretragu korisnika.",
+      });
+    }
+
+    const membership = await query(
+      `SELECT member_role FROM band_members
+       WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+      { bandId, userId: req.user.id },
+    );
+    if (!membership.rows[0] || !isBandLead(membership.rows[0].member_role)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Samo vlasnik ili lead može tražiti korisnike za bend.",
+      });
     }
 
     const filter = q.length > 0 ? 1 : 0;
@@ -40,12 +45,9 @@ export async function searchUsers(req, res, next) {
            OR COALESCE(p.display_name, '') ILIKE :pattern ESCAPE '\\'
            OR COALESCE(p.email, '') ILIKE :pattern ESCAPE '\\'
          )
-         AND (
-           :bandId = ''
-           OR NOT EXISTS (
-             SELECT 1 FROM band_members bm
-             WHERE bm.band_id = :bandId AND bm.user_id = p.id
-           )
+         AND NOT EXISTS (
+           SELECT 1 FROM band_members bm
+           WHERE bm.band_id = :bandId AND bm.user_id = p.id
          )
        ORDER BY
          CASE
@@ -61,7 +63,7 @@ export async function searchUsers(req, res, next) {
         filter,
         pattern,
         prefix,
-        bandId: bandId || "",
+        bandId,
       },
     );
 

@@ -15,9 +15,11 @@ Ovaj dokument objašnjava kako sync radi, kako ga uključiti/isključiti, i šta
 | Akcija | Ko |
 | --- | --- |
 | Poveži Google nalog (Settings) | Svaki korisnik za sebe |
-| Poveži kalendar na bend | Ko prvi poveže = „connector” |
-| Sync on/off, odveži, uvoz | Samo connector |
+| Prvo poveži kalendar na bend | Owner ili lead |
+| Sync on/off, odveži, pull/uvoz, push, obriši uvezeno | Samo connector (ko je povezao kalendar) |
 | Kasnije | Owner + lead mogu preuzeti link |
+
+Google opis događaja sadrži grad/lokal/napomenu + `created via chabar.rs` — **bez** cene/prevoza (finansije ostaju u Chabar-u).
 
 ## Preporučeni redosled
 

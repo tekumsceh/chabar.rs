@@ -40,6 +40,7 @@ import {
   handleOAuthCallback,
   linkBandCalendar,
   listCalendars,
+  oauthErrorCode,
   pullBandCalendar,
   pushBandCalendar,
   redirectUri,
@@ -50,6 +51,9 @@ import {
   updatePersonalPrefs,
   deleteGoogleImportedEvents,
 } from "./googleCalendar.js";
+import { rateLimit } from "./rateLimit.js";
+import { isBandLead } from "../shared/roles.js";
+import { parseDate, startOfToday } from "../src/calculations.js";
 
 const app = express();
 const port = Number(process.env.API_PORT || 3001);
@@ -57,23 +61,79 @@ const host = process.env.API_HOST || (process.env.NODE_ENV === "production" ? "1
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "..", "dist");
 
-app.use(cors());
-app.use(express.json());
+/** Schedule keeps ~18 months of history + all future; finance keeps ~5 years. */
+const SCHEDULE_LOOKBACK = "18 months";
+const FINANCE_LOOKBACK = "5 years";
+
+function corsAllowedOrigins() {
+  const fromEnv = String(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const defaults = [
+    process.env.PUBLIC_APP_URL,
+    process.env.APP_URL,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "https://chabar.rs",
+    "https://www.chabar.rs",
+  ]
+    .map((item) => String(item || "").trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  return new Set([...fromEnv, ...defaults]);
+}
+
+const allowedOrigins = corsAllowedOrigins();
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Non-browser / same-origin proxies often omit Origin
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.has(origin) || process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+  }),
+);
+app.use(express.json({ limit: "256kb" }));
 
 app.get("/api/health", async (_req, res) => {
   await query("SELECT 1");
   res.json({ ok: true, database: "supabase-postgres" });
 });
 
-app.post("/api/client-log", (req, res) => {
-  const level = ["info", "warn", "error"].includes(req.body?.level) ? req.body.level : "info";
-  const message = String(req.body?.message || "client log").slice(0, 500);
-  logger[level](`[client] ${message}`, {
-    detail: req.body?.detail ?? null,
-    href: req.body?.href || "",
-  });
-  res.status(204).end();
-});
+function sanitizeClientLogDetail(detail) {
+  try {
+    const raw = JSON.stringify(detail ?? null);
+    if (raw.length <= 2_000) return detail ?? null;
+    return { truncated: true, preview: raw.slice(0, 500) };
+  } catch {
+    return { truncated: true, preview: String(detail).slice(0, 200) };
+  }
+}
+
+app.post(
+  "/api/client-log",
+  rateLimit({
+    windowMs: 60_000,
+    max: 40,
+    keyFn: (req) => `client-log:${req.ip || req.socket?.remoteAddress || "unknown"}`,
+  }),
+  requireAuth,
+  (req, res) => {
+    const level = ["info", "warn", "error"].includes(req.body?.level) ? req.body.level : "info";
+    const message = String(req.body?.message || "client log").slice(0, 500);
+    logger[level](`[client] ${message}`, {
+      detail: sanitizeClientLogDetail(req.body?.detail),
+      href: String(req.body?.href || "").slice(0, 500),
+      userId: req.user?.id,
+    });
+    res.status(204).end();
+  },
+);
 
 app.get("/api/me", requireAuth, async (req, res, next) => {
   try {
@@ -169,10 +229,36 @@ app.get("/api/google/calendar/callback", async (req, res) => {
   } catch (error) {
     logger.error("Google calendar callback failed", { detail: error.message });
     return res.redirect(
-      frontendReturnUrl({ returnTo: "settings", error: error.message || "oauth_failed" }),
+      frontendReturnUrl({ returnTo: "settings", error: oauthErrorCode(error) }),
     );
   }
 });
+
+/** First link: owner/lead. Existing link: connector only. */
+async function requireGoogleCalendarManager(req, res, next) {
+  try {
+    const link = await getBandCalendarLink(req.params.id);
+    req.googleLink = link || null;
+    if (!link) {
+      if (!isBandLead(req.memberRole)) {
+        return res.status(403).json({
+          error: "Forbidden",
+          detail: "Samo vlasnik ili lead može povezati Google kalendar.",
+        });
+      }
+      return next();
+    }
+    if (link.connectedByUserId !== req.user.id) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Samo connector može upravljati Google sync-om.",
+      });
+    }
+    return next();
+  } catch (error) {
+    next(error);
+  }
+}
 
 app.delete("/api/google/calendar/account", requireAuth, async (req, res, next) => {
   try {
@@ -217,7 +303,9 @@ app.get(
         configured: googleCalendarConfigured(),
         account: status,
         link,
-        canManageLink: !link || link.connectedByUserId === req.user.id,
+        canManageLink: link
+          ? link.connectedByUserId === req.user.id
+          : isBandLead(req.memberRole),
       });
     } catch (error) {
       next(error);
@@ -230,6 +318,7 @@ app.put(
   requireAuth,
   bandIdFromParams,
   requireBandMember,
+  requireGoogleCalendarManager,
   async (req, res, next) => {
     try {
       const calendarId = String(req.body?.calendarId || "").trim();
@@ -257,6 +346,7 @@ app.patch(
   requireAuth,
   bandIdFromParams,
   requireBandMember,
+  requireGoogleCalendarManager,
   async (req, res, next) => {
     try {
       if (typeof req.body?.syncEnabled === "boolean") {
@@ -279,6 +369,7 @@ app.delete(
   requireAuth,
   bandIdFromParams,
   requireBandMember,
+  requireGoogleCalendarManager,
   async (req, res, next) => {
     try {
       await unlinkBandCalendar({ bandId: req.params.id, userId: req.user.id });
@@ -294,6 +385,7 @@ app.post(
   requireAuth,
   bandIdFromParams,
   requireBandMember,
+  requireGoogleCalendarManager,
   async (req, res, next) => {
     try {
       const mode = String(req.query.mode || req.body?.mode || "linked");
@@ -339,12 +431,9 @@ app.delete(
   requireAuth,
   bandIdFromParams,
   requireBandMember,
+  requireGoogleCalendarManager,
   async (req, res, next) => {
     try {
-      const link = await getBandCalendarLink(req.params.id);
-      if (link && link.connectedByUserId !== req.user.id) {
-        return res.status(403).json({ error: "Samo connector može obrisati uvezeno." });
-      }
       const result = await deleteGoogleImportedEvents(req.params.id);
       res.json(result);
     } catch (error) {
@@ -495,6 +584,12 @@ app.get("/api/exchange-rate", requireAuth, async (req, res, next) => {
 app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const event = normalizeEvent(req.body);
+    if (isPastEventDate(event.date)) {
+      return res.status(400).json({
+        error: "Invalid date",
+        detail: "Datum termina ne sme biti u prošlosti.",
+      });
+    }
     const result = await query(
       `INSERT INTO events
         (band_id, sort_order, event_date_text, city, venue, note, price_eur, transport_rsd)
@@ -526,7 +621,32 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
 
 app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next) => {
   try {
+    const existing = await query(
+      `SELECT event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: req.params.id, bandId: req.bandId },
+    );
+    if (!existing.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
     const event = normalizeEvent(req.body);
+    const existingDate = String(existing.rows[0].event_date_text || "");
+    const dateChanged = String(event.date || "").trim() !== existingDate.trim();
+
+    // Past gigs may still get wage/note edits; only the calendar date is locked.
+    if (dateChanged && isPastEventDate(existingDate)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Datum prošlog termina se ne može menjati.",
+      });
+    }
+    if (dateChanged && isPastEventDate(event.date)) {
+      return res.status(400).json({
+        error: "Invalid date",
+        detail: "Datum termina ne sme biti u prošlosti.",
+      });
+    }
+
     const result = await query(
       `UPDATE events
        SET event_date_text = :date,
@@ -558,6 +678,20 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
 
 app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, next) => {
   try {
+    const existing = await query(
+      `SELECT event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: req.params.id, bandId: req.bandId },
+    );
+    if (!existing.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    if (isPastEventDate(existing.rows[0].event_date_text)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Prošli termini se ne mogu brisati.",
+      });
+    }
+
     await syncEventDelete({ eventId: Number(req.params.id), bandId: req.bandId });
     const result = await query("DELETE FROM events WHERE id = :id AND band_id = :bandId", {
       id: req.params.id,
@@ -572,7 +706,7 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
   }
 });
 
-app.post("/api/payments", requireAuth, async (req, res, next) => {
+app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const payment = normalizePayment(req.body);
     const result = await query(
@@ -581,7 +715,7 @@ app.post("/api/payments", requireAuth, async (req, res, next) => {
         :userId,
         :bandId,
         COALESCE((SELECT max_order + 1 FROM (
-          SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM payments WHERE user_id = :userId
+          SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM payments WHERE band_id = :bandId
         ) AS t), 1),
         :date, :amount, :currency
        )
@@ -589,10 +723,10 @@ app.post("/api/payments", requireAuth, async (req, res, next) => {
       {
         ...payment,
         userId: req.user.id,
-        bandId: (await getPersonalBandId(req.user.id)) || null,
+        bandId: req.bandId,
       },
     );
-    res.status(201).json({ ...payment, id: result.rows[0].id });
+    res.status(201).json({ ...payment, id: result.rows[0].id, bandId: req.bandId });
   } catch (error) {
     next(error);
   }
@@ -643,9 +777,13 @@ if (process.env.NODE_ENV === "production" && process.env.SERVE_STATIC !== "0") {
 app.use((error, _req, res, _next) => {
   logger.error("Unhandled API error", error);
   const status = Number(error.status) || 500;
+  const publicDetail =
+    status >= 500
+      ? "Neočekivana greška na serveru."
+      : String(error.message || "Request error").slice(0, 300);
   res.status(status).json({
     error: status >= 500 ? "Server error" : "Request error",
-    detail: error.message,
+    detail: publicDetail,
   });
 });
 
@@ -688,6 +826,26 @@ async function getPersonalBandId(userId) {
   return result.rows[0]?.id || null;
 }
 
+/** Serbian DD.MM.YYYY. text → comparable date; invalid → not past (don't block). */
+function isPastEventDate(dateText) {
+  const eventDate = parseDate(dateText);
+  if (Number.isNaN(eventDate.getTime())) return false;
+  return eventDate <= startOfToday();
+}
+
+/**
+ * SQL predicate: keep rows with empty/unparseable dates, or dates within lookback.
+ * lookback e.g. '18 months' / '5 years'.
+ */
+function eventDateWithinLookbackSql(alias = "e", lookback = SCHEDULE_LOOKBACK) {
+  return `(
+    NULLIF(trim(${alias}.event_date_text), '') IS NULL
+    OR ${alias}.event_date_text !~ '^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{4}\\.?$'
+    OR to_date(regexp_replace(trim(${alias}.event_date_text), '\\.+$', ''), 'DD.MM.YYYY')
+         >= (CURRENT_DATE - INTERVAL '${lookback}')
+  )`;
+}
+
 async function getBandEventsForUser(bandId, userId) {
   const result = await query(
     `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.note,
@@ -698,6 +856,7 @@ async function getBandEventsForUser(bandId, userId) {
      LEFT JOIN event_member_finance f
        ON f.event_id = e.id AND f.user_id = :userId
      WHERE e.band_id = :bandId
+       AND ${eventDateWithinLookbackSql("e", SCHEDULE_LOOKBACK)}
      ORDER BY e.sort_order, e.id`,
     { bandId, userId },
   );
@@ -714,6 +873,7 @@ async function getAllScheduleEventsForUser(userId) {
      JOIN band_members bm ON bm.band_id = e.band_id AND bm.user_id = :userId
      LEFT JOIN event_member_finance f
        ON f.event_id = e.id AND f.user_id = :userId
+     WHERE ${eventDateWithinLookbackSql("e", SCHEDULE_LOOKBACK)}
      ORDER BY e.sort_order, e.id`,
     { userId },
   );
@@ -729,6 +889,7 @@ async function getMyFinanceEvents(userId) {
      JOIN bands b ON b.id = e.band_id
      JOIN band_members bm ON bm.band_id = e.band_id AND bm.user_id = :userId
      WHERE f.user_id = :userId
+       AND ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
      ORDER BY e.sort_order, e.id`,
     { userId },
   );
@@ -743,6 +904,12 @@ async function getMyPayments(userId) {
     `SELECT id, payment_date_text, amount, currency
      FROM payments
      WHERE user_id = :userId
+       AND (
+         NULLIF(trim(payment_date_text), '') IS NULL
+         OR payment_date_text !~ '^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{4}\\.?$'
+         OR to_date(regexp_replace(trim(payment_date_text), '\\.+$', ''), 'DD.MM.YYYY')
+              >= (CURRENT_DATE - INTERVAL '${FINANCE_LOOKBACK}')
+       )
      ORDER BY sort_order, id`,
     { userId },
   );
@@ -765,6 +932,7 @@ async function getBandFinanceEvents(bandId) {
      FROM events e
      JOIN bands b ON b.id = e.band_id
      WHERE e.band_id = :bandId
+       AND ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
      ORDER BY e.sort_order, e.id`,
     { bandId },
   );
@@ -777,7 +945,9 @@ async function getBandFinanceEvents(bandId) {
      FROM event_member_finance f
      JOIN profiles p ON p.id = f.user_id
      WHERE f.event_id IN (
-       SELECT e.id FROM events e WHERE e.band_id = :bandId
+       SELECT e.id FROM events e
+       WHERE e.band_id = :bandId
+         AND ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
      )
      ORDER BY f.event_id, member_name`,
     { bandId },
@@ -820,6 +990,12 @@ async function getBandPayments(bandId) {
     `SELECT id, payment_date_text, amount, currency
      FROM payments
      WHERE band_id = :bandId
+       AND (
+         NULLIF(trim(payment_date_text), '') IS NULL
+         OR payment_date_text !~ '^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{4}\\.?$'
+         OR to_date(regexp_replace(trim(payment_date_text), '\\.+$', ''), 'DD.MM.YYYY')
+              >= (CURRENT_DATE - INTERVAL '${FINANCE_LOOKBACK}')
+       )
      ORDER BY sort_order, id`,
     { bandId },
   );
