@@ -37,6 +37,30 @@ export async function query(sql, params = {}) {
   return result;
 }
 
+/** Run fn(queryFn) inside a transaction. queryFn has the same named-param API as query(). */
+export async function withTransaction(fn) {
+  const client = await pool.connect();
+  const run = async (sql, params = {}) => {
+    const { text, values } = namedToPositional(sql, params);
+    return client.query(text, values);
+  };
+  try {
+    await client.query("BEGIN");
+    const result = await fn(run);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // ignore rollback errors
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 /** Ping so the pooler / TCP path stays warm (Supabase idle disconnects otherwise). */
 export function startPoolWarmer(intervalMs = 50_000) {
   const tick = async () => {

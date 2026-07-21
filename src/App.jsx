@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, setApiAuth } from "./api.js";
 import BandPage from "./BandPage.jsx";
+import BandTiles from "./BandTiles.jsx";
 import { DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText } from "./calculations.js";
 import LegalPage, { isLegalPage } from "./LegalPage.jsx";
 import LoginPage from "./LoginPage.jsx";
@@ -10,6 +11,7 @@ import SettingsPage from "./SettingsPage.jsx";
 import UserMenu from "./UserMenu.jsx";
 import { log } from "./logger.js";
 import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase.js";
+import { takePendingJoinToken } from "./joinLink.js";
 
 const pages = [
   ["schedule", "Raspored"],
@@ -130,6 +132,17 @@ export default function App() {
   );
   const effectiveFinanceMode = canUseBandMode && financeMode === "band" ? "band" : "member";
 
+  function goToSchedule(resetBand = false) {
+    if (resetBand) setActiveBandId(ALL_BANDS_ID);
+    setPage("schedule");
+  }
+
+  function openBand(bandId) {
+    if (!bandId || bandId === ALL_BANDS_ID) return;
+    setActiveBandId(bandId);
+    setPage("band");
+  }
+
   useEffect(() => {
     if (financeMode === "band" && !canUseBandMode) {
       setFinanceMode("member");
@@ -207,6 +220,27 @@ export default function App() {
       setLoading(true);
       setError("");
       setApiAuth({ token, bandId: activeBandId === ALL_BANDS_ID ? "" : activeBandId });
+
+      const joinToken = takePendingJoinToken();
+      let joinedBandId = "";
+      if (joinToken) {
+        try {
+          const joined = await api(`/api/join/${encodeURIComponent(joinToken)}`, { method: "POST" });
+          if (joined?.bandId) {
+            joinedBandId = joined.bandId;
+            setActiveBandId(joined.bandId);
+            setPage("band");
+            showToast(
+              joined.status === "already_member"
+                ? `Već si u bendu „${joined.bandName}”`
+                : `Pridružen/a bendu „${joined.bandName}”`,
+            );
+          }
+        } catch (joinError) {
+          showToast(joinError.message || "Pozivni link nije važeći", "error");
+        }
+      }
+
       const me = await api("/api/me");
       setProfile(me.profile);
       setBands(me.bands);
@@ -214,11 +248,12 @@ export default function App() {
 
       const stored = localStorage.getItem(ACTIVE_BAND_KEY);
       const preferred =
-        stored === ALL_BANDS_ID || (!stored && !activeBandId)
+        joinedBandId ||
+        (stored === ALL_BANDS_ID || (!stored && !activeBandId)
           ? ALL_BANDS_ID
           : me.bands.find((band) => band.id === activeBandId)?.id ||
             me.bands.find((band) => band.id === stored)?.id ||
-            ALL_BANDS_ID;
+            ALL_BANDS_ID);
 
       if (preferred !== activeBandId) {
         setActiveBandId(preferred);
@@ -538,6 +573,18 @@ export default function App() {
       eventsRef.current.find((item) => item.id === id) || financeEventsRef.current.find((item) => item.id === id);
     if (!current) return;
 
+    const asOf = parseDate(settings.asOfDate || todayText());
+    const eventDate = parseDate(current.date);
+    const calculationDate = Number.isNaN(asOf.getTime()) ? startOfToday() : asOf;
+    const isPast =
+      Boolean(String(current.date || "").trim()) &&
+      !Number.isNaN(eventDate.getTime()) &&
+      eventDate <= calculationDate;
+    if (isPast) {
+      showToast("Prošli termini su zaključani — možeš samo dodati komentar", "error");
+      return;
+    }
+
     const nextEvent = {
       ...current,
       date: fields.date ?? current.date,
@@ -549,21 +596,25 @@ export default function App() {
         fields.transportRsd !== undefined ? numberValue(fields.transportRsd) : numberValue(current.transportRsd),
     };
 
-    await api(`/api/events/${id}`, {
-      method: "PUT",
-      bandId: eventBandId(nextEvent),
-      body: {
-        date: nextEvent.date ?? "",
-        city: nextEvent.city ?? "",
-        venue: nextEvent.venue ?? "",
-        note: nextEvent.note ?? "",
-        priceEur: numberValue(nextEvent.priceEur),
-        transportRsd: numberValue(nextEvent.transportRsd),
-      },
-    });
-    invalidateScheduleCache(eventBandId(nextEvent));
-    await loadScheduleAndFinance();
-    showToast(`Termin sačuvan: ${nextEvent.date}${nextEvent.city ? ` — ${nextEvent.city}` : ""}`);
+    try {
+      await api(`/api/events/${id}`, {
+        method: "PUT",
+        bandId: eventBandId(nextEvent),
+        body: {
+          date: nextEvent.date ?? "",
+          city: nextEvent.city ?? "",
+          venue: nextEvent.venue ?? "",
+          note: nextEvent.note ?? "",
+          priceEur: numberValue(nextEvent.priceEur),
+          transportRsd: numberValue(nextEvent.transportRsd),
+        },
+      });
+      invalidateScheduleCache(eventBandId(nextEvent));
+      await loadScheduleAndFinance();
+      showToast(`Termin sačuvan: ${nextEvent.date}${nextEvent.city ? ` — ${nextEvent.city}` : ""}`);
+    } catch (requestError) {
+      showToast(requestError.message || "Termin nije sačuvan", "error");
+    }
   }
 
   async function removeEvent(id) {
@@ -684,7 +735,13 @@ export default function App() {
               key={id}
               className={`top-nav-link ${activePage === id ? "active" : ""}`}
               type="button"
-              onClick={() => setPage(id)}
+              onClick={() => {
+                if (id === "schedule" && activePage === "band") {
+                  goToSchedule(true);
+                  return;
+                }
+                setPage(id);
+              }}
             >
               {label}
             </button>
@@ -726,11 +783,6 @@ export default function App() {
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
           onBandChange={setActiveBandId}
-          onOpenBand={(bandId) => {
-            if (!bandId || bandId === ALL_BANDS_ID) return;
-            setActiveBandId(bandId);
-            setPage("band");
-          }}
           onBandsChanged={async () => {
             const me = await api("/api/me");
             setProfile(me.profile);
@@ -752,7 +804,7 @@ export default function App() {
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
           onBandChange={setActiveBandId}
-          onBack={() => setPage("schedule")}
+          onBack={() => goToSchedule(true)}
           onBandsChanged={async () => {
             const me = await api("/api/me");
             setProfile(me.profile);
@@ -776,6 +828,7 @@ export default function App() {
           onFinanceModeChange={handleFinanceModeChange}
           settings={settings}
           loading={loading}
+          showToast={showToast}
         />
       </div>
 
@@ -794,6 +847,14 @@ export default function App() {
           showToast={showToast}
         />
       </div>
+
+      {showSchedule || forceSchedule || showBand || showReport ? (
+        <BandTiles
+          bands={bands}
+          activeBandId={showBand ? activeBandId : ""}
+          onOpenBand={openBand}
+        />
+      ) : null}
 
       {toast ? (
         <div id="toast" className={`show toast-${toast.type || "success"}`} role="status" aria-live="polite">

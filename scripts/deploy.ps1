@@ -1,6 +1,6 @@
 # One-command deploy to Hostinger VPS.
 # Prerequisites (one-time):
-#   1. SSH key:  ssh-keygen -t ed25519 -C "ioorganize-hostinger"
+#   1. SSH key:  ssh-keygen -t ed25519 -C "chabar-hostinger"
 #   2. Add id_ed25519.pub in Hostinger / authorized_keys
 #   3. Optional ~/.ssh/config Host alias, e.g.:
 #        Host chabar
@@ -49,13 +49,13 @@ $sshTarget = if ($deployUser) { "$deployUser@$deployHost" } else { $deployHost }
 
 Write-Host "==> Building deploy zip..."
 & (Join-Path $root "scripts\make-deploy-zip.ps1")
-$zipPath = Join-Path $root "ioorganize-deploy.zip"
+$zipPath = Join-Path $root "chabar-deploy.zip"
 if (-not (Test-Path $zipPath)) {
   Write-Error "Zip was not created: $zipPath"
 }
 
 Write-Host "==> Uploading to ${sshTarget}:${deployPath}/ ..."
-scp $zipPath "${sshTarget}:${deployPath}/ioorganize-deploy.zip"
+scp $zipPath "${sshTarget}:${deployPath}/chabar-deploy.zip"
 if ($LASTEXITCODE -ne 0) {
   Write-Error "scp failed (exit $LASTEXITCODE). Check SSH key / DEPLOY_HOST."
 }
@@ -64,7 +64,7 @@ Write-Host "==> Unzip + reload on VPS..."
 $remote = @"
 set -eu
 cd '$deployPath'
-unzip -o ioorganize-deploy.zip
+unzip -o chabar-deploy.zip
 bash scripts/vps-reload.sh
 "@
 $remote = $remote -replace "`r`n", "`n" -replace "`r", "`n"

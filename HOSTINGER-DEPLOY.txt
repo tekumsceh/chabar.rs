@@ -1,5 +1,5 @@
 ================================================================================
-IO ORGANIZE — HOSTINGER KVM VPS DEPLOYMENT GUIDE
+CHABAR — HOSTINGER KVM VPS DEPLOYMENT GUIDE
 ================================================================================
 Created for: Hostinger KVM 2 (Ubuntu 22.04 or 24.04 LTS, plain — no panel apps)
 App stack:   React (Vite build) + Express API + Supabase Postgres
@@ -156,7 +156,7 @@ carelessly — the zip script already excludes .env and node_modules.
   .\scripts\make-deploy-zip.ps1
 
 This creates:
-  c:\xampp\htdocs\ioorganize\ioorganize-deploy.zip
+  c:\xampp\htdocs\ioorganize\chabar-deploy.zip
 
 --- 6.2 Upload the zip ---
 
@@ -164,7 +164,7 @@ Easiest options:
 
 A) SCP from PowerShell:
 
-  scp c:\xampp\htdocs\ioorganize\ioorganize-deploy.zip root@YOUR_VPS_IP:/var/www/ioorganize/
+  scp c:\xampp\htdocs\ioorganize\chabar-deploy.zip root@YOUR_VPS_IP:/var/www/ioorganize/
 
 B) FileZilla / WinSCP:
   - Protocol: SFTP
@@ -176,7 +176,7 @@ B) FileZilla / WinSCP:
 --- 6.3 On the VPS — unzip ---
 
   cd /var/www/ioorganize
-  unzip -o ioorganize-deploy.zip
+  unzip -o chabar-deploy.zip
   ls -la
 
 You should see folders like: src, server, deploy, scripts, package.json, etc.
@@ -250,7 +250,7 @@ Check:
   pm2 logs ioorganize --lines 50
 
 Healthy log should show something like:
-  IO Organize API running on http://127.0.0.1:3001
+  Chabar API running on http://127.0.0.1:3001
 
 Test API locally on the server:
 
@@ -307,7 +307,7 @@ If testing by IP only (no domain yet), set:
   or
   http://YOUR_VPS_IP
 
-You should see the IO Organize UI.
+You should see the Chabar UI.
 Open DevTools → Network and confirm /api/bootstrap returns 200.
 
 
@@ -364,7 +364,7 @@ On Windows:
 On VPS:
 
   cd /var/www/ioorganize
-  unzip -o ioorganize-deploy.zip
+  unzip -o chabar-deploy.zip
   npm install
   npm run build
   pm2 reload ioorganize

@@ -4,6 +4,7 @@ import { calculate, formatEur, formatRsd, formatScheduleDateParts, parseDate, un
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
+import EventComments from "./EventComments.jsx";
 
 const statusOptions = [
   { id: "all", label: "Sve stavke" },
@@ -25,6 +26,7 @@ export default function ReportPage({
   onFinanceModeChange,
   settings,
   loading = false,
+  showToast,
 }) {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -409,6 +411,7 @@ export default function ReportPage({
           row={selectedRow}
           band={bandsById.get(selectedRow.bandId)}
           rate={selectedRow.rate || calculations.rate}
+          showToast={showToast}
           onClose={() => setSelectedId(null)}
         />
       ) : null}
@@ -416,7 +419,7 @@ export default function ReportPage({
   );
 }
 
-function FinanceDetailModal({ row, band, rate, onClose }) {
+function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
   const name = band?.name || row.bandName || "";
   const color = resolveBandColor(band, row.bandId || name);
   const transportEur = rate > 0 ? row.transportRsd / rate : 0;
@@ -573,6 +576,16 @@ function FinanceDetailModal({ row, band, rate, onClose }) {
                 <strong>{formatEur(detailTotalEur)}</strong>
               </li>
             </ul>
+          </section>
+
+          {row.done ? (
+            <p className="event-comments-locknote">
+              Termin je zaključan — finansijski detalji se ne menjaju. Možeš dodati komentar ispod.
+            </p>
+          ) : null}
+
+          <section className="finance-detail-section">
+            <EventComments eventId={row.id} bandId={row.bandId} showToast={showToast} compact />
           </section>
         </div>
       </div>

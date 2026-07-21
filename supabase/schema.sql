@@ -1,4 +1,4 @@
--- IO Organize schema for Supabase (PostgreSQL) — bands-first
+-- Chabar schema for Supabase (PostgreSQL) — bands-first
 
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,

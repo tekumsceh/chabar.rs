@@ -4,6 +4,7 @@ import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { useConfirm } from "./confirmDialog.jsx";
 import { bandRoleLabel } from "../shared/roles.js";
 import { parseDate, sameMonth, startOfToday } from "./calculations.js";
+import { joinUrlForToken, qrImageUrlForJoin } from "./joinLink.js";
 
 const WEEKDAYS = ["P", "U", "S", "Č", "P", "S", "N"];
 const SIDE_RATIO = 0.88;
@@ -250,11 +251,81 @@ export default function BandPage({
   const isLead = Boolean(permissions.isLead) && !isAllBands;
   const members = detail?.members || [];
   const invites = detail?.invites || [];
-  const googleCalendar = detail?.googleCalendar || null;
   const bandColor = resolveBandColor(band, band?.id || activeBandId);
-  const [calendarList, setCalendarList] = useState([]);
-  const [calendarBusy, setCalendarBusy] = useState(false);
-  const [pickOpen, setPickOpen] = useState(false);
+  const [sideSection, setSideSection] = useState("members");
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+
+  function toggleSideSection(id) {
+    setSideSection((current) => (current === id ? "" : id));
+  }
+
+  useEffect(() => {
+    if (sideSection !== "sharing") return undefined;
+    if (!canInvite || !manageBandId || band?.kind === "personal" || isAllBands) {
+      setShareUrl("");
+      setQrOpen(false);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      setShareBusy(true);
+      try {
+        const data = await api(`/api/bands/${manageBandId}/invite-link`, { bandId: manageBandId });
+        if (!cancelled) {
+          setShareUrl(joinUrlForToken(data.token));
+          setQrOpen(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setShareUrl("");
+          showToast?.(error.message || "Link nije učitan", "error");
+        }
+      } finally {
+        if (!cancelled) setShareBusy(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sideSection, canInvite, manageBandId, band?.kind, isAllBands, showToast]);
+
+  async function copyShareLink() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast?.("Link kopiran");
+    } catch {
+      showToast?.("Kopiranje nije uspelo", "error");
+    }
+  }
+
+  async function rotateShareLink() {
+    if (!manageBandId || shareBusy) return;
+    const ok = await confirm({
+      title: "Novi link?",
+      message: "Stari link i QR prestaju da važe. Nastaviti?",
+      confirmLabel: "Generiši novi",
+      cancelLabel: "Otkaži",
+      danger: true,
+    });
+    if (!ok) return;
+    setShareBusy(true);
+    try {
+      const data = await api(`/api/bands/${manageBandId}/invite-link/rotate`, {
+        method: "POST",
+        bandId: manageBandId,
+      });
+      setShareUrl(joinUrlForToken(data.token));
+      setQrOpen(false);
+      showToast?.("Novi link je spreman");
+    } catch (error) {
+      showToast?.(error.message || "Link nije obnovljen", "error");
+    } finally {
+      setShareBusy(false);
+    }
+  }
 
   /** day-of-month → events in the visible month */
   const eventsByDay = useMemo(() => {
@@ -928,391 +999,136 @@ export default function BandPage({
               <span>{subtitle}</span>
             </div>
 
-            <section className="band-home-side-section">
-              <h3>
-                Članovi
-                {members.length ? ` · ${members.length}` : ""}
-              </h3>
-              {isAllBands ? (
-                <p className="band-home-note">Izaberi bend da vidiš članove.</p>
-              ) : band?.kind === "personal" ? (
-                <p className="band-home-note">Lični prostor — nema liste članova.</p>
-              ) : (
-                <ul className="band-home-side-members">
-                  {members.map((member) => (
-                    <li key={member.id}>
-                      <span className="band-home-avatar is-sm" aria-hidden="true">
-                        {bandInitials(member.name)}
-                      </span>
-                      <span className="band-home-side-member-text">
-                        <strong>{member.name}</strong>
-                        {member.email ? <small>{member.email}</small> : null}
-                      </span>
-                      <span className="band-home-side-role">{bandRoleLabel(member.memberRole)}</span>
-                    </li>
-                  ))}
-                  {invites.map((invite) => (
-                    <li key={invite.id} className="is-pending">
-                      <span className="band-home-avatar is-sm is-pending" aria-hidden="true">
-                        ?
-                      </span>
-                      <span className="band-home-side-member-text">
-                        <strong>{invite.email}</strong>
-                        <small>čeka potvrdu</small>
-                      </span>
-                      <span className="band-home-side-role">pozivnica</span>
-                    </li>
-                  ))}
-                  {!members.length && !invites.length ? (
-                    <li className="band-home-side-empty">Nema učitanih članova.</li>
-                  ) : null}
-                </ul>
-              )}
-            </section>
+            <div className="band-accordion" role="list">
+              <BandAccordionSection
+                id="members"
+                title={`Članovi${members.length ? ` · ${members.length}` : ""}`}
+                open={sideSection === "members"}
+                onToggle={toggleSideSection}
+              >
+                {isAllBands ? (
+                  <p className="band-home-note">Izaberi bend da vidiš članove.</p>
+                ) : band?.kind === "personal" ? (
+                  <p className="band-home-note">Lični prostor — nema liste članova.</p>
+                ) : (
+                  <ul className="band-home-side-members">
+                    {members.map((member) => (
+                      <li key={member.id}>
+                        <span className="band-home-avatar is-sm" aria-hidden="true">
+                          {bandInitials(member.name)}
+                        </span>
+                        <span className="band-home-side-member-text">
+                          <strong>{member.name}</strong>
+                          {member.email ? <small>{member.email}</small> : null}
+                        </span>
+                        <span className="band-home-side-role">{bandRoleLabel(member.memberRole)}</span>
+                      </li>
+                    ))}
+                    {invites.map((invite) => (
+                      <li key={invite.id} className="is-pending">
+                        <span className="band-home-avatar is-sm is-pending" aria-hidden="true">
+                          ?
+                        </span>
+                        <span className="band-home-side-member-text">
+                          <strong>{invite.email}</strong>
+                          <small>čeka potvrdu</small>
+                        </span>
+                        <span className="band-home-side-role">pozivnica</span>
+                      </li>
+                    ))}
+                    {!members.length && !invites.length ? (
+                      <li className="band-home-side-empty">Nema učitanih članova.</li>
+                    ) : null}
+                  </ul>
+                )}
+              </BandAccordionSection>
 
-            <section className="band-home-side-section">
-              <h3>Google kalendar</h3>
-              {!googleCalendar?.configured ? (
-                <p className="band-home-note">Sync nije konfigurisan na serveru.</p>
-              ) : !googleCalendar?.account?.connected ? (
-                <div className="band-home-side-placeholders">
-                  <p className="band-home-note">
-                    Jedan Google nalog → po bendu biraš koji kalendar (npr. Saint Louis / Marko Louis).
-                    Sync ne dira kalendare drugih članova.
-                  </p>
-                  <button
-                    type="button"
-                    className="band-home-side-action"
-                    disabled={calendarBusy || isAllBands}
-                    onClick={async () => {
-                      setCalendarBusy(true);
-                      try {
-                        const data = await api(
-                          `/api/google/calendar/connect?returnTo=band&bandId=${encodeURIComponent(activeBandId)}`,
-                        );
-                        window.location.href = data.url;
-                      } catch (error) {
-                        showToast?.(error.message || "Povezivanje nije uspelo", "error");
-                        setCalendarBusy(false);
-                      }
-                    }}
-                  >
-                    Poveži Google nalog
-                    <small>pa izaberi kalendar benda</small>
-                  </button>
-                </div>
-              ) : googleCalendar?.link ? (
-                <div className="band-home-side-placeholders">
-                  <p className="band-home-note">
-                    {googleCalendar.link.summary || googleCalendar.link.calendarId}
-                    {googleCalendar.link.syncEnabled ? " · sync uključen" : " · sync isključen"}
-                  </p>
-                  {googleCalendar.canManageLink ? (
-                    <>
-                      <button
-                        type="button"
-                        className="band-home-side-action"
-                        disabled={calendarBusy}
-                        onClick={async () => {
-                          setCalendarBusy(true);
-                          try {
-                            await api(`/api/bands/${activeBandId}/google-calendar`, {
-                              method: "PATCH",
-                              bandId: activeBandId,
-                              body: { syncEnabled: !googleCalendar.link.syncEnabled },
-                            });
-                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
-                            setDetail(data);
-                            showToast?.(
-                              !googleCalendar.link.syncEnabled ? "Sync uključen" : "Sync isključen",
-                            );
-                          } catch (error) {
-                            showToast?.(error.message || "Izmena nije uspela", "error");
-                          } finally {
-                            setCalendarBusy(false);
-                          }
-                        }}
-                      >
-                        {googleCalendar.link.syncEnabled ? "Isključi sync" : "Uključi sync"}
-                        <small>bend kalendar</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="band-home-side-action"
-                        disabled={calendarBusy}
-                        onClick={async () => {
-                          setCalendarBusy(true);
-                          try {
-                            const result = await api(
-                              `/api/bands/${activeBandId}/google-calendar/pull?mode=linked`,
-                              { method: "POST", bandId: activeBandId },
-                            );
-                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
-                            setDetail(data);
-                            setCalendarEvents(data.events || []);
-                            showToast?.(
-                              `Ažurirano ${result.updated} (uvezeno 0, preskočeno ${result.skipped || 0})`,
-                            );
-                          } catch (error) {
-                            showToast?.(error.message || "Sync nije uspeo", "error");
-                          } finally {
-                            setCalendarBusy(false);
-                          }
-                        }}
-                      >
-                        Ažuriraj povezane
-                        <small>bez novih termina — bezbedno</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="band-home-side-action"
-                        disabled={calendarBusy}
-                        onClick={async () => {
-                          const ok = await confirm({
-                            title: "Pošalji u Google?",
-                            message:
-                              "Poslati Chabar datume koji još nisu u Google kalendaru?\n\n" +
-                              "• Samo ovaj bendov kalendar\n" +
-                              "• Ne dira postojeće Google događaje\n" +
-                              "• Novi imaju liniju „created via chabar.rs”",
-                            confirmLabel: "Pošalji",
-                            cancelLabel: "Otkaži",
-                          });
-                          if (!ok) return;
-                          setCalendarBusy(true);
-                          try {
-                            const result = await api(
-                              `/api/bands/${activeBandId}/google-calendar/push`,
-                              { method: "POST", bandId: activeBandId },
-                            );
-                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
-                            setDetail(data);
-                            setCalendarEvents(data.events || []);
-                            showToast?.(
-                              `Poslato ${result.created}, povezano ${result.linked || 0}, ` +
-                                `preskočeno ${result.skipped || 0}` +
-                                (result.errors ? `, greške ${result.errors}` : ""),
-                            );
-                          } catch (error) {
-                            showToast?.(error.message || "Slanje nije uspelo", "error");
-                          } finally {
-                            setCalendarBusy(false);
-                          }
-                        }}
-                      >
-                        Pošalji u Google
-                        <small>Chabar → kalendar (samo novi)</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="band-home-side-action"
-                        disabled={calendarBusy}
-                        onClick={async () => {
-                          const ok = await confirm({
-                            title: "Uvesti iz Google-a?",
-                            message:
-                              "Uvesti BUDUĆE datume iz Google kalendara koji još nisu u Chabar-u?\n\n" +
-                              "• Ne dira prošlost\n" +
-                              "• Ne pravi duplikate ako isti datum već postoji\n" +
-                              "• Ne piše u kalendare drugih članova\n\n" +
-                              "Preporuka: prvo koristi „Ažuriraj povezane”.",
-                            confirmLabel: "Uvezi",
-                            cancelLabel: "Otkaži",
-                          });
-                          if (!ok) return;
-                          setCalendarBusy(true);
-                          try {
-                            const result = await api(
-                              `/api/bands/${activeBandId}/google-calendar/pull?mode=import`,
-                              { method: "POST", bandId: activeBandId },
-                            );
-                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
-                            setDetail(data);
-                            setCalendarEvents(data.events || []);
-                            showToast?.(
-                              `Uvezeno ${result.imported}, ažurirano ${result.updated}, preskočeno ${result.skipped || 0}` +
-                                (result.imported
-                                  ? " — možeš obrisati dugmetom „Obriši uvezeno”"
-                                  : ""),
-                            );
-                          } catch (error) {
-                            showToast?.(error.message || "Uvoz nije uspeo", "error");
-                          } finally {
-                            setCalendarBusy(false);
-                          }
-                        }}
-                      >
-                        Uvezi buduće iz Google-a
-                        <small>samo danas pa nadalje</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="band-home-side-action"
-                        disabled={calendarBusy || !(googleCalendar.importedCount > 0)}
-                        onClick={async () => {
-                          const n = googleCalendar.importedCount || 0;
-                          const ok = await confirm({
-                            title: "Obriši uvezeno?",
-                            message:
-                              `Obrisati ${n} termin(a) uvezena iz Google-a iz Chabar-a?\n\n` +
-                              "Google kalendar ostaje netaknut — briše se samo kopija u aplikaciji.",
-                            confirmLabel: "Obriši",
-                            cancelLabel: "Otkaži",
-                            danger: true,
-                          });
-                          if (!ok) return;
-                          setCalendarBusy(true);
-                          try {
-                            const result = await api(
-                              `/api/bands/${activeBandId}/google-calendar/imported`,
-                              { method: "DELETE", bandId: activeBandId },
-                            );
-                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
-                            setDetail(data);
-                            setCalendarEvents(data.events || []);
-                            showToast?.(`Obrisano ${result.deleted} uvezenih termina (Google netaknut)`);
-                          } catch (error) {
-                            showToast?.(error.message || "Brisanje nije uspelo", "error");
-                          } finally {
-                            setCalendarBusy(false);
-                          }
-                        }}
-                      >
-                        Obriši uvezeno
-                        <small>
-                          {googleCalendar.importedCount > 0
-                            ? `${googleCalendar.importedCount} u Chabar-u · Google ostaje`
-                            : "nema uvezenih (sync_source=google)"}
-                        </small>
-                      </button>
-                      <button
-                        type="button"
-                        className="band-home-side-action"
-                        disabled={calendarBusy}
-                        onClick={async () => {
-                          const ok = await confirm({
-                            title: "Odvezati kalendar?",
-                            message: "Odvezati Google kalendar od ovog benda?",
-                            confirmLabel: "Odveži",
-                            cancelLabel: "Otkaži",
-                            danger: true,
-                          });
-                          if (!ok) return;
-                          setCalendarBusy(true);
-                          try {
-                            await api(`/api/bands/${activeBandId}/google-calendar`, {
-                              method: "DELETE",
-                              bandId: activeBandId,
-                            });
-                            const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
-                            setDetail(data);
-                            showToast?.("Kalendar odvezan");
-                          } catch (error) {
-                            showToast?.(error.message || "Odvezivanje nije uspelo", "error");
-                          } finally {
-                            setCalendarBusy(false);
-                          }
-                        }}
-                      >
-                        Odveži kalendar
-                        <small>samo connector (v1)</small>
-                      </button>
-                    </>
-                  ) : (
-                    <p className="band-home-note">Samo osoba koja je povezala može menjati link (v1).</p>
-                  )}
-                </div>
-              ) : (
-                <div className="band-home-side-placeholders">
-                  {!pickOpen ? (
-                    <button
-                      type="button"
-                      className="band-home-side-action"
-                      disabled={calendarBusy || isAllBands}
-                      onClick={async () => {
-                        setCalendarBusy(true);
-                        try {
-                          const data = await api("/api/google/calendar/calendars");
-                          setCalendarList(data.calendars || []);
-                          setPickOpen(true);
-                        } catch (error) {
-                          showToast?.(error.message || "Lista kalendara nije uspela", "error");
-                        } finally {
-                          setCalendarBusy(false);
-                        }
-                      }}
-                    >
-                      Izaberi kalendar benda
-                      <small>poveži postojeći Google calendar</small>
-                    </button>
-                  ) : (
-                    <ul className="band-home-side-members">
-                      {calendarList.map((cal) => (
-                        <li key={cal.id}>
-                          <button
-                            type="button"
-                            className="band-user-result"
-                            disabled={calendarBusy}
-                            onClick={async () => {
-                              setCalendarBusy(true);
-                              try {
-                                await api(`/api/bands/${activeBandId}/google-calendar`, {
-                                  method: "PUT",
-                                  bandId: activeBandId,
-                                  body: {
-                                    calendarId: cal.id,
-                                    summary: cal.summary,
-                                    syncEnabled: true,
-                                  },
-                                });
-                                const data = await api(`/api/bands/${activeBandId}`, {
-                                  bandId: activeBandId,
-                                });
-                                setDetail(data);
-                                setPickOpen(false);
-                                showToast?.(`Povezano: ${cal.summary}`);
-                              } catch (error) {
-                                showToast?.(error.message || "Povezivanje nije uspelo", "error");
-                              } finally {
-                                setCalendarBusy(false);
-                              }
-                            }}
-                          >
-                            <span className="band-user-result-name">{cal.summary}</span>
-                            <span className="band-user-result-email">{cal.primary ? "primary" : cal.id}</span>
-                          </button>
-                        </li>
-                      ))}
-                      {!calendarList.length ? (
-                        <li className="band-home-side-empty">Nema kalendara sa write pristupom.</li>
-                      ) : null}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </section>
+              <BandAccordionSection
+                id="media"
+                title="Mediji"
+                open={sideSection === "media"}
+                onToggle={toggleSideSection}
+              >
+                <p className="band-home-note">Uskoro — foto, snimci i deljeni fajlovi benda.</p>
+              </BandAccordionSection>
 
-            <section className="band-home-side-section">
-              <h3>Ostalo</h3>
-              <div className="band-home-side-placeholders">
-                <button type="button" className="band-home-side-action" disabled>
-                  Mediji
-                  <small>uskoro</small>
-                </button>
-                <button type="button" className="band-home-side-action" disabled>
-                  Obaveštenja
-                  <small>uskoro</small>
-                </button>
-                <button type="button" className="band-home-side-action" disabled>
-                  Deljenje
-                  <small>uskoro</small>
-                </button>
-                <button type="button" className="band-home-side-action" disabled>
-                  Podešavanja benda
-                  <small>uskoro</small>
-                </button>
-              </div>
-            </section>
+              <BandAccordionSection
+                id="notifications"
+                title="Obaveštenja"
+                open={sideSection === "notifications"}
+                onToggle={toggleSideSection}
+              >
+                <p className="band-home-note">Uskoro — kako bend šalje podsetnike i novosti.</p>
+              </BandAccordionSection>
+
+              <BandAccordionSection
+                id="sharing"
+                title="Deljenje"
+                open={sideSection === "sharing"}
+                onToggle={toggleSideSection}
+              >
+                {isAllBands ? (
+                  <p className="band-home-note">Izaberi bend da deliš pozivnicu.</p>
+                ) : band?.kind === "personal" ? (
+                  <p className="band-home-note">Lični prostor — nema link za deljenje.</p>
+                ) : !canInvite ? (
+                  <p className="band-home-note">Nemaš dozvolu za deljenje pozivnice u ovom bendu.</p>
+                ) : (
+                  <div className="band-share">
+                    <p className="band-home-note">
+                      Ko otvori link (ili skenira QR) i prijavi se / napravi nalog, automatski ulazi u bend
+                      kao član.
+                    </p>
+                    <label className="band-share-field">
+                      <span>Pozivni link</span>
+                      <input type="text" readOnly value={shareBusy && !shareUrl ? "Učitavam…" : shareUrl} />
+                    </label>
+                    <div className="band-share-actions">
+                      <button type="button" className="band-home-side-action" disabled={!shareUrl || shareBusy} onClick={copyShareLink}>
+                        Kopiraj link
+                        <small>Viber, SMS, email…</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={!shareUrl || shareBusy}
+                        onClick={() => setQrOpen((open) => !open)}
+                      >
+                        {qrOpen ? "Sakrij QR" : "Generiši QR kod"}
+                        <small>isti link, za skeniranje</small>
+                      </button>
+                      <button
+                        type="button"
+                        className="band-home-side-action"
+                        disabled={shareBusy}
+                        onClick={rotateShareLink}
+                      >
+                        Novi link
+                        <small>stari prestaje da važi</small>
+                      </button>
+                    </div>
+                    {qrOpen && shareUrl ? (
+                      <div className="band-share-qr">
+                        <img src={qrImageUrlForJoin(shareUrl, 220)} alt="QR kod za pozivnicu u bend" width={220} height={220} />
+                        <p className="band-home-note">Skeniraj telefonom — isti efekat kao link.</p>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </BandAccordionSection>
+
+              <BandAccordionSection
+                id="settings"
+                title="Podešavanja benda"
+                open={sideSection === "settings"}
+                onToggle={toggleSideSection}
+              >
+                <p className="band-home-note">
+                  Uskoro — ime, boja i pravila benda. Google kalendar sync biće u toku kreiranja i
+                  izmene termina.
+                </p>
+              </BandAccordionSection>
+            </div>
           </div>
         </aside>
       </div>
@@ -1330,6 +1146,53 @@ export default function BandPage({
   );
 }
 
+
+function BandAccordionSection({ id, title, open, onToggle, children }) {
+  return (
+    <section className={`band-accordion-item ${open ? "is-open" : ""}`} role="listitem">
+      <h3 className="band-accordion-heading">
+        <button
+          type="button"
+          className="band-accordion-trigger"
+          aria-expanded={open}
+          aria-controls={`band-acc-${id}`}
+          id={`band-acc-btn-${id}`}
+          onClick={() => onToggle(id)}
+        >
+          <span>{title}</span>
+          <span className="band-accordion-chevron" aria-hidden="true">
+            <AccordionChevronIcon />
+          </span>
+        </button>
+      </h3>
+      {open ? (
+        <div
+          className="band-accordion-panel"
+          id={`band-acc-${id}`}
+          role="region"
+          aria-labelledby={`band-acc-btn-${id}`}
+        >
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AccordionChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M8 10l4 4 4-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 /** Always 6 weeks (42 cells), Mon–Sun, with adjacent-month days filled in. */
 function buildMonthCells(monthStart) {

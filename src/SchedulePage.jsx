@@ -37,7 +37,6 @@ export default function SchedulePage({
   activeBandId,
   allBandsId,
   onBandChange,
-  onOpenBand,
   onBandsChanged,
   showToast,
   profile = null,
@@ -679,30 +678,6 @@ export default function SchedulePage({
             </form>
           </div>
         </div>
-      ) : null}
-
-      {bands.length ? (
-        <section className="raspored-bands" aria-label="Moji bendovi">
-          <div className="raspored-bands-scroll">
-            {bands.map((band) => {
-              const color = resolveBandColor(band, band.id);
-              const label = band.kind === "personal" ? `${band.name} (lično)` : band.name;
-              return (
-                <button
-                  key={band.id}
-                  type="button"
-                  className="raspored-band-tile"
-                  style={{ "--band-tile-bg": color }}
-                  title={label}
-                  aria-label={label}
-                  onClick={() => onOpenBand?.(band.id)}
-                >
-                  <span className="raspored-band-tile-text">{bandInitials(band.name)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
       ) : null}
     </div>
   );

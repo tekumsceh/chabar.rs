@@ -1,10 +1,10 @@
-# Creates ioorganize-deploy.zip for SFTP upload to Hostinger VPS.
+# Creates chabar-deploy.zip for SFTP upload to Hostinger VPS.
 # Run from project root in PowerShell:
 #   .\scripts\make-deploy-zip.ps1
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$zipPath = Join-Path $root "ioorganize-deploy.zip"
+$zipPath = Join-Path $root "chabar-deploy.zip"
 
 if (Test-Path $zipPath) {
   Remove-Item $zipPath -Force
@@ -14,16 +14,25 @@ $excludeDirs = @(
   "node_modules",
   ".git",
   "dist",
+  "dev-dist",
+  "docs",
+  "logs",
   "agent-tools",
-  "agent-transcripts"
+  "agent-transcripts",
+  ".cursor"
 )
 $excludeFiles = @(
   ".env",
   ".env.deploy",
-  "ioorganize-deploy.zip"
+  ".env.example",
+  "chabar-deploy.zip",
+  "ioorganize-deploy.zip",
+  "UI_TEXTS.md",
+  "AUTH-SETUP.txt",
+  "HOSTINGER-DEPLOY.txt"
 )
 
-$temp = Join-Path $env:TEMP ("ioorganize-deploy-" + [guid]::NewGuid().ToString("N"))
+$temp = Join-Path $env:TEMP ("chabar-deploy-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $temp | Out-Null
 
 try {
@@ -39,6 +48,12 @@ try {
   if (Test-Path $studioPath) {
     Remove-Item $studioPath -Recurse -Force
   }
+
+  # Dev/copy tooling — not needed on the VPS runtime
+  $uiTextsIndex = Join-Path $temp "scripts\_ui-texts-index.json"
+  if (Test-Path $uiTextsIndex) { Remove-Item $uiTextsIndex -Force }
+  $buildUiTexts = Join-Path $temp "scripts\build-ui-texts.js"
+  if (Test-Path $buildUiTexts) { Remove-Item $buildUiTexts -Force }
 
   Compress-Archive -Path (Join-Path $temp "*") -DestinationPath $zipPath -Force
 

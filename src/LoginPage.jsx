@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { authRedirectTo, friendlyAuthError, supabase } from "./supabase.js";
+import { peekPendingJoinToken, rememberJoinToken } from "./joinLink.js";
 
 export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }) {
   const [email, setEmail] = useState("");
@@ -8,6 +9,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(friendlyAuthError(initialError));
+  const [joinHint, setJoinHint] = useState("");
 
   useEffect(() => {
     if (initialError) setError(friendlyAuthError(initialError));
@@ -17,6 +19,30 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
     if (window.location.hostname === "www.chabar.rs") {
       window.location.replace("https://chabar.rs/");
     }
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const join = String(params.get("join") || "").trim();
+    if (join) rememberJoinToken(join);
+    const token = peekPendingJoinToken();
+    if (!token) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/join/${encodeURIComponent(token)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.bandName) {
+          setJoinHint(`Posle prijave ulaziš u bend „${data.bandName}” kao član.`);
+        }
+      } catch {
+        // ignore preview failures
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleEmailAuth(event) {
@@ -74,6 +100,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
           <div>
             <h2>{mode === "signin" ? "Prijava" : "Registracija"}</h2>
             <p>Pristup rasporedu i finansijama je vezan za tvoj nalog i bendove.</p>
+            {joinHint ? <p className="login-join-hint">{joinHint}</p> : null}
           </div>
         </div>
 

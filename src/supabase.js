@@ -23,10 +23,14 @@ export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "", {
 export function authRedirectTo() {
   if (typeof window === "undefined") return undefined;
   const host = window.location.hostname;
-  if (host === "chabar.rs" || host === "www.chabar.rs") {
-    return "https://chabar.rs";
+  const base = host === "chabar.rs" || host === "www.chabar.rs" ? "https://chabar.rs" : window.location.origin;
+  try {
+    const token = sessionStorage.getItem("chabar.pendingJoinToken");
+    if (token) return `${base}/?join=${encodeURIComponent(token)}`;
+  } catch {
+    // ignore
   }
-  return window.location.origin;
+  return base;
 }
 
 export function friendlyAuthError(message) {

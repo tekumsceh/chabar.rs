@@ -18,7 +18,7 @@ async function send(level, message, detail) {
   const payload = toPayload(level, message, detail);
   if (import.meta.env.DEV) {
     const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
-    fn(`[ioorganize] ${message}`, detail ?? "");
+    fn(`[chabar] ${message}`, detail ?? "");
   }
   try {
     const headers = { "Content-Type": "application/json" };

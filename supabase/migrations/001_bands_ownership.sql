@@ -1,4 +1,4 @@
--- Bands-first ownership for IO Organize
+-- Bands-first ownership for Chabar
 -- Safe to re-run partially; backfill script handles data attribution.
 
 CREATE TABLE IF NOT EXISTS profiles (

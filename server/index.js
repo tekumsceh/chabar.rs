@@ -14,13 +14,17 @@ import {
 import {
   acceptInvite,
   addBandMember,
+  acceptJoinLink,
   bandIdFromParams,
   createBand,
   declineInvite,
   deleteBand,
   getBandHome,
+  getInviteLink,
+  getJoinPreview,
   listPendingInvitesForUser,
   removeBandMember,
+  rotateInviteLink,
   transferBandOwnership,
   updateMemberInvitePrivilege,
   updateMemberRole,
@@ -28,8 +32,14 @@ import {
 import { normalizeInvitePreference, ownerBandLimit } from "../shared/bandLimits.js";
 import { searchUsers } from "./users.js";
 import { getEurRsdRate } from "./exchangeRate.js";
-import { query, startPoolWarmer } from "./db.js";
+import { query, startPoolWarmer, withTransaction } from "./db.js";
 import { logger } from "./logger.js";
+import {
+  snapshotEvent,
+  snapshotMemberFinance,
+  snapshotPayment,
+  writeAudit,
+} from "./audit.js";
 import {
   buildAuthUrl,
   disconnectGoogleAccount,
@@ -446,6 +456,22 @@ app.post("/api/bands", requireAuth, createBand);
 app.get("/api/bands/:id", requireAuth, bandIdFromParams, requireBandMember, getBandHome);
 app.delete("/api/bands/:id", requireAuth, bandIdFromParams, requireBandMember, deleteBand);
 app.post("/api/bands/:id/transfer", requireAuth, bandIdFromParams, requireBandMember, transferBandOwnership);
+app.get(
+  "/api/bands/:id/invite-link",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  getInviteLink,
+);
+app.post(
+  "/api/bands/:id/invite-link/rotate",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  rotateInviteLink,
+);
+app.get("/api/join/:token", getJoinPreview);
+app.post("/api/join/:token", requireAuth, acceptJoinLink);
 app.post("/api/bands/:id/members", requireAuth, bandIdFromParams, requireBandMember, addBandMember);
 app.patch(
   "/api/bands/:id/members/:userId",
@@ -590,30 +616,52 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
         detail: "Datum termina ne sme biti u prošlosti.",
       });
     }
-    const result = await query(
-      `INSERT INTO events
-        (band_id, sort_order, event_date_text, city, venue, note, price_eur, transport_rsd)
-       VALUES (
-        :bandId,
-        COALESCE((SELECT max_order + 1 FROM (
-          SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM events WHERE band_id = :bandId
-        ) AS t), 1),
-        :date, :city, :venue, :note, :priceEur, :transportRsd
-       )
-       RETURNING id`,
-      { ...event, bandId: req.bandId },
-    );
-    const id = result.rows[0].id;
-    await upsertMemberFinance(id, req.user.id, event.priceEur, event.transportRsd);
+
+    const created = await withTransaction(async (tx) => {
+      const result = await tx(
+        `INSERT INTO events
+          (band_id, sort_order, event_date_text, city, venue, note, price_eur, transport_rsd)
+         VALUES (
+          :bandId,
+          COALESCE((SELECT max_order + 1 FROM (
+            SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM events WHERE band_id = :bandId
+          ) AS t), 1),
+          :date, :city, :venue, :note, :priceEur, :transportRsd
+         )
+         RETURNING id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd`,
+        { ...event, bandId: req.bandId },
+      );
+      const row = result.rows[0];
+      const id = row.id;
+      await upsertMemberFinance(id, req.user.id, event.priceEur, event.transportRsd, {
+        bandId: req.bandId,
+        actorUserId: req.user.id,
+        runQuery: tx,
+      });
+      await writeAudit(
+        {
+          entityType: "event",
+          entityId: id,
+          bandId: req.bandId,
+          actorUserId: req.user.id,
+          action: "insert",
+          before: null,
+          after: snapshotEvent(row),
+        },
+        tx,
+      );
+      return { id, row };
+    });
+
     const bandName = await getBandName(req.bandId);
     void syncEventUpsert({
-      eventId: id,
+      eventId: created.id,
       bandId: req.bandId,
       event: { ...event, bandId: req.bandId },
       bandName,
       actorUserId: req.user.id,
     });
-    res.status(201).json({ ...event, id, bandId: req.bandId });
+    res.status(201).json({ ...event, id: created.id, bandId: req.bandId });
   } catch (error) {
     next(error);
   }
@@ -622,46 +670,68 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
 app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const existing = await query(
-      `SELECT event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      `SELECT id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd
+       FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
       { id: req.params.id, bandId: req.bandId },
     );
     if (!existing.rows[0]) {
       return res.status(404).json({ error: "Not found" });
     }
 
-    const event = normalizeEvent(req.body);
-    const existingDate = String(existing.rows[0].event_date_text || "");
-    const dateChanged = String(event.date || "").trim() !== existingDate.trim();
-
-    // Past gigs may still get wage/note edits; only the calendar date is locked.
-    if (dateChanged && isPastEventDate(existingDate)) {
+    const existingRow = existing.rows[0];
+    if (isPastEventDate(existingRow.event_date_text)) {
       return res.status(403).json({
         error: "Forbidden",
-        detail: "Datum prošlog termina se ne može menjati.",
+        detail: "Prošli termini su zaključani. Možeš samo dodati komentar.",
       });
     }
-    if (dateChanged && isPastEventDate(event.date)) {
+
+    const event = normalizeEvent(req.body);
+    if (isPastEventDate(event.date)) {
       return res.status(400).json({
         error: "Invalid date",
         detail: "Datum termina ne sme biti u prošlosti.",
       });
     }
 
-    const result = await query(
-      `UPDATE events
-       SET event_date_text = :date,
-           city = :city,
-           venue = :venue,
-           note = :note,
-           price_eur = :priceEur,
-           transport_rsd = :transportRsd
-       WHERE id = :id AND band_id = :bandId`,
-      { ...event, id: req.params.id, bandId: req.bandId },
-    );
-    if (!result.rowCount) {
-      return res.status(404).json({ error: "Not found" });
-    }
-    await upsertMemberFinance(Number(req.params.id), req.user.id, event.priceEur, event.transportRsd);
+    const updated = await withTransaction(async (tx) => {
+      const result = await tx(
+        `UPDATE events
+         SET event_date_text = :date,
+             city = :city,
+             venue = :venue,
+             note = :note,
+             price_eur = :priceEur,
+             transport_rsd = :transportRsd
+         WHERE id = :id AND band_id = :bandId
+         RETURNING id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd`,
+        { ...event, id: req.params.id, bandId: req.bandId },
+      );
+      if (!result.rowCount) {
+        const err = new Error("Not found");
+        err.status = 404;
+        throw err;
+      }
+      await upsertMemberFinance(Number(req.params.id), req.user.id, event.priceEur, event.transportRsd, {
+        bandId: req.bandId,
+        actorUserId: req.user.id,
+        runQuery: tx,
+      });
+      await writeAudit(
+        {
+          entityType: "event",
+          entityId: req.params.id,
+          bandId: req.bandId,
+          actorUserId: req.user.id,
+          action: "update",
+          before: snapshotEvent(existingRow),
+          after: snapshotEvent(result.rows[0]),
+        },
+        tx,
+      );
+      return result.rows[0];
+    });
+
     const bandName = await getBandName(req.bandId);
     void syncEventUpsert({
       eventId: Number(req.params.id),
@@ -679,7 +749,8 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
 app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const existing = await query(
-      `SELECT event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      `SELECT id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd
+       FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
       { id: req.params.id, bandId: req.bandId },
     );
     if (!existing.rows[0]) {
@@ -688,19 +759,158 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
     if (isPastEventDate(existing.rows[0].event_date_text)) {
       return res.status(403).json({
         error: "Forbidden",
-        detail: "Prošli termini se ne mogu brisati.",
+        detail: "Prošli termini su zaključani i ne mogu se brisati.",
       });
     }
 
+    const before = snapshotEvent(existing.rows[0]);
     await syncEventDelete({ eventId: Number(req.params.id), bandId: req.bandId });
-    const result = await query("DELETE FROM events WHERE id = :id AND band_id = :bandId", {
-      id: req.params.id,
-      bandId: req.bandId,
+
+    await withTransaction(async (tx) => {
+      const result = await tx("DELETE FROM events WHERE id = :id AND band_id = :bandId", {
+        id: req.params.id,
+        bandId: req.bandId,
+      });
+      if (!result.rowCount) {
+        const err = new Error("Not found");
+        err.status = 404;
+        throw err;
+      }
+      await writeAudit(
+        {
+          entityType: "event",
+          entityId: req.params.id,
+          bandId: req.bandId,
+          actorUserId: req.user.id,
+          action: "delete",
+          before,
+          after: null,
+        },
+        tx,
+      );
     });
-    if (!result.rowCount) {
+
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/events/:id/comments", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: req.params.id, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
       return res.status(404).json({ error: "Not found" });
     }
-    res.status(204).end();
+    const result = await query(
+      `SELECT c.id, c.body, c.created_at, c.user_id,
+              COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Korisnik') AS author_name
+       FROM event_comments c
+       JOIN profiles p ON p.id = c.user_id
+       WHERE c.event_id = :eventId
+       ORDER BY c.created_at ASC, c.id ASC`,
+      { eventId: req.params.id },
+    );
+    res.json({
+      comments: result.rows.map((row) => ({
+        id: row.id,
+        body: row.body,
+        createdAt: row.created_at,
+        userId: row.user_id,
+        authorName: row.author_name,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/events/:id/comments", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const body = String(req.body?.body || "").trim();
+    if (!body) {
+      return res.status(400).json({ error: "Invalid body", detail: "Komentar ne sme biti prazan." });
+    }
+    if (body.length > 2000) {
+      return res.status(400).json({ error: "Invalid body", detail: "Komentar je predugačak (max 2000)." });
+    }
+
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: req.params.id, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const result = await query(
+      `INSERT INTO event_comments (event_id, user_id, body)
+       VALUES (:eventId, :userId, :body)
+       RETURNING id, body, created_at, user_id`,
+      { eventId: req.params.id, userId: req.user.id, body },
+    );
+    const row = result.rows[0];
+    const profile = await query(
+      `SELECT COALESCE(NULLIF(display_name, ''), NULLIF(email, ''), 'Korisnik') AS author_name
+       FROM profiles WHERE id = :id LIMIT 1`,
+      { id: req.user.id },
+    );
+    res.status(201).json({
+      id: row.id,
+      body: row.body,
+      createdAt: row.created_at,
+      userId: row.user_id,
+      authorName: profile.rows[0]?.author_name || "Korisnik",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/audit", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const entityType = String(req.query.entityType || "").trim();
+    const entityId = String(req.query.entityId || "").trim();
+    if (!entityType || !entityId) {
+      return res.status(400).json({
+        error: "Missing params",
+        detail: "entityType i entityId su obavezni.",
+      });
+    }
+    if (!["event", "payment", "event_member_finance"].includes(entityType)) {
+      return res.status(400).json({ error: "Invalid entityType" });
+    }
+
+    const result = await query(
+      `SELECT a.id, a.entity_type, a.entity_id, a.action, a.before_json, a.after_json, a.created_at,
+              a.actor_user_id,
+              COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Korisnik') AS actor_name
+       FROM transaction_audit a
+       LEFT JOIN profiles p ON p.id = a.actor_user_id
+       WHERE a.entity_type = :entityType
+         AND a.entity_id = :entityId
+         AND (a.band_id IS NULL OR a.band_id = :bandId)
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT 100`,
+      { entityType, entityId, bandId: req.bandId },
+    );
+
+    res.json({
+      entries: result.rows.map((row) => ({
+        id: row.id,
+        entityType: row.entity_type,
+        entityId: row.entity_id,
+        action: row.action,
+        before: row.before_json,
+        after: row.after_json,
+        createdAt: row.created_at,
+        actorUserId: row.actor_user_id,
+        actorName: row.actor_name,
+      })),
+    });
   } catch (error) {
     next(error);
   }
@@ -709,24 +919,47 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
 app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const payment = normalizePayment(req.body);
-    const result = await query(
-      `INSERT INTO payments (user_id, band_id, sort_order, payment_date_text, amount, currency)
-       VALUES (
-        :userId,
-        :bandId,
-        COALESCE((SELECT max_order + 1 FROM (
-          SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM payments WHERE band_id = :bandId
-        ) AS t), 1),
-        :date, :amount, :currency
-       )
-       RETURNING id`,
-      {
-        ...payment,
-        userId: req.user.id,
-        bandId: req.bandId,
-      },
-    );
-    res.status(201).json({ ...payment, id: result.rows[0].id, bandId: req.bandId });
+    // Creating a payment is always allowed (late bookkeeping); once its date is past, PUT/DELETE lock.
+
+    const created = await withTransaction(async (tx) => {
+      const result = await tx(
+        `INSERT INTO payments (user_id, band_id, sort_order, payment_date_text, amount, currency)
+         VALUES (
+          :userId,
+          :bandId,
+          COALESCE((SELECT max_order + 1 FROM (
+            SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM payments WHERE band_id = :bandId
+          ) AS t), 1),
+          :date, :amount, :currency
+         )
+         RETURNING id, user_id, band_id, payment_date_text, amount, currency`,
+        {
+          ...payment,
+          userId: req.user.id,
+          bandId: req.bandId,
+        },
+      );
+      const row = result.rows[0];
+      await writeAudit(
+        {
+          entityType: "payment",
+          entityId: row.id,
+          bandId: req.bandId,
+          actorUserId: req.user.id,
+          action: "insert",
+          before: null,
+          after: snapshotPayment(row),
+        },
+        tx,
+      );
+      return row;
+    });
+
+    res.status(201).json({
+      ...payment,
+      id: created.id,
+      bandId: req.bandId,
+    });
   } catch (error) {
     next(error);
   }
@@ -734,19 +967,60 @@ app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next)
 
 app.put("/api/payments/:id", requireAuth, async (req, res, next) => {
   try {
-    const payment = normalizePayment(req.body);
-    const result = await query(
-      `UPDATE payments
-       SET payment_date_text = :date,
-           amount = :amount,
-           currency = :currency
-       WHERE id = :id AND user_id = :userId`,
-      { ...payment, id: req.params.id, userId: req.user.id },
+    const existing = await query(
+      `SELECT id, user_id, band_id, payment_date_text, amount, currency
+       FROM payments WHERE id = :id AND user_id = :userId LIMIT 1`,
+      { id: req.params.id, userId: req.user.id },
     );
-    if (!result.rowCount) {
+    if (!existing.rows[0]) {
       return res.status(404).json({ error: "Not found" });
     }
-    res.json({ ...payment, id: Number(req.params.id) });
+    if (isPastEventDate(existing.rows[0].payment_date_text)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Prošle uplate su zaključane i ne mogu se menjati.",
+      });
+    }
+
+    const payment = normalizePayment(req.body);
+    if (isPastEventDate(payment.date)) {
+      return res.status(400).json({
+        error: "Invalid date",
+        detail: "Datum uplate ne sme biti u prošlosti.",
+      });
+    }
+
+    const updated = await withTransaction(async (tx) => {
+      const result = await tx(
+        `UPDATE payments
+         SET payment_date_text = :date,
+             amount = :amount,
+             currency = :currency
+         WHERE id = :id AND user_id = :userId
+         RETURNING id, user_id, band_id, payment_date_text, amount, currency`,
+        { ...payment, id: req.params.id, userId: req.user.id },
+      );
+      if (!result.rowCount) {
+        const err = new Error("Not found");
+        err.status = 404;
+        throw err;
+      }
+      await writeAudit(
+        {
+          entityType: "payment",
+          entityId: req.params.id,
+          bandId: existing.rows[0].band_id,
+          actorUserId: req.user.id,
+          action: "update",
+          before: snapshotPayment(existing.rows[0]),
+          after: snapshotPayment(result.rows[0]),
+        },
+        tx,
+      );
+      return result.rows[0];
+    });
+
+    res.json({ ...payment, id: Number(req.params.id), bandId: updated.band_id });
   } catch (error) {
     next(error);
   }
@@ -754,13 +1028,45 @@ app.put("/api/payments/:id", requireAuth, async (req, res, next) => {
 
 app.delete("/api/payments/:id", requireAuth, async (req, res, next) => {
   try {
-    const result = await query("DELETE FROM payments WHERE id = :id AND user_id = :userId", {
-      id: req.params.id,
-      userId: req.user.id,
-    });
-    if (!result.rowCount) {
+    const existing = await query(
+      `SELECT id, user_id, band_id, payment_date_text, amount, currency
+       FROM payments WHERE id = :id AND user_id = :userId LIMIT 1`,
+      { id: req.params.id, userId: req.user.id },
+    );
+    if (!existing.rows[0]) {
       return res.status(404).json({ error: "Not found" });
     }
+    if (isPastEventDate(existing.rows[0].payment_date_text)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Prošle uplate su zaključane i ne mogu se brisati.",
+      });
+    }
+
+    await withTransaction(async (tx) => {
+      const result = await tx("DELETE FROM payments WHERE id = :id AND user_id = :userId", {
+        id: req.params.id,
+        userId: req.user.id,
+      });
+      if (!result.rowCount) {
+        const err = new Error("Not found");
+        err.status = 404;
+        throw err;
+      }
+      await writeAudit(
+        {
+          entityType: "payment",
+          entityId: req.params.id,
+          bandId: existing.rows[0].band_id,
+          actorUserId: req.user.id,
+          action: "delete",
+          before: snapshotPayment(existing.rows[0]),
+          after: null,
+        },
+        tx,
+      );
+    });
+
     res.status(204).end();
   } catch (error) {
     next(error);
@@ -788,7 +1094,7 @@ app.use((error, _req, res, _next) => {
 });
 
 app.listen(port, host, () => {
-  logger.info(`IO Organize API running on http://${host}:${port}`);
+  logger.info(`Chabar API running on http://${host}:${port}`);
   startPoolWarmer();
   syncMissingProfilesFromAuth()
     .then((result) => {
@@ -1007,15 +1313,46 @@ async function getBandPayments(bandId) {
   }));
 }
 
-async function upsertMemberFinance(eventId, userId, priceEur, transportRsd) {
-  await query(
+async function upsertMemberFinance(eventId, userId, priceEur, transportRsd, options = {}) {
+  const runQuery = options.runQuery || query;
+  const beforeResult = await runQuery(
+    `SELECT event_id, user_id, price_eur, transport_rsd
+     FROM event_member_finance
+     WHERE event_id = :eventId AND user_id = :userId
+     LIMIT 1`,
+    { eventId, userId },
+  );
+  const before = snapshotMemberFinance(beforeResult.rows[0]);
+
+  const result = await runQuery(
     `INSERT INTO event_member_finance (event_id, user_id, price_eur, transport_rsd)
      VALUES (:eventId, :userId, :priceEur, :transportRsd)
      ON CONFLICT (event_id, user_id) DO UPDATE
        SET price_eur = EXCLUDED.price_eur,
            transport_rsd = EXCLUDED.transport_rsd,
-           updated_at = NOW()`,
+           updated_at = NOW()
+     RETURNING event_id, user_id, price_eur, transport_rsd`,
     { eventId, userId, priceEur, transportRsd },
+  );
+  const after = snapshotMemberFinance(result.rows[0]);
+  const unchanged =
+    before &&
+    after &&
+    before.priceEur === after.priceEur &&
+    before.transportRsd === after.transportRsd;
+  if (unchanged) return;
+
+  await writeAudit(
+    {
+      entityType: "event_member_finance",
+      entityId: `${eventId}:${userId}`,
+      bandId: options.bandId || null,
+      actorUserId: options.actorUserId || userId,
+      action: before ? "update" : "insert",
+      before,
+      after,
+    },
+    runQuery,
   );
 }
 

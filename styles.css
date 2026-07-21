@@ -1921,6 +1921,20 @@ td input[data-field="note"] {
   width: 100%;
 }
 
+.app-band-tiles {
+  margin: 0 auto;
+  max-width: 980px;
+  padding: 0.45rem clamp(0.75rem, 1.5vw, 1.5rem) 0.75rem;
+  width: 100%;
+}
+
+.app-band-tiles .raspored-band-tile.is-active {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 0 0 2px color-mix(in srgb, var(--brand, #ff2bd6) 70%, transparent) !important;
+  filter: brightness(1.08);
+}
+
 .raspored-bands-scroll {
   display: flex;
   gap: 0.55rem;
@@ -2747,6 +2761,103 @@ td input[data-field="note"] {
   color: #fde68a;
 }
 
+.event-comments-panel {
+  max-width: 28rem;
+  width: min(96vw, 28rem);
+}
+
+.event-comments-locknote {
+  color: var(--muted, #667085);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  margin: 0.35rem 0 0;
+}
+
+.event-comments {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.event-comments-title {
+  font-size: 0.95rem;
+  font-weight: 650;
+  margin: 0;
+}
+
+.event-comments.is-compact .event-comments-title {
+  display: none;
+}
+
+.event-comments-empty {
+  color: var(--muted, #667085);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.event-comments-list {
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0;
+  max-height: 14rem;
+  overflow: auto;
+  padding: 0;
+}
+
+.event-comments-item {
+  border-left: 2px solid var(--band-accent, var(--accent, #276ef1));
+  padding: 0.15rem 0 0.15rem 0.65rem;
+}
+
+.event-comments-meta {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.2rem;
+}
+
+.event-comments-meta strong {
+  font-size: 0.88rem;
+}
+
+.event-comments-meta time {
+  color: var(--muted, #667085);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.event-comments-body {
+  font-size: 0.92rem;
+  line-height: 1.4;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.event-comments-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.event-comments-form textarea {
+  min-height: 4rem;
+  resize: vertical;
+  width: 100%;
+}
+
+.event-comments-panel .panel-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.event-comments-form button {
+  justify-self: end;
+}
+
 .finance-tip-trigger {
   cursor: help;
   position: relative;
@@ -2807,11 +2918,6 @@ td input[data-field="note"] {
 .finance-detail-members strong {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-}
-
-.studio-finance-live .raspored.finansije {
-  max-width: none;
-  padding-top: 0.25rem;
 }
 
 .finansije-mode-tag {
@@ -3678,6 +3784,121 @@ html[data-theme="dark"] body {
   text-transform: uppercase;
 }
 
+.band-accordion {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.band-accordion-item {
+  border: 1px solid color-mix(in srgb, var(--line, #d0d5dd) 80%, transparent);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.band-accordion-heading {
+  margin: 0;
+}
+
+.band-accordion-trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  width: 100%;
+}
+
+.band-accordion-trigger:hover {
+  background: color-mix(in srgb, var(--ink, #101828) 4%, transparent);
+}
+
+.band-accordion-chevron {
+  color: var(--muted, #667085);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.1rem;
+  transition: transform 0.18s ease;
+  width: 1.1rem;
+}
+
+.band-accordion-chevron svg {
+  height: 100%;
+  width: 100%;
+}
+
+.band-accordion-item.is-open .band-accordion-chevron {
+  transform: rotate(180deg);
+}
+
+.band-accordion-panel {
+  border-top: 1px solid color-mix(in srgb, var(--line, #d0d5dd) 70%, transparent);
+  padding: 0.65rem 0.85rem 0.85rem;
+}
+
+.app-shell[data-theme="dark"] .band-accordion-item {
+  border-color: color-mix(in srgb, #fff 12%, transparent);
+}
+
+.app-shell[data-theme="dark"] .band-accordion-trigger:hover {
+  background: color-mix(in srgb, #fff 6%, transparent);
+}
+
+.app-shell[data-theme="dark"] .band-accordion-panel {
+  border-top-color: color-mix(in srgb, #fff 10%, transparent);
+}
+
+.band-share {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.band-share-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.band-share-field input {
+  font-size: 0.78rem;
+  font-weight: 400;
+  width: 100%;
+}
+
+.band-share-actions {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.band-share-qr {
+  align-items: center;
+  display: grid;
+  gap: 0.45rem;
+  justify-items: center;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.band-share-qr img {
+  background: #fff;
+  border-radius: 0.65rem;
+  padding: 0.45rem;
+}
+
+.login-join-hint {
+  color: var(--accent, #276ef1);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.45rem 0 0;
+}
+
 .band-home-side-members {
   display: flex;
   flex-direction: column;
@@ -3729,12 +3950,6 @@ html[data-theme="dark"] body {
   color: var(--muted, #c4a8e8);
   font-size: 0.8rem;
   padding: 0.35rem 0;
-}
-
-.band-home-side-placeholders {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
 }
 
 .band-home-side-action {

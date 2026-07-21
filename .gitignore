@@ -4,9 +4,9 @@ dev-dist/
 .env
 .env.*
 !.env.example
-!.env.smoke.example
 logs/
 *.log
 .DS_Store
+chabar-deploy.zip
 ioorganize-deploy.zip
 .cursor/

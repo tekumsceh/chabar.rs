@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { clearMembershipCache, pickBandColor } from "./auth.js";
 import { query } from "./db.js";
 import {
@@ -14,6 +15,10 @@ import {
   ownerBandLimit,
 } from "../shared/bandLimits.js";
 import { isBandLead } from "../shared/roles.js";
+
+function makeInviteToken() {
+  return crypto.randomBytes(18).toString("base64url");
+}
 
 export function bandIdFromParams(req, _res, next) {
   req.headers["x-band-id"] = req.params.id;
@@ -719,6 +724,205 @@ export async function deleteBand(req, res, next) {
     clearMembershipCache();
 
     res.json({ status: "deleted", id: req.bandId, name });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Ensure one share link per group band; create if missing. */
+export async function getInviteLink(req, res, next) {
+  try {
+    const allowed = await assertCanInvite(req);
+    if (!allowed) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Nemaš dozvolu za deljenje pozivnice.",
+      });
+    }
+
+    const bandMeta = await query(`SELECT id, name, kind FROM bands WHERE id = :bandId LIMIT 1`, {
+      bandId: req.bandId,
+    });
+    if (!bandMeta.rows[0]) return res.status(404).json({ error: "Not found" });
+    if (bandMeta.rows[0].kind === "personal") {
+      return res.status(400).json({
+        error: "Invalid band",
+        detail: "Lični bend nema link za deljenje.",
+      });
+    }
+
+    let row = (
+      await query(
+        `SELECT token, member_role, created_at FROM band_invite_links WHERE band_id = :bandId LIMIT 1`,
+        { bandId: req.bandId },
+      )
+    ).rows[0];
+
+    if (!row) {
+      const token = makeInviteToken();
+      const inserted = await query(
+        `INSERT INTO band_invite_links (band_id, token, member_role, created_by)
+         VALUES (:bandId, :token, 'member', :userId)
+         ON CONFLICT (band_id) DO UPDATE
+           SET token = EXCLUDED.token,
+               member_role = 'member',
+               created_by = EXCLUDED.created_by,
+               created_at = NOW()
+         RETURNING token, member_role, created_at`,
+        { bandId: req.bandId, token, userId: req.user.id },
+      );
+      row = inserted.rows[0];
+    }
+
+    res.json({
+      token: row.token,
+      memberRole: "member",
+      createdAt: row.created_at,
+      bandId: req.bandId,
+      bandName: bandMeta.rows[0].name,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Invalidate old link and issue a new token. */
+export async function rotateInviteLink(req, res, next) {
+  try {
+    const allowed = await assertCanInvite(req);
+    if (!allowed) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Nemaš dozvolu za deljenje pozivnice.",
+      });
+    }
+
+    const bandMeta = await query(`SELECT id, name, kind FROM bands WHERE id = :bandId LIMIT 1`, {
+      bandId: req.bandId,
+    });
+    if (!bandMeta.rows[0]) return res.status(404).json({ error: "Not found" });
+    if (bandMeta.rows[0].kind === "personal") {
+      return res.status(400).json({
+        error: "Invalid band",
+        detail: "Lični bend nema link za deljenje.",
+      });
+    }
+
+    const token = makeInviteToken();
+    const result = await query(
+      `INSERT INTO band_invite_links (band_id, token, member_role, created_by)
+       VALUES (:bandId, :token, 'member', :userId)
+       ON CONFLICT (band_id) DO UPDATE
+         SET token = EXCLUDED.token,
+             member_role = 'member',
+             created_by = EXCLUDED.created_by,
+             created_at = NOW()
+       RETURNING token, member_role, created_at`,
+      { bandId: req.bandId, token, userId: req.user.id },
+    );
+
+    res.json({
+      token: result.rows[0].token,
+      memberRole: "member",
+      createdAt: result.rows[0].created_at,
+      bandId: req.bandId,
+      bandName: bandMeta.rows[0].name,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Public preview — band name only (no auth). */
+export async function getJoinPreview(req, res, next) {
+  try {
+    const token = String(req.params.token || "").trim();
+    if (!token) return res.status(400).json({ error: "Missing token" });
+
+    const result = await query(
+      `SELECT l.band_id, b.name AS band_name, b.kind
+       FROM band_invite_links l
+       JOIN bands b ON b.id = l.band_id
+       WHERE l.token = :token
+       LIMIT 1`,
+      { token },
+    );
+    if (!result.rows[0] || result.rows[0].kind === "personal") {
+      return res.status(404).json({ error: "Not found", detail: "Link nije važeći ili je istekao." });
+    }
+
+    res.json({
+      bandId: result.rows[0].band_id,
+      bandName: result.rows[0].band_name,
+      memberRole: "member",
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Auth: open share link → become band member immediately. */
+export async function acceptJoinLink(req, res, next) {
+  try {
+    const { ensureProfileAndPersonalBand } = await import("./auth.js");
+    await ensureProfileAndPersonalBand(req.user);
+
+    const token = String(req.params.token || "").trim();
+    if (!token) return res.status(400).json({ error: "Missing token" });
+
+    const link = await query(
+      `SELECT l.band_id, l.member_role, b.name AS band_name, b.kind
+       FROM band_invite_links l
+       JOIN bands b ON b.id = l.band_id
+       WHERE l.token = :token
+       LIMIT 1`,
+      { token },
+    );
+    if (!link.rows[0] || link.rows[0].kind === "personal") {
+      return res.status(404).json({ error: "Not found", detail: "Link nije važeći ili je istekao." });
+    }
+
+    const bandId = link.rows[0].band_id;
+    const bandName = link.rows[0].band_name;
+
+    const existing = await query(
+      `SELECT member_role FROM band_members
+       WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+      { bandId, userId: req.user.id },
+    );
+    if (existing.rows[0]) {
+      return res.json({
+        status: "already_member",
+        bandId,
+        bandName,
+        memberRole: existing.rows[0].member_role,
+      });
+    }
+
+    await query(
+      `INSERT INTO band_members (band_id, user_id, member_role)
+       VALUES (:bandId, :userId, 'member')
+       ON CONFLICT (band_id, user_id) DO NOTHING`,
+      { bandId, userId: req.user.id },
+    );
+    // Drop any pending email invite for this user/band
+    const email = String(req.user.email || "")
+      .trim()
+      .toLowerCase();
+    if (email) {
+      await query(`DELETE FROM band_invites WHERE band_id = :bandId AND lower(email) = :email`, {
+        bandId,
+        email,
+      });
+    }
+    clearMembershipCache();
+
+    res.json({
+      status: "joined",
+      bandId,
+      bandName,
+      memberRole: "member",
+    });
   } catch (error) {
     next(error);
   }
