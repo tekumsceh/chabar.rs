@@ -13,6 +13,7 @@ import { useConfirm } from "./confirmDialog.jsx";
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
+import EventPage from "./EventPage.jsx";
 import { ownerBandLimit } from "../shared/bandLimits.js";
 
 const scheduleFilters = [
@@ -52,7 +53,7 @@ export default function SchedulePage({
   const [dateSort, setDateSort] = useState("desc");
   const [listPage, setListPage] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [selectedEventId, setSelectedEventId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [initialForm, setInitialForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
@@ -89,6 +90,10 @@ export default function SchedulePage({
     setListPage(0);
   }, [filter, search, activeBandId, dateSort]);
 
+  useEffect(() => {
+    setSelectedEventId(null);
+  }, [activeBandId]);
+
   const totalPages =
     filter === "all" ? Math.max(1, Math.ceil(filteredRows.length / ALL_PAGE_SIZE)) : 1;
   const safePage = Math.min(listPage, totalPages - 1);
@@ -105,7 +110,14 @@ export default function SchedulePage({
       .sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
     return upcoming[0]?.id ?? null;
   }, [rows]);
-  const isEditing = editingId !== null;
+  const selectedEvent = useMemo(
+    () => (selectedEventId ? events.find((item) => item.id === selectedEventId) || null : null),
+    [events, selectedEventId],
+  );
+  const selectedBand = selectedEvent
+    ? bandsById.get(selectedEvent.bandId) || null
+    : null;
+
   const isDirty =
     form.bandId !== initialForm.bandId ||
     form.date !== initialForm.date ||
@@ -148,7 +160,6 @@ export default function SchedulePage({
 
   function openForm() {
     const next = { ...emptyForm, date: todayText(), bandId: "" };
-    setEditingId(null);
     setForm(next);
     setInitialForm(next);
     setFormError("");
@@ -185,24 +196,8 @@ export default function SchedulePage({
     }
   }
 
-  function openEditForm(row) {
-    const next = {
-      bandId: row.bandId || "",
-      date: row.date || "",
-      city: row.city || "",
-      venue: row.venue || "",
-      note: row.note || "",
-    };
-    setEditingId(row.id);
-    setForm(next);
-    setInitialForm(next);
-    setFormError("");
-    setFormOpen(true);
-  }
-
   function forceCloseForm() {
     setFormOpen(false);
-    setEditingId(null);
     setFormError("");
     setForm(emptyForm);
     setInitialForm(emptyForm);
@@ -250,7 +245,7 @@ export default function SchedulePage({
     const venue = String(form.venue || "").trim();
     const note = String(form.note || "").trim();
 
-    if (!isEditing && !bandId) {
+    if (!bandId) {
       setFormError("Moraš izabrati bend ili Personal.");
       return;
     }
@@ -271,35 +266,31 @@ export default function SchedulePage({
       return;
     }
 
-    if (isEditing && !isDirty) {
-      setFormError("Nema izmena za čuvanje.");
-      return;
-    }
-
-    if (isEditing) {
-      const confirmed = await confirm({
-        title: "Sačuvati izmene?",
-        message: `${date}${city ? ` — ${city}` : ""}`,
-        confirmLabel: "Sačuvaj",
-        cancelLabel: "Otkaži",
-      });
-      if (!confirmed) return;
-    }
-
     try {
       setSaving(true);
       setFormError("");
-      if (isEditing) {
-        await onUpdate(editingId, { date, city, venue, note });
-      } else {
-        await onAdd({ bandId, date, city, venue, note, priceEur: 0, transportRsd: 0 });
-      }
+      await onAdd({ bandId, date, city, venue, note, priceEur: 0, transportRsd: 0 });
       forceCloseForm();
     } catch (error) {
       setFormError(error.message || "Nije moguće sačuvati termin.");
     } finally {
       setSaving(false);
     }
+  }
+
+  if (selectedEventId) {
+    return (
+      <div className="raspored">
+        <EventPage
+          event={selectedEvent}
+          band={selectedBand}
+          settings={settings}
+          onBack={() => setSelectedEventId(null)}
+          onUpdate={onUpdate}
+          showToast={showToast}
+        />
+      </div>
+    );
   }
 
   return (
@@ -426,41 +417,40 @@ export default function SchedulePage({
                 className={`raspored-row ${row.done ? "is-past" : ""} ${row.id === nextId ? "is-next" : ""}`}
                 style={bandColor ? { "--band-accent": bandColor } : undefined}
               >
-                <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
-                  <span className="raspored-date-day">{dateParts.day}</span>
-                  <span className="raspored-date-month">{dateParts.month}</span>
-                </time>
-                <div className="raspored-main">
-                  <strong className="raspored-city">{row.city || "—"}</strong>
-                  {row.venue ? <span className="raspored-venue">{row.venue}</span> : null}
-                </div>
-                <span className="raspored-band">{row.bandName || ""}</span>
+                <button
+                  type="button"
+                  className="raspored-row-button raspored-row-open"
+                  onClick={() => setSelectedEventId(row.id)}
+                  aria-label={`Otvori termin ${row.date || ""} ${row.city || ""}`.trim()}
+                >
+                  <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
+                    <span className="raspored-date-day">{dateParts.day}</span>
+                    <span className="raspored-date-month">{dateParts.month}</span>
+                  </time>
+                  <div className="raspored-main">
+                    <strong className="raspored-city">{row.city || "—"}</strong>
+                    {row.venue ? <span className="raspored-venue">{row.venue}</span> : null}
+                  </div>
+                  <span className="raspored-band">{row.bandName || ""}</span>
+                </button>
                 <div className="raspored-actions">
                   {row.done ? (
                     <span className="raspored-lock" title="Prošli termin je zaključan">
                       <LockIcon />
                     </span>
                   ) : (
-                    <>
-                      <button
-                        className="raspored-icon-btn"
-                        type="button"
-                        title="Izmeni termin"
-                        aria-label="Izmeni termin"
-                        onClick={() => openEditForm(row)}
-                      >
-                        <PenIcon />
-                      </button>
-                      <button
-                        className="raspored-icon-btn raspored-icon-btn-danger"
-                        type="button"
-                        aria-label="Obriši termin"
-                        title="Obriši termin"
-                        onClick={() => requestRemove(row)}
-                      >
-                        <CloseIcon />
-                      </button>
-                    </>
+                    <button
+                      className="raspored-icon-btn raspored-icon-btn-danger"
+                      type="button"
+                      aria-label="Obriši termin"
+                      title="Obriši termin"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        requestRemove(row);
+                      }}
+                    >
+                      <CloseIcon />
+                    </button>
                   )}
                 </div>
               </li>
@@ -505,37 +495,26 @@ export default function SchedulePage({
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="addTerminTitle">
             <div className="panel-heading compact">
               <div>
-                <h2 id="addTerminTitle">{isEditing ? "Izmeni termin" : "Novi termin"}</h2>
+                <h2 id="addTerminTitle">Novi termin</h2>
               </div>
             </div>
 
             <form className="termin-form" onSubmit={submitForm}>
               <label htmlFor="terminBand" className="termin-form-full">
                 Bend / Personal
-                {isEditing ? (
-                  <input
-                    id="terminBand"
-                    name="terminBand"
-                    type="text"
-                    value={bands.find((band) => band.id === form.bandId)?.name || form.bandId || "—"}
-                    readOnly
-                    disabled
-                  />
-                ) : (
-                  <FieldSelect
-                    id="terminBand"
-                    label="Bend / Personal"
-                    value={form.bandId}
-                    placeholder="— Izaberi —"
-                    required
-                    autoFocus
-                    options={bands.map((band) => ({
-                      id: band.id,
-                      label: `${band.name}${band.kind === "personal" ? " (lično)" : ""}`,
-                    }))}
-                    onChange={(id) => updateForm("bandId", id)}
-                  />
-                )}
+                <FieldSelect
+                  id="terminBand"
+                  label="Bend / Personal"
+                  value={form.bandId}
+                  placeholder="— Izaberi —"
+                  required
+                  autoFocus
+                  options={bands.map((band) => ({
+                    id: band.id,
+                    label: `${band.name}${band.kind === "personal" ? " (lično)" : ""}`,
+                  }))}
+                  onChange={(id) => updateForm("bandId", id)}
+                />
               </label>
               <label htmlFor="terminDate" className="termin-form-full">
                 Datum
@@ -592,7 +571,7 @@ export default function SchedulePage({
                   Otkaži
                 </button>
                 <button type="submit" disabled={saving}>
-                  {saving ? "Čuvam..." : isEditing ? "Sačuvaj izmene" : "Sačuvaj termin"}
+                  {saving ? "Čuvam..." : "Sačuvaj termin"}
                 </button>
               </div>
             </form>
@@ -694,21 +673,6 @@ function matchesScheduleFilter(row, search, filter, asOfDate) {
   if (filter === "done") return row.done;
   if (filter === "month") return sameMonth(row.parsedDate, parseDate(asOfDate));
   return true;
-}
-
-function PenIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M4 20h4.5L19.2 9.3a1.5 1.5 0 0 0 0-2.1L16.8 4.8a1.5 1.5 0 0 0-2.1 0L4 15.5V20z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M13.8 6.2l4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 function LockIcon() {

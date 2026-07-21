@@ -2147,8 +2147,8 @@ td input[data-field="note"] {
   align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   display: grid;
-  gap: 0.35rem 0.65rem;
-  grid-template-columns: 2.6rem minmax(0, 1fr) auto auto;
+  gap: 0.35rem 0.45rem;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 0.45rem 0.65rem;
 }
 
@@ -2293,6 +2293,16 @@ td input[data-field="note"] {
   justify-content: flex-end;
 }
 
+.raspored-row > .raspored-row-open {
+  align-items: center !important;
+  display: grid !important;
+  gap: 0.35rem 0.65rem;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0 !important;
+  width: 100%;
+}
+
 .raspored-row .raspored-icon-btn,
 .raspored-lock {
   height: 1.85rem;
@@ -2320,12 +2330,17 @@ td input[data-field="note"] {
 
 @media (max-width: 800px) {
   .raspored-row {
-    gap: 0.3rem 0.55rem;
-    grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+    gap: 0.3rem 0.45rem;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 0.4rem 0.55rem;
   }
 
-  .raspored-band {
+  .raspored-row > .raspored-row-open {
+    gap: 0.3rem 0.55rem;
+    grid-template-columns: 2.4rem minmax(0, 1fr);
+  }
+
+  .raspored-row > .raspored-row-open .raspored-band {
     grid-column: 2;
     justify-self: start;
     max-width: 100%;
@@ -2334,7 +2349,6 @@ td input[data-field="note"] {
 
   .raspored-actions {
     align-self: center;
-    grid-column: 3;
     grid-row: 1 / span 2;
   }
 
@@ -4829,4 +4843,215 @@ html[data-theme="dark"] body {
   color: #f97066;
   border-color: color-mix(in srgb, #f97066 40%, transparent);
   background: color-mix(in srgb, #f97066 10%, transparent);
+}
+
+/* —— Event / date detail page —— */
+.event-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 0.35rem 0 0.75rem;
+}
+
+.event-page-head {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.55rem;
+}
+
+.event-page-back {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  color: inherit;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 2.35rem;
+  justify-content: center;
+  line-height: 0;
+  padding: 0;
+  width: 2.35rem;
+}
+
+.event-page-back:hover {
+  background: color-mix(in srgb, var(--brand, #ff2bd6) 14%, transparent);
+  border-color: var(--brand, #ff2bd6);
+  box-shadow: none;
+  transform: none;
+}
+
+.event-page-back svg {
+  display: block;
+  height: 1.15rem;
+  width: 1.15rem;
+}
+
+.event-page-title-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-page-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-page-sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0.15rem 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-page-lock {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  height: 1.85rem;
+  justify-content: center;
+  width: 1.85rem;
+}
+
+.event-page-lock svg {
+  height: 0.95rem;
+  width: 0.95rem;
+}
+
+.event-page-panel {
+  flex: 1;
+  min-height: 0;
+  padding: 0.85rem 0.9rem;
+}
+
+.event-page-fields {
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+}
+
+.event-page-fields > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.event-page-fields-full {
+  grid-column: 1 / -1;
+}
+
+.event-page-fields dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.event-page-fields dd {
+  font-size: 0.98rem;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.event-page-fee-row dd,
+.event-page-fee strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.event-page-fee {
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+}
+
+.event-page-fee-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.event-page-form {
+  margin: 0;
+}
+
+.event-page-stub {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  justify-content: center;
+  min-height: 8rem;
+}
+
+.event-page-stub-title {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.event-page-stub-copy {
+  color: var(--muted);
+  margin: 0;
+}
+
+.event-page-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.event-page-full-details {
+  align-items: center;
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  display: flex !important;
+  font-weight: 800 !important;
+  gap: 0.55rem;
+  justify-content: center;
+  padding: 0.85rem 1rem !important;
+  transform: none !important;
+  width: 100%;
+}
+
+.event-page-full-details:hover {
+  background: var(--surface-2) !important;
+  border-color: var(--brand, #ff2bd6) !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  transform: none !important;
+}
+
+.event-page-full-details svg {
+  flex-shrink: 0;
+  height: 1.15rem;
+  width: 1.15rem;
+}
+
+.app-shell[data-theme="dark"] .event-page-back {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+@media (max-width: 640px) {
+  .event-page-fields {
+    grid-template-columns: 1fr;
+  }
 }

@@ -620,7 +620,9 @@ export default function App() {
   async function updateEventFields(id, fields) {
     const current =
       eventsRef.current.find((item) => item.id === id) || financeEventsRef.current.find((item) => item.id === id);
-    if (!current) return;
+    if (!current) {
+      throw new Error("Termin nije pronađen");
+    }
 
     const asOf = parseDate(settings.asOfDate || todayText());
     const eventDate = parseDate(current.date);
@@ -631,7 +633,7 @@ export default function App() {
       eventDate <= calculationDate;
     if (isPast) {
       showToast("Prošli termini su zaključani — možeš samo dodati komentar", "error");
-      return;
+      throw new Error("Prošli termini su zaključani — možeš samo dodati komentar");
     }
 
     const nextEvent = {
@@ -663,6 +665,7 @@ export default function App() {
       showToast(`Termin sačuvan: ${nextEvent.date}${nextEvent.city ? ` — ${nextEvent.city}` : ""}`);
     } catch (requestError) {
       showToast(requestError.message || "Termin nije sačuvan", "error");
+      throw requestError;
     }
   }
 
