@@ -22,7 +22,10 @@ import {
   getBandHome,
   getInviteLink,
   getJoinPreview,
+  listNotificationsForUser,
   listPendingInvitesForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
   removeBandMember,
   rotateInviteLink,
   transferBandOwnership,
@@ -163,9 +166,10 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
          AND b.kind = 'group'`,
       { userId: req.user.id },
     );
-    const [bands, pendingInvites] = await Promise.all([
+    const [bands, pendingInvites, notifications] = await Promise.all([
       getMemberships(req.user.id),
       listPendingInvitesForUser(req.user),
+      listNotificationsForUser(req.user),
     ]);
     const extraGrants = profile.extra_band_grants || 0;
     const limit = ownerBandLimit(extraGrants);
@@ -182,6 +186,7 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
       },
       bands,
       pendingInvites,
+      notifications,
     });
   } catch (error) {
     next(error);
@@ -190,6 +195,8 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
 
 app.post("/api/me/invites/:inviteId/accept", requireAuth, acceptInvite);
 app.post("/api/me/invites/:inviteId/decline", requireAuth, declineInvite);
+app.post("/api/me/notifications/:notificationId/read", requireAuth, markNotificationRead);
+app.post("/api/me/notifications/read-all", requireAuth, markAllNotificationsRead);
 
 app.patch("/api/me/preferences", requireAuth, async (req, res, next) => {
   try {

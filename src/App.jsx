@@ -57,6 +57,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [bands, setBands] = useState([]);
   const [pendingInvites, setPendingInvites] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [activeBandId, setActiveBandId] = useState(() => localStorage.getItem(ACTIVE_BAND_KEY) || ALL_BANDS_ID);
   const [page, setPageState] = useState(DEFAULT_PAGE);
 
@@ -191,6 +192,7 @@ export default function App() {
       setProfile(null);
       setBands([]);
       setPendingInvites([]);
+      setNotifications([]);
       setEvents([]);
       setFinanceEvents([]);
       setPayments([]);
@@ -214,6 +216,18 @@ export default function App() {
     // Band switch only needs schedule; finance is always "mine across bands"
     loadScheduleAndFinance({ scheduleOnly: true });
   }, [activeBandId]);
+
+  // Soft poll so inviters see "member joined" without a full refresh.
+  useEffect(() => {
+    if (!session?.access_token) return undefined;
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshNotifications().catch(() => {});
+    };
+    const id = window.setInterval(tick, 45000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshNotifications is stable enough for poll
+  }, [session?.access_token]);
 
   async function bootstrapSession(token) {
     try {
@@ -245,6 +259,7 @@ export default function App() {
       setProfile(me.profile);
       setBands(me.bands);
       setPendingInvites(me.pendingInvites || []);
+      setNotifications(me.notifications || []);
 
       const stored = localStorage.getItem(ACTIVE_BAND_KEY);
       const preferred =
@@ -429,6 +444,7 @@ export default function App() {
       setProfile(me.profile);
       setBands(me.bands);
       setPendingInvites(me.pendingInvites || []);
+      setNotifications(me.notifications || []);
       if (result.band?.id) {
         setActiveBandId(result.band.id);
         setPage("band");
@@ -447,6 +463,39 @@ export default function App() {
       showToast("Pozivnica odbijena");
     } catch (requestError) {
       showToast(requestError.message || "Odbijanje nije uspelo", "error");
+    }
+  }
+
+  async function refreshNotifications() {
+    try {
+      const me = await api("/api/me");
+      setPendingInvites(me.pendingInvites || []);
+      setNotifications(me.notifications || []);
+    } catch {
+      // ignore — menu can stay on last known list
+    }
+  }
+
+  async function handleMarkNotificationRead(notificationId) {
+    try {
+      await api(`/api/me/notifications/${notificationId}/read`, { method: "POST" });
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notificationId ? { ...item, readAt: item.readAt || new Date().toISOString() } : item,
+        ),
+      );
+    } catch (requestError) {
+      showToast(requestError.message || "Nije sačuvano", "error");
+    }
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    try {
+      await api("/api/me/notifications/read-all", { method: "POST" });
+      const now = new Date().toISOString();
+      setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt || now })));
+    } catch (requestError) {
+      showToast(requestError.message || "Nije sačuvano", "error");
     }
   }
 
@@ -756,8 +805,12 @@ export default function App() {
               ""
             }
             pendingInvites={pendingInvites}
+            notifications={notifications}
             onAcceptInvite={handleAcceptInvite}
             onDeclineInvite={handleDeclineInvite}
+            onOpenNotifications={refreshNotifications}
+            onMarkNotificationRead={handleMarkNotificationRead}
+            onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
             onOpenSettings={() => setPage("settings")}
             onSignOut={handleSignOut}
           />
@@ -781,6 +834,7 @@ export default function App() {
             setProfile(me.profile);
             setBands(me.bands);
             setPendingInvites(me.pendingInvites || []);
+            setNotifications(me.notifications || []);
           }}
           showToast={showToast}
           profile={profile}
@@ -803,6 +857,7 @@ export default function App() {
             setProfile(me.profile);
             setBands(me.bands);
             setPendingInvites(me.pendingInvites || []);
+            setNotifications(me.notifications || []);
           }}
           showToast={showToast}
         />

@@ -5,8 +5,12 @@ export default function UserMenu({
   displayName,
   avatarUrl,
   pendingInvites = [],
+  notifications = [],
   onAcceptInvite,
   onDeclineInvite,
+  onOpenNotifications,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead,
   onOpenSettings,
   onSignOut,
 }) {
@@ -18,7 +22,10 @@ export default function UserMenu({
   const label = displayName || email || "Nalog";
   const initials = getInitials(displayName, email);
   const inviteCount = pendingInvites.length;
-  const hasInvites = inviteCount > 0;
+  const unreadNotifications = notifications.filter((item) => !item.readAt);
+  const noticeCount = unreadNotifications.length;
+  const badgeCount = inviteCount + noticeCount;
+  const hasBadge = badgeCount > 0;
 
   useEffect(() => {
     if (!open) {
@@ -32,7 +39,7 @@ export default function UserMenu({
 
     function onKeyDown(event) {
       if (event.key === "Escape") {
-        if (view === "invites") setView("menu");
+        if (view !== "menu") setView("menu");
         else setOpen(false);
       }
     }
@@ -63,12 +70,35 @@ export default function UserMenu({
     }
   }
 
+  async function openNotices() {
+    setView("notices");
+    onOpenNotifications?.();
+  }
+
+  async function handleMarkRead(id) {
+    setBusyId(id);
+    try {
+      await onMarkNotificationRead?.(id);
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleMarkAllRead() {
+    setBusyId("all");
+    try {
+      await onMarkAllNotificationsRead?.();
+    } finally {
+      setBusyId("");
+    }
+  }
+
   return (
     <div className={`user-menu ${open ? "is-open" : ""}`} ref={rootRef}>
       <button
         type="button"
         className="user-avatar-btn"
-        aria-label={hasInvites ? `Nalog, ${inviteCount} pozivnica` : "Nalog"}
+        aria-label={hasBadge ? `Nalog, ${badgeCount} obaveštenja` : "Nalog"}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
@@ -82,7 +112,7 @@ export default function UserMenu({
             {initials}
           </span>
         )}
-        {hasInvites ? <span className="user-avatar-dot" aria-hidden="true" /> : null}
+        {hasBadge ? <span className="user-avatar-dot" aria-hidden="true" /> : null}
       </button>
 
       {open ? (
@@ -134,6 +164,63 @@ export default function UserMenu({
                 </ul>
               )}
             </>
+          ) : view === "notices" ? (
+            <>
+              <div className="user-menu-header user-menu-header-row">
+                <button
+                  type="button"
+                  className="user-menu-back"
+                  onClick={() => setView("menu")}
+                  aria-label="Nazad"
+                >
+                  <BackIcon />
+                </button>
+                <p className="user-menu-name">Obaveštenja</p>
+              </div>
+
+              {noticeCount > 0 ? (
+                <div className="user-menu-notice-toolbar">
+                  <button
+                    type="button"
+                    className="user-menu-mark-all"
+                    disabled={busyId === "all"}
+                    onClick={handleMarkAllRead}
+                  >
+                    Označi sve pročitano
+                  </button>
+                </div>
+              ) : null}
+
+              {notifications.length === 0 ? (
+                <p className="user-menu-empty">Nema obaveštenja.</p>
+              ) : (
+                <ul className="user-invite-list">
+                  {notifications.map((notice) => (
+                    <li
+                      key={notice.id}
+                      className={`user-invite-row user-notice-row ${notice.readAt ? "is-read" : ""}`}
+                    >
+                      <p className="user-invite-copy">
+                        <strong>{notice.bandName || "Bend"}</strong>
+                        <span>{notice.message}</span>
+                      </p>
+                      {!notice.readAt ? (
+                        <div className="user-invite-actions">
+                          <button
+                            type="button"
+                            className="invite-accept"
+                            disabled={busyId === notice.id}
+                            onClick={() => handleMarkRead(notice.id)}
+                          >
+                            U redu
+                          </button>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           ) : (
             <>
               <div className="user-menu-header">
@@ -155,7 +242,18 @@ export default function UserMenu({
                     onClick={() => setView("invites")}
                   >
                     <span>Pozivnice</span>
-                    {hasInvites ? <span className="user-menu-count">{inviteCount}</span> : null}
+                    {inviteCount ? <span className="user-menu-count">{inviteCount}</span> : null}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="user-menu-item user-menu-item-invites"
+                    role="menuitem"
+                    onClick={openNotices}
+                  >
+                    <span>Obaveštenja</span>
+                    {noticeCount ? <span className="user-menu-count">{noticeCount}</span> : null}
                   </button>
                 </li>
                 <li>

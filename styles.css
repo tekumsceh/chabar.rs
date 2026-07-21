@@ -480,6 +480,34 @@ main,
   gap: 0.35rem;
 }
 
+.user-menu-notice-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0.45rem 0.35rem;
+}
+
+.user-menu-mark-all {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  padding: 0.2rem 0.15rem !important;
+  transform: none !important;
+}
+
+.user-menu-mark-all:hover:not(:disabled) {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  transform: none !important;
+}
+
+.user-notice-row.is-read {
+  opacity: 0.72;
+}
+
 .login-page {
   align-items: center;
   display: flex;

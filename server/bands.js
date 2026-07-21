@@ -20,6 +20,93 @@ function makeInviteToken() {
   return crypto.randomBytes(18).toString("base64url");
 }
 
+async function actorLabel(userId) {
+  if (!userId) return "Neko";
+  const result = await query(
+    `SELECT display_name, email FROM profiles WHERE id = :id LIMIT 1`,
+    { id: userId },
+  );
+  const row = result.rows[0];
+  if (!row) return "Neko";
+  return row.display_name || String(row.email || "").split("@")[0] || "Neko";
+}
+
+/** Best-effort in-app notice; never fails the join/accept flow. */
+async function notifyMemberJoined(recipientUserId, { bandId, bandName, actorUserId }) {
+  if (!recipientUserId || !bandId || !actorUserId) return;
+  if (recipientUserId === actorUserId) return;
+  try {
+    const who = await actorLabel(actorUserId);
+    const band = String(bandName || "bend").trim() || "bend";
+    const message = `${who} se pridružio/la bendu „${band}”.`;
+    await query(
+      `INSERT INTO user_notifications (user_id, type, band_id, actor_user_id, message)
+       VALUES (:userId, 'member_joined', :bandId, :actorUserId, :message)`,
+      { userId: recipientUserId, bandId, actorUserId, message },
+    );
+  } catch (error) {
+    console.warn("notifyMemberJoined failed", error.message || error);
+  }
+}
+
+export async function listNotificationsForUser(user, { limit = 20 } = {}) {
+  const result = await query(
+    `SELECT n.id, n.type, n.band_id, n.actor_user_id, n.message, n.read_at, n.created_at,
+            b.name AS band_name, b.color AS band_color
+     FROM user_notifications n
+     LEFT JOIN bands b ON b.id = n.band_id
+     WHERE n.user_id = :userId
+     ORDER BY n.created_at DESC
+     LIMIT :limit`,
+    { userId: user.id, limit: Math.min(50, Math.max(1, Number(limit) || 20)) },
+  );
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    type: row.type,
+    bandId: row.band_id,
+    bandName: row.band_name || "",
+    bandColor: row.band_color || null,
+    actorUserId: row.actor_user_id,
+    message: row.message,
+    readAt: row.read_at,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function markNotificationRead(req, res, next) {
+  try {
+    const id = String(req.params.notificationId || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing id" });
+    const result = await query(
+      `UPDATE user_notifications
+       SET read_at = COALESCE(read_at, NOW())
+       WHERE id = :id AND user_id = :userId
+       RETURNING id, read_at`,
+      { id, userId: req.user.id },
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.json({ id: String(result.rows[0].id), readAt: result.rows[0].read_at });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function markAllNotificationsRead(req, res, next) {
+  try {
+    await query(
+      `UPDATE user_notifications
+       SET read_at = NOW()
+       WHERE user_id = :userId AND read_at IS NULL`,
+      { userId: req.user.id },
+    );
+    res.json({ status: "ok" });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export function bandIdFromParams(req, _res, next) {
   req.headers["x-band-id"] = req.params.id;
   next();
@@ -103,7 +190,7 @@ export async function acceptInvite(req, res, next) {
     }
 
     const invite = await query(
-      `SELECT id, band_id, member_role, email
+      `SELECT id, band_id, member_role, email, invited_by
        FROM band_invites
        WHERE id = :inviteId AND lower(email) = :email
        LIMIT 1`,
@@ -125,6 +212,12 @@ export async function acceptInvite(req, res, next) {
 
     const band = await query(`SELECT id, name, kind, color FROM bands WHERE id = :bandId LIMIT 1`, {
       bandId: row.band_id,
+    });
+    const bandName = band.rows[0]?.name || "";
+    await notifyMemberJoined(row.invited_by, {
+      bandId: row.band_id,
+      bandName,
+      actorUserId: req.user.id,
     });
     res.json({
       status: "accepted",
@@ -871,7 +964,7 @@ export async function acceptJoinLink(req, res, next) {
     if (!token) return res.status(400).json({ error: "Missing token" });
 
     const link = await query(
-      `SELECT l.band_id, l.member_role, b.name AS band_name, b.kind
+      `SELECT l.band_id, l.member_role, l.created_by, b.name AS band_name, b.kind
        FROM band_invite_links l
        JOIN bands b ON b.id = l.band_id
        WHERE l.token = :token
@@ -884,6 +977,7 @@ export async function acceptJoinLink(req, res, next) {
 
     const bandId = link.rows[0].band_id;
     const bandName = link.rows[0].band_name;
+    const linkCreatorId = link.rows[0].created_by;
 
     const existing = await query(
       `SELECT member_role FROM band_members
@@ -905,17 +999,34 @@ export async function acceptJoinLink(req, res, next) {
        ON CONFLICT (band_id, user_id) DO NOTHING`,
       { bandId, userId: req.user.id },
     );
-    // Drop any pending email invite for this user/band
+    // Drop any pending email invite for this user/band (and notify that inviter too).
     const email = String(req.user.email || "")
       .trim()
       .toLowerCase();
+    let emailInviterId = null;
     if (email) {
+      const pending = await query(
+        `SELECT invited_by FROM band_invites
+         WHERE band_id = :bandId AND lower(email) = :email
+         LIMIT 1`,
+        { bandId, email },
+      );
+      emailInviterId = pending.rows[0]?.invited_by || null;
       await query(`DELETE FROM band_invites WHERE band_id = :bandId AND lower(email) = :email`, {
         bandId,
         email,
       });
     }
     clearMembershipCache();
+
+    const notifyIds = new Set([linkCreatorId, emailInviterId].filter(Boolean));
+    for (const recipientId of notifyIds) {
+      await notifyMemberJoined(recipientId, {
+        bandId,
+        bandName,
+        actorUserId: req.user.id,
+      });
+    }
 
     res.json({
       status: "joined",
