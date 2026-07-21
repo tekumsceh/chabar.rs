@@ -4926,9 +4926,28 @@ html[data-theme="dark"] body {
 }
 
 .event-page-panel {
+  background: var(--panel, var(--surface));
+  border: 1px solid var(--line);
   flex: 1;
   min-height: 0;
+  overflow: auto;
   padding: 0.85rem 0.9rem;
+}
+
+.raspored.is-event-open {
+  min-height: 0;
+}
+
+.raspored-list-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.raspored-list-view[hidden] {
+  display: none !important;
 }
 
 .event-page-fields {

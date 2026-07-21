@@ -232,7 +232,7 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
       </div>
 
       {tab === "osnovno" ? (
-        <section className="event-page-panel raspored-panel" role="tabpanel" aria-label="Osnovno">
+        <section className="event-page-panel" role="tabpanel" aria-label="Osnovno">
           {editing ? (
             <form className="event-page-form termin-form" onSubmit={saveEdit}>
               <label className="termin-form-full">
@@ -335,21 +335,21 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
       ) : null}
 
       {tab === "tehnicki" ? (
-        <section className="event-page-panel raspored-panel event-page-stub" role="tabpanel" aria-label="Tehnički">
+        <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Tehnički">
           <h3 className="event-page-stub-title">Tehnički</h3>
           <p className="event-page-stub-copy">Tehnički detalji termina — uskoro.</p>
         </section>
       ) : null}
 
       {tab === "show" ? (
-        <section className="event-page-panel raspored-panel event-page-stub" role="tabpanel" aria-label="Show">
+        <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Show">
           <h3 className="event-page-stub-title">Show</h3>
           <p className="event-page-stub-copy">Setlista i show materijal — uskoro.</p>
         </section>
       ) : null}
 
       {tab === "finansije" && canSeeFinance ? (
-        <section className="event-page-panel raspored-panel event-page-stub" role="tabpanel" aria-label="Finansije">
+        <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Finansije">
           <h3 className="event-page-stub-title">Finansije</h3>
           <p className="event-page-stub-copy">Pregled finansija termina za vlasnika i lead — uskoro.</p>
         </section>

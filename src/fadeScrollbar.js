@@ -5,6 +5,9 @@ const FADE_OUT_MS = 1000;
  * Custom 2px scrollbar:
  * - Desktop: fade in while scrolling, fade out 1s after stop
  * - Touch: stay visible while finger is held (and list can scroll), fade out 1s after release
+ *
+ * Important: never leave a React-managed node reparented under a detached wrap.
+ * Cleanup always restores the host to its original parent before removing the wrap.
  */
 export function initFadeScrollbars() {
   const hideTimers = new WeakMap();
@@ -67,9 +70,30 @@ export function initFadeScrollbars() {
     return true;
   }
 
+  function unwrap(wrap, viewport) {
+    const parent = wrap.parentNode;
+    if (viewport && parent && viewport.parentNode === wrap) {
+      parent.insertBefore(viewport, wrap);
+    }
+    if (wrap.parentNode) wrap.remove();
+  }
+
+  function destroyWrap(wrap) {
+    const viewport = wrap.querySelector(SCROLL_HOSTS);
+    try {
+      wrap._fadeScrollCleanup?.();
+    } catch {
+      /* ignore */
+    }
+    clearHideTimer(wrap);
+    unwrap(wrap, viewport);
+  }
+
   function enhance(viewport) {
     if (!(viewport instanceof HTMLElement)) return;
     if (viewport.closest(".fade-scroll-wrap")) return;
+    // Event detail panels scroll inside the page; wrapping them fights React unmounts.
+    if (viewport.classList.contains("event-page-panel")) return;
 
     const parent = viewport.parentElement;
     if (!parent) return;
@@ -141,9 +165,9 @@ export function initFadeScrollbars() {
 
   function scan() {
     document.querySelectorAll(".fade-scroll-wrap").forEach((wrap) => {
-      if (!wrap.querySelector(SCROLL_HOSTS)) {
-        wrap._fadeScrollCleanup?.();
-        wrap.remove();
+      const host = wrap.querySelector(SCROLL_HOSTS);
+      if (!host || !document.contains(host)) {
+        destroyWrap(wrap);
       }
     });
     document.querySelectorAll(SCROLL_HOSTS).forEach(enhance);
@@ -152,10 +176,26 @@ export function initFadeScrollbars() {
   scan();
 
   const root = document.getElementById("root") || document.body;
-  const mo = new MutationObserver(() => scan());
+  let scheduled = false;
+  const mo = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      // Restore hosts that React still owns before it tries to remove them mid-tree.
+      document.querySelectorAll(".fade-scroll-wrap").forEach((wrap) => {
+        const host = wrap.querySelector(SCROLL_HOSTS);
+        if (host && !document.contains(wrap)) {
+          destroyWrap(wrap);
+        }
+      });
+      scan();
+    });
+  });
   mo.observe(root, { childList: true, subtree: true });
 
   return () => {
     mo.disconnect();
+    document.querySelectorAll(".fade-scroll-wrap").forEach(destroyWrap);
   };
 }

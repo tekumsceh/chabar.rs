@@ -278,9 +278,11 @@ export default function SchedulePage({
     }
   }
 
-  if (selectedEventId) {
-    return (
-      <div className="raspored">
+  const eventOpen = Boolean(selectedEventId);
+
+  return (
+    <div className={`raspored ${eventOpen ? "is-event-open" : ""}`}>
+      {eventOpen ? (
         <EventPage
           event={selectedEvent}
           band={selectedBand}
@@ -289,12 +291,9 @@ export default function SchedulePage({
           onUpdate={onUpdate}
           showToast={showToast}
         />
-      </div>
-    );
-  }
+      ) : null}
 
-  return (
-    <div className="raspored">
+      <div className="raspored-list-view" hidden={eventOpen} aria-hidden={eventOpen}>
       <header className="raspored-bar">
         <div className="raspored-tools raspored-tools-start" aria-label="Filteri rasporeda">
           <MenuSelect
@@ -489,6 +488,8 @@ export default function SchedulePage({
           </button>
         </div>
       ) : null}
+
+      </div>
 
       {formOpen ? (
         <div className="modal-backdrop" role="presentation">
