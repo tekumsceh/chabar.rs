@@ -3803,6 +3803,7 @@ html[data-theme="dark"] body {
   align-items: center;
   background: transparent;
   border: 0;
+  box-shadow: none;
   color: inherit;
   cursor: pointer;
   display: flex;
@@ -3813,11 +3814,17 @@ html[data-theme="dark"] body {
   justify-content: space-between;
   padding: 0.7rem 0.85rem;
   text-align: left;
+  transform: none;
+  transition: background-color 140ms ease;
   width: 100%;
 }
 
-.band-accordion-trigger:hover {
-  background: color-mix(in srgb, var(--ink, #101828) 4%, transparent);
+.band-accordion-trigger:hover,
+.band-accordion-trigger:focus-visible {
+  background: color-mix(in srgb, var(--ink, #101828) 5%, transparent);
+  box-shadow: none;
+  color: inherit;
+  transform: none;
 }
 
 .band-accordion-chevron {
@@ -3847,8 +3854,10 @@ html[data-theme="dark"] body {
   border-color: color-mix(in srgb, #fff 12%, transparent);
 }
 
-.app-shell[data-theme="dark"] .band-accordion-trigger:hover {
-  background: color-mix(in srgb, #fff 6%, transparent);
+.app-shell[data-theme="dark"] .band-accordion-trigger:hover,
+.app-shell[data-theme="dark"] .band-accordion-trigger:focus-visible {
+  background: color-mix(in srgb, #fff 7%, transparent);
+  color: inherit;
 }
 
 .app-shell[data-theme="dark"] .band-accordion-panel {
@@ -3956,6 +3965,7 @@ html[data-theme="dark"] body {
   align-items: center;
   background: color-mix(in srgb, var(--ink, #f7f2ff) 6%, transparent) !important;
   border: 1px solid color-mix(in srgb, var(--line, #ff3dce66) 55%, transparent) !important;
+  box-shadow: none !important;
   color: inherit !important;
   display: flex !important;
   font-weight: 700 !important;
@@ -3964,7 +3974,17 @@ html[data-theme="dark"] body {
   padding: 0.7rem 0.75rem !important;
   text-align: left;
   transform: none !important;
+  transition: background-color 140ms ease, border-color 140ms ease !important;
   width: 100%;
+}
+
+.band-home-side-action:hover:not(:disabled),
+.band-home-side-action:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--ink, #f7f2ff) 11%, transparent) !important;
+  border-color: color-mix(in srgb, var(--brand, #ff2bd6) 45%, transparent) !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  transform: none !important;
 }
 
 .band-home-side-action:disabled {
@@ -3975,6 +3995,14 @@ html[data-theme="dark"] body {
   color: var(--muted, #c4a8e8);
   font-size: 0.68rem;
   font-weight: 600;
+}
+
+/* Kill global neon button:hover inside the band info drawer */
+.band-home-side button:hover,
+.band-home-side button:focus-visible {
+  box-shadow: none;
+  color: inherit;
+  transform: none;
 }
 
 .band-home-scrim {
@@ -4457,9 +4485,11 @@ html[data-theme="dark"] body {
   width: 100%;
 }
 
-.band-user-result:hover {
+.band-user-result:hover,
+.band-user-result:focus-visible {
   background: var(--panel-soft, rgba(15, 23, 42, 0.05));
   box-shadow: none;
+  color: inherit;
   transform: none;
 }
 
