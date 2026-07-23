@@ -43,6 +43,8 @@ export default function SchedulePage({
   onAdd,
   onUpdate,
   onRemove,
+  onRefreshSchedule,
+  leaveEventSignal = 0,
   loading = false,
 }) {
   const { confirm } = useConfirm();
@@ -289,6 +291,8 @@ export default function SchedulePage({
           settings={settings}
           onBack={() => setSelectedEventId(null)}
           onUpdate={onUpdate}
+          onRefreshSchedule={onRefreshSchedule}
+          leaveSignal={leaveEventSignal}
           showToast={showToast}
         />
       ) : null}
@@ -463,12 +467,12 @@ export default function SchedulePage({
         <div className="raspored-pagination" aria-label="Stranice">
           <button
             type="button"
-            className="finansije-year-btn"
+            className="finansije-year-btn finansije-page-btn"
             disabled={safePage <= 0}
             onClick={() => setListPage((page) => Math.max(0, page - 1))}
             aria-label="Prethodna stranica"
           >
-            ←
+            <PageChevronLeftIcon />
           </button>
           <span className="raspored-pagination-label">
             {safePage + 1} / {totalPages}
@@ -479,12 +483,12 @@ export default function SchedulePage({
           </span>
           <button
             type="button"
-            className="finansije-year-btn"
+            className="finansije-year-btn finansije-page-btn"
             disabled={safePage >= totalPages - 1}
             onClick={() => setListPage((page) => Math.min(totalPages - 1, page + 1))}
             aria-label="Sledeća stranica"
           >
-            →
+            <PageChevronRightIcon />
           </button>
         </div>
       ) : null}
@@ -674,6 +678,36 @@ function matchesScheduleFilter(row, search, filter, asOfDate) {
   if (filter === "done") return row.done;
   if (filter === "month") return sameMonth(row.parsedDate, parseDate(asOfDate));
   return true;
+}
+
+function PageChevronLeftIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M15 6l-6 6 6 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PageChevronRightIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M9 6l6 6-6 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function LockIcon() {

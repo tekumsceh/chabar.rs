@@ -229,15 +229,6 @@ export default function ReportPage({
               />
             ) : null}
           </div>
-
-          <div className="finansije-tools-slot" aria-hidden="true">
-            <button type="button" className="raspored-icon-btn" disabled title="Uskoro" aria-label="Alat (uskoro)">
-              <PlusIcon />
-            </button>
-            <button type="button" className="raspored-icon-btn" disabled title="Uskoro" aria-label="Alat (uskoro)">
-              <WrenchIcon />
-            </button>
-          </div>
         </div>
       </header>
 
@@ -296,6 +287,12 @@ export default function ReportPage({
                       </time>
                       <div className="raspored-main">
                         <strong>{row.city || "—"}</strong>
+                        <span
+                          className={`finansije-date-phase ${row.done ? "is-held" : "is-upcoming"}`}
+                          title={row.done ? "Termin je održan" : "Termin tek predstoji"}
+                        >
+                          {row.done ? "održano" : "buduće"}
+                        </span>
                       </div>
                       <span
                         className="band-chip"
@@ -306,13 +303,13 @@ export default function ReportPage({
                         {bandInitials(name)}
                       </span>
                       <span
-                        className={`pay-icon pay-icon-${row.done ? row.paymentClass : "future"}`}
-                        title={payStatusLabel(row)}
-                        aria-label={payStatusLabel(row)}
+                        className={`raspored-fee raspored-fee-${feeAmountTone(row)}`}
+                        title={
+                          row.hasDate
+                            ? `${payStatusLabel(row)} · ${formatEur(row.totalEur)}`
+                            : undefined
+                        }
                       >
-                        <DollarIcon />
-                      </span>
-                      <span className="raspored-fee" title={row.hasDate ? formatEur(row.totalEur) : undefined}>
                         {row.hasDate ? formatEurCeil(row.totalEur) : "—"}
                       </span>
                     </button>
@@ -353,12 +350,12 @@ export default function ReportPage({
         <div className="raspored-pagination" aria-label="Stranice">
           <button
             type="button"
-            className="finansije-year-btn"
+            className="finansije-year-btn finansije-page-btn"
             disabled={safePage <= 0}
             onClick={() => setListPage((page) => Math.max(0, page - 1))}
             aria-label="Prethodna stranica"
           >
-            ←
+            <ChevronLeftIcon />
           </button>
           <span className="raspored-pagination-label">
             {safePage + 1} / {totalPages}
@@ -369,12 +366,12 @@ export default function ReportPage({
           </span>
           <button
             type="button"
-            className="finansije-year-btn"
+            className="finansije-year-btn finansije-page-btn"
             disabled={safePage >= totalPages - 1}
             onClick={() => setListPage((page) => Math.min(totalPages - 1, page + 1))}
             aria-label="Sledeća stranica"
           >
-            →
+            <ChevronRightIcon />
           </button>
         </div>
       ) : null}
@@ -470,9 +467,6 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
               <div>
                 <dt>Status</dt>
                 <dd className="finance-detail-status">
-                  <span className={`pay-icon pay-icon-${row.done ? row.paymentClass : "future"}`}>
-                    <DollarIcon />
-                  </span>
                   {payStatusLabel(row)}
                   {row.done && remaining > 0 ? ` · ostaje ${formatEur(remaining)}` : null}
                 </dd>
@@ -629,6 +623,14 @@ function payStatusLabel(row) {
   return "Otvoreno";
 }
 
+/** Amount color: paid green, partial yellow, held unpaid white, future muted blue. */
+function feeAmountTone(row) {
+  if (!row.done) return "future";
+  if (row.paymentClass === "paid") return "paid";
+  if (row.paymentClass === "partial") return "partial";
+  return "unpaid";
+}
+
 function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -638,22 +640,30 @@ function SearchIcon() {
   );
 }
 
-function PlusIcon() {
+function ChevronLeftIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M15 6l-6 6 6 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
-function WrenchIcon() {
+function ChevronRightIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path
-        d="M14.7 6.3a4 4 0 0 0-5.6 5.6L4 17l3 3 5.1-5.1a4 4 0 0 0 5.6-5.6l-2.5 2.5-2.5-2.5 2.5-2.5z"
+        d="M9 6l6 6-6 6"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.9"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
@@ -702,21 +712,6 @@ function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function DollarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 3 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   );
 }

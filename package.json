@@ -17,6 +17,7 @@
     "db:migrate:comments-audit": "node scripts/apply-event-comments-audit.js",
     "db:migrate:invite-links": "node scripts/apply-band-invite-links.js",
     "db:migrate:notifications": "node scripts/apply-user-notifications.js",
+    "db:migrate:expenses": "node scripts/apply-event-expenses.js",
     "db:migrate:bands": "node scripts/migrate-bands-ownership.js",
     "db:migrate:finance": "node scripts/migrate-member-finance.js",
     "deploy": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy.ps1"

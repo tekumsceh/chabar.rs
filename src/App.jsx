@@ -60,6 +60,8 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [activeBandId, setActiveBandId] = useState(() => localStorage.getItem(ACTIVE_BAND_KEY) || ALL_BANDS_ID);
   const [page, setPageState] = useState(DEFAULT_PAGE);
+  /** Bumped when user chooses Raspored — closes open event detail (with dirty save prompt). */
+  const [scheduleLeaveNonce, setScheduleLeaveNonce] = useState(0);
 
   function setPage(next) {
     setPageState(normalizePage(next));
@@ -135,6 +137,7 @@ export default function App() {
 
   function goToSchedule() {
     setPage("schedule");
+    setScheduleLeaveNonce((value) => value + 1);
   }
 
   function openBandPage(bandId) {
@@ -746,7 +749,8 @@ export default function App() {
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    // Local only — default "global" revokes every device and feels like random kickouts.
+    await supabase.auth.signOut({ scope: "local" });
     setApiAuth({ token: "", bandId: "" });
     localStorage.removeItem(ACTIVE_BAND_KEY);
     setActiveBandId("");
@@ -787,7 +791,10 @@ export default function App() {
               key={id}
               className={`top-nav-link ${activePage === id ? "active" : ""}`}
               type="button"
-              onClick={() => setPage(id)}
+              onClick={() => {
+                if (id === "schedule") goToSchedule();
+                else setPage(id);
+              }}
             >
               {label}
             </button>
@@ -844,6 +851,8 @@ export default function App() {
           onAdd={addEvent}
           onUpdate={updateEventFields}
           onRemove={removeEvent}
+          onRefreshSchedule={() => loadScheduleAndFinance({ scheduleOnly: true })}
+          leaveEventSignal={scheduleLeaveNonce}
           loading={loading}
         />
       </div>

@@ -803,6 +803,305 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
   }
 });
 
+/** Owner/lead: per-member fees for one date. Past dates allowed (settling after the gig). */
+app.get("/api/events/:id/member-finance", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
+  try {
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: req.params.id, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const result = await query(
+      `SELECT bm.user_id, bm.member_role, p.email, p.display_name,
+              COALESCE(f.price_eur, 0) AS price_eur,
+              COALESCE(f.transport_rsd, 0) AS transport_rsd
+       FROM band_members bm
+       JOIN profiles p ON p.id = bm.user_id
+       LEFT JOIN event_member_finance f
+         ON f.event_id = :eventId AND f.user_id = bm.user_id
+       WHERE bm.band_id = :bandId
+       ORDER BY
+         CASE bm.member_role WHEN 'owner' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END,
+         p.display_name, p.email`,
+      { eventId: req.params.id, bandId: req.bandId },
+    );
+
+    res.json({
+      eventId: Number(req.params.id),
+      bandId: req.bandId,
+      members: result.rows.map((row) => ({
+        id: row.user_id,
+        name: row.display_name || row.email?.split("@")[0] || "Član",
+        memberRole: row.member_role,
+        priceEur: Number(row.price_eur) || 0,
+        transportRsd: Number(row.transport_rsd) || 0,
+        // TBD: per-member default fee storage + settings UI
+        defaultPriceEur: null,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put(
+  "/api/events/:id/member-finance/:userId",
+  requireAuth,
+  requireBandMember,
+  requireBandAdmin,
+  async (req, res, next) => {
+    try {
+      const eventId = Number(req.params.id);
+      const userId = String(req.params.userId || "").trim();
+      if (!eventId || !userId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      const event = await query(
+        `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+        { id: eventId, bandId: req.bandId },
+      );
+      if (!event.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      const membership = await query(
+        `SELECT user_id FROM band_members WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+        { bandId: req.bandId, userId },
+      );
+      if (!membership.rows[0]) {
+        return res.status(400).json({
+          error: "Invalid member",
+          detail: "Korisnik nije član ovog benda.",
+        });
+      }
+
+      const priceEur = numberValue(req.body?.priceEur);
+      if (priceEur < 0) {
+        return res.status(400).json({
+          error: "Invalid amount",
+          detail: "Iznos ne može biti negativan.",
+        });
+      }
+
+      const existingFinance = await query(
+        `SELECT transport_rsd FROM event_member_finance
+         WHERE event_id = :eventId AND user_id = :userId LIMIT 1`,
+        { eventId, userId },
+      );
+      const transportRsd =
+        req.body?.transportRsd !== undefined
+          ? numberValue(req.body.transportRsd)
+          : Number(existingFinance.rows[0]?.transport_rsd) || 0;
+
+      await upsertMemberFinance(eventId, userId, priceEur, transportRsd, {
+        bandId: req.bandId,
+        actorUserId: req.user.id,
+      });
+
+      res.json({
+        eventId,
+        userId,
+        priceEur,
+        transportRsd,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+const EXPENSE_CURRENCIES = new Set([
+  "EUR",
+  "USD",
+  "GBP",
+  "RSD",
+  "CHF",
+  "JPY",
+  "CAD",
+  "AUD",
+  "SEK",
+  "PLN",
+]);
+
+function mapExpenseRow(row) {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    bandId: row.band_id,
+    amount: Number(row.amount) || 0,
+    currency: row.currency || "EUR",
+    description: row.description || "",
+    payeeKind: row.payee_kind,
+    payeeUserId: row.payee_user_id || null,
+    payeeName: row.payee_name || null,
+    createdAt: row.created_at,
+  };
+}
+
+app.get("/api/events/:id/expenses", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
+  try {
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: req.params.id, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const [expensesResult, membersResult] = await Promise.all([
+      query(
+        `SELECT x.id, x.event_id, x.band_id, x.amount, x.currency, x.description,
+                x.payee_kind, x.payee_user_id, x.created_at,
+                CASE
+                  WHEN x.payee_kind = 'band' THEN 'Bend'
+                  WHEN x.payee_kind = 'external' THEN 'Spoljnji'
+                  ELSE COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Član')
+                END AS payee_name
+         FROM event_expenses x
+         LEFT JOIN profiles p ON p.id = x.payee_user_id
+         WHERE x.event_id = :eventId AND x.band_id = :bandId
+         ORDER BY x.created_at ASC, x.id ASC`,
+        { eventId: req.params.id, bandId: req.bandId },
+      ),
+      query(
+        `SELECT bm.user_id, p.email, p.display_name
+         FROM band_members bm
+         JOIN profiles p ON p.id = bm.user_id
+         WHERE bm.band_id = :bandId
+         ORDER BY p.display_name, p.email`,
+        { bandId: req.bandId },
+      ),
+    ]);
+
+    res.json({
+      eventId: Number(req.params.id),
+      bandId: req.bandId,
+      currencies: [...EXPENSE_CURRENCIES],
+      members: membersResult.rows.map((row) => ({
+        id: row.user_id,
+        name: row.display_name || row.email?.split("@")[0] || "Član",
+      })),
+      expenses: expensesResult.rows.map(mapExpenseRow),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/events/:id/expenses", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const amount = numberValue(req.body?.amount);
+    const currency = String(req.body?.currency || "EUR").trim().toUpperCase();
+    const description = String(req.body?.description || "").trim();
+    const payeeKind = String(req.body?.payeeKind || "").trim().toLowerCase();
+    const payeeUserId = req.body?.payeeUserId ? String(req.body.payeeUserId).trim() : null;
+
+    if (!Number.isFinite(amount) || amount < 0) {
+      return res.status(400).json({ error: "Invalid amount", detail: "Iznos nije ispravan." });
+    }
+    if (!EXPENSE_CURRENCIES.has(currency)) {
+      return res.status(400).json({ error: "Invalid currency", detail: "Valuta nije podržana." });
+    }
+    if (!description) {
+      return res.status(400).json({ error: "Invalid description", detail: "Opis je obavezan." });
+    }
+    if (!["member", "band", "external"].includes(payeeKind)) {
+      return res.status(400).json({ error: "Invalid payee", detail: "Izaberi kome ide trošak." });
+    }
+    if (payeeKind === "member") {
+      if (!payeeUserId) {
+        return res.status(400).json({ error: "Invalid payee", detail: "Izaberi člana." });
+      }
+      const membership = await query(
+        `SELECT user_id FROM band_members WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+        { bandId: req.bandId, userId: payeeUserId },
+      );
+      if (!membership.rows[0]) {
+        return res.status(400).json({ error: "Invalid member", detail: "Korisnik nije član ovog benda." });
+      }
+    }
+
+    const inserted = await query(
+      `INSERT INTO event_expenses
+        (event_id, band_id, amount, currency, description, payee_kind, payee_user_id, created_by)
+       VALUES
+        (:eventId, :bandId, :amount, :currency, :description, :payeeKind, :payeeUserId, :createdBy)
+       RETURNING id, event_id, band_id, amount, currency, description,
+                 payee_kind, payee_user_id, created_at`,
+      {
+        eventId,
+        bandId: req.bandId,
+        amount,
+        currency,
+        description,
+        payeeKind,
+        payeeUserId: payeeKind === "member" ? payeeUserId : null,
+        createdBy: req.user.id,
+      },
+    );
+
+    const row = inserted.rows[0];
+    let payeeName = payeeKind === "band" ? "Bend" : payeeKind === "external" ? "Spoljnji" : "Član";
+    if (payeeKind === "member" && payeeUserId) {
+      const profile = await query(
+        `SELECT display_name, email FROM profiles WHERE id = :id LIMIT 1`,
+        { id: payeeUserId },
+      );
+      payeeName =
+        profile.rows[0]?.display_name || profile.rows[0]?.email?.split("@")[0] || "Član";
+    }
+
+    res.status(201).json(
+      mapExpenseRow({
+        ...row,
+        payee_name: payeeName,
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete(
+  "/api/events/:id/expenses/:expenseId",
+  requireAuth,
+  requireBandMember,
+  requireBandAdmin,
+  async (req, res, next) => {
+    try {
+      const result = await query(
+        `DELETE FROM event_expenses
+         WHERE id = :expenseId AND event_id = :eventId AND band_id = :bandId
+         RETURNING id`,
+        {
+          expenseId: req.params.expenseId,
+          eventId: req.params.id,
+          bandId: req.bandId,
+        },
+      );
+      if (!result.rowCount) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 app.get("/api/events/:id/comments", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const event = await query(
@@ -1266,6 +1565,24 @@ async function getBandFinanceEvents(bandId) {
     { bandId },
   );
 
+  const expensesResult = await query(
+    `SELECT x.id, x.event_id, x.amount, x.currency, x.description, x.payee_kind, x.payee_user_id,
+            CASE
+              WHEN x.payee_kind = 'band' THEN 'Bend'
+              WHEN x.payee_kind = 'external' THEN 'Spoljnji'
+              ELSE COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Član')
+            END AS payee_name
+     FROM event_expenses x
+     LEFT JOIN profiles p ON p.id = x.payee_user_id
+     WHERE x.event_id IN (
+       SELECT e.id FROM events e
+       WHERE e.band_id = :bandId
+         AND ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
+     )
+     ORDER BY x.event_id, x.id`,
+    { bandId },
+  );
+
   const wagesByEvent = new Map();
   for (const row of financeResult.rows) {
     const list = wagesByEvent.get(row.event_id) || [];
@@ -1276,6 +1593,21 @@ async function getBandFinanceEvents(bandId) {
       transportRsd: Number(row.transport_rsd),
     });
     wagesByEvent.set(row.event_id, list);
+  }
+
+  const expensesByEvent = new Map();
+  for (const row of expensesResult.rows) {
+    const list = expensesByEvent.get(row.event_id) || [];
+    list.push({
+      id: row.id,
+      amount: Number(row.amount) || 0,
+      currency: row.currency || "EUR",
+      description: row.description || "",
+      payeeKind: row.payee_kind,
+      payeeUserId: row.payee_user_id || null,
+      payeeName: row.payee_name || null,
+    });
+    expensesByEvent.set(row.event_id, list);
   }
 
   return eventsResult.rows.map((row) => {
@@ -1293,7 +1625,7 @@ async function getBandFinanceEvents(bandId) {
       priceEur,
       transportRsd,
       memberWages: memberWages.map(({ id, name, priceEur: wage }) => ({ id, name, priceEur: wage })),
-      expenseItems: [],
+      expenseItems: expensesByEvent.get(row.id) || [],
     };
   });
 }

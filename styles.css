@@ -28,10 +28,12 @@
     0 0 0 1px rgba(0, 246, 255, 0.28),
     0 10px 0 rgba(184, 255, 0, 0.12),
     0 18px 40px rgba(0, 0, 0, 0.45);
-  --radius: 2px;
-  --radius-sm: 2px;
-  --radius-lg: 2px;
-  --radius-pill: 2px;
+  --radius: 3px;
+  --radius-sm: 3px;
+  --radius-lg: 3px;
+  --radius-pill: 3px;
+  --shadow-click: 0 1px 2px rgba(15, 23, 42, 0.1), 0 1px 1px rgba(15, 23, 42, 0.06);
+  --shadow-click-hover: 0 2px 5px rgba(15, 23, 42, 0.14), 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 * {
@@ -1892,7 +1894,11 @@ td input[data-field="note"] {
   justify-content: center !important;
   line-height: 0 !important;
   padding: 0 !important;
-  transition: border-color 140ms ease, color 140ms ease, background 140ms ease !important;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease !important;
   width: 2.25rem;
 }
 
@@ -2147,8 +2153,8 @@ td input[data-field="note"] {
   align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   display: grid;
-  gap: 0.35rem 0.45rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.65rem;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto auto;
   padding: 0.45rem 0.65rem;
 }
 
@@ -2158,6 +2164,12 @@ td input[data-field="note"] {
 
 .raspored-row:hover {
   background: var(--panel-soft);
+}
+
+/* Schedule list: hit-target + actions (not used by Finansije rows). */
+.raspored-row:has(> .raspored-row-open) {
+  gap: 0.35rem 0.45rem;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .raspored-row.is-next {
@@ -2330,9 +2342,14 @@ td input[data-field="note"] {
 
 @media (max-width: 800px) {
   .raspored-row {
+    gap: 0.3rem 0.55rem;
+    grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+    padding: 0.4rem 0.55rem;
+  }
+
+  .raspored-row:has(> .raspored-row-open) {
     gap: 0.3rem 0.45rem;
     grid-template-columns: minmax(0, 1fr) auto;
-    padding: 0.4rem 0.55rem;
   }
 
   .raspored-row > .raspored-row-open {
@@ -2347,8 +2364,21 @@ td input[data-field="note"] {
     text-align: left;
   }
 
-  .raspored-actions {
+  .raspored-row:has(> .raspored-row-open) .raspored-actions {
     align-self: center;
+    grid-row: 1 / span 2;
+  }
+
+  .raspored-row:not(:has(> .raspored-row-open)) .raspored-band {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .raspored-row:not(:has(> .raspored-row-open)) .raspored-actions {
+    align-self: center;
+    grid-column: 3;
     grid-row: 1 / span 2;
   }
 
@@ -2705,7 +2735,7 @@ td input[data-field="note"] {
   align-items: center !important;
   background: transparent !important;
   border: 0 !important;
-  border-radius: 0 !important;
+  border-radius: var(--radius-sm, 3px) !important;
   box-shadow: none !important;
   color: inherit !important;
   cursor: pointer;
@@ -3055,7 +3085,26 @@ td input[data-field="note"] {
 }
 
 .raspored-row-finance {
-  grid-template-columns: 2.6rem minmax(0, 1fr) 2rem 1.5rem 4.75rem !important;
+  grid-template-columns: 2.6rem minmax(0, 1fr) 2rem 4.75rem !important;
+}
+
+.finansije-date-phase {
+  color: var(--muted);
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  margin-top: 0.12rem;
+  text-transform: lowercase;
+}
+
+.finansije-date-phase.is-held {
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
+}
+
+.finansije-date-phase.is-upcoming {
+  color: var(--muted);
 }
 
 .band-chip {
@@ -3114,7 +3163,10 @@ td input[data-field="note"] {
 }
 
 .finansije .raspored-main {
+  display: flex;
+  flex-direction: column;
   gap: 0;
+  min-width: 0;
 }
 
 .finansije .raspored-main strong {
@@ -3133,6 +3185,22 @@ td input[data-field="note"] {
   justify-self: end;
   text-align: right;
   white-space: nowrap;
+}
+
+.finansije .raspored-fee-paid {
+  color: #15803d !important;
+}
+
+.finansije .raspored-fee-partial {
+  color: #ca8a04 !important;
+}
+
+.finansije .raspored-fee-unpaid {
+  color: inherit !important;
+}
+
+.finansije .raspored-fee-future {
+  color: #0284c7 !important;
 }
 
 .pay-pill {
@@ -3357,6 +3425,8 @@ html[data-theme="dark"] body {
     0 0 0 1px rgba(255, 43, 214, 0.35),
     0 12px 0 rgba(0, 246, 255, 0.16),
     0 22px 44px rgba(0, 0, 0, 0.55);
+  --shadow-click: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.22);
+  --shadow-click-hover: 0 2px 6px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.28);
   background: transparent;
   color: var(--ink);
   height: 100%;
@@ -3605,6 +3675,18 @@ html[data-theme="dark"] body {
   box-shadow: 0 0 12px rgba(184, 255, 0, 0.35);
 }
 
+.app-shell[data-theme="dark"] .finansije .raspored-fee-paid {
+  color: var(--neon-lime, #b8ff00) !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-partial {
+  color: var(--warn, #ffe600) !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-future {
+  color: var(--neon-cyan, #00f6ff) !important;
+}
+
 .app-shell[data-theme="dark"] .pay-pill.partial {
   background: rgba(255, 230, 0, 0.16);
   color: var(--warn);
@@ -3636,13 +3718,13 @@ html[data-theme="dark"] body {
 
 @media (max-width: 860px) {
   .raspored-row-finance {
-    grid-template-columns: 2.6rem minmax(0, 1fr) 2rem 1.5rem 4.5rem !important;
+    grid-template-columns: 2.6rem minmax(0, 1fr) 2rem 4.5rem !important;
   }
 }
 
-/* —— Neon / sharp / float overrides —— */
+/* —— Neon / soft-square overrides (tiny radius, keep avatars round) —— */
 .app-shell *:not(.user-avatar-btn):not(.user-avatar-img):not(img.user-avatar-img):not(.user-avatar-dot):not(.user-menu-count) {
-  border-radius: 0 !important;
+  border-radius: var(--radius-sm, 3px) !important;
 }
 
 .app-shell .user-avatar-btn,
@@ -3697,16 +3779,63 @@ html[data-theme="dark"] body {
 .app-shell .raspored-icon-btn:hover,
 .app-shell .finansije-year-btn:hover:not(:disabled),
 .app-shell .toolbar .raspored-icon-btn:hover {
-  box-shadow: 0 0 16px rgba(255, 43, 214, 0.45) !important;
-  transform: translateY(-2px) !important;
+  box-shadow:
+    var(--shadow-click-hover),
+    0 0 12px rgba(255, 43, 214, 0.22) !important;
+  transform: translateY(-1px) !important;
 }
 
 .app-shell .finansije-tab.is-active,
 .app-shell .raspored-chip.is-active {
   box-shadow:
-    0 0 16px rgba(255, 43, 214, 0.4),
-    0 5px 0 var(--neon-cyan) !important;
-  transform: translateY(-2px) !important;
+    var(--shadow-click-hover),
+    0 0 12px rgba(255, 43, 214, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Ever-so-slight drop on interactive controls */
+.app-shell .raspored-icon-btn,
+.app-shell .finansije-year-btn:not(:disabled),
+.app-shell .finansije-tab,
+.app-shell .top-nav-link,
+.app-shell .event-page-back,
+.app-shell .event-finance-btn,
+.app-shell .event-page-full-details,
+.app-shell .field-select-trigger,
+.app-shell .menu-select > .raspored-icon-btn,
+.app-shell .band-home-back,
+.app-shell .band-home-info,
+.app-shell .band-cal-nav-btn,
+.app-shell .raspored-band-tile,
+.app-shell .app-band-tiles-open,
+.app-shell .confirm-btn,
+.app-shell .termin-form-actions button,
+.app-shell .login-google,
+.app-shell .user-avatar-btn {
+  box-shadow: var(--shadow-click) !important;
+}
+
+.app-shell .finansije-tab:hover,
+.app-shell .top-nav-link:hover,
+.app-shell .event-page-back:hover,
+.app-shell .event-finance-btn:hover:not(:disabled),
+.app-shell .field-select-trigger:hover,
+.app-shell .band-home-back:hover,
+.app-shell .band-home-info:hover,
+.app-shell .band-cal-nav-btn:hover,
+.app-shell .raspored-band-tile:hover,
+.app-shell .app-band-tiles-open:hover,
+.app-shell .confirm-btn:hover,
+.app-shell .termin-form-actions button:hover,
+.app-shell .login-google:hover {
+  box-shadow: var(--shadow-click-hover) !important;
+}
+
+.app-shell .raspored-icon-btn:disabled,
+.app-shell .finansije-year-btn:disabled,
+.app-shell .event-finance-btn:disabled,
+.app-shell .event-page-full-details:disabled {
+  box-shadow: none !important;
 }
 
 .app-shell[data-theme="dark"] .finansije-tab.is-active,
@@ -4913,16 +5042,18 @@ html[data-theme="dark"] body {
 
 .event-page-lock {
   align-items: center;
+  border: 1px solid transparent;
   color: var(--muted);
   display: inline-flex;
-  height: 1.85rem;
+  flex-shrink: 0;
+  height: 2.35rem;
   justify-content: center;
-  width: 1.85rem;
+  width: 2.35rem;
 }
 
 .event-page-lock svg {
-  height: 0.95rem;
-  width: 0.95rem;
+  height: 1.05rem;
+  width: 1.05rem;
 }
 
 .event-page-panel {
@@ -5073,4 +5204,345 @@ html[data-theme="dark"] body {
   .event-page-fields {
     grid-template-columns: 1fr;
   }
+}
+
+/* Event Finansije — compact: name ····· amount · Postavi · Podrazumevano */
+.event-page-section-title {
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  display: flex;
+  font-size: 0.92rem;
+  font-weight: 800;
+  gap: 0.4rem;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.45rem;
+}
+
+.event-page-section-title svg {
+  flex-shrink: 0;
+  height: 1rem;
+  opacity: 0.85;
+  width: 1rem;
+}
+
+.event-page-finance {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.event-finance-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.35rem 0;
+}
+
+.event-finance-status.is-error {
+  color: var(--danger, #c23b3b);
+}
+
+.event-finance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.event-finance-row {
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  display: flex;
+  gap: 0.45rem;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: 0.45rem 0;
+}
+
+.event-finance-row:last-child {
+  border-bottom: 0;
+}
+
+.event-finance-name {
+  flex: 1 1 auto;
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 0.75rem;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-finance-amount {
+  display: block;
+  flex-shrink: 0;
+  margin: 0;
+  width: auto;
+}
+
+.event-finance-amount input {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  max-width: 3.6rem;
+  min-height: 2.15rem;
+  padding: 0.3rem 0.35rem;
+  text-align: center;
+  width: 3.6rem;
+}
+
+.event-finance-btn {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  flex-shrink: 0;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em;
+  min-height: 2.15rem;
+  padding: 0.3rem 0.45rem !important;
+  transform: none !important;
+  white-space: nowrap;
+}
+
+.event-finance-btn:hover:not(:disabled) {
+  background: var(--surface-2) !important;
+  border-color: var(--brand, #ff2bd6) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.event-finance-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.event-finance-btn-set {
+  background: var(--ink) !important;
+  border-color: var(--ink) !important;
+  color: var(--on-ink) !important;
+}
+
+.event-finance-btn-set:hover:not(:disabled) {
+  background: var(--ink) !important;
+  border-color: var(--brand, #ff2bd6) !important;
+  color: var(--on-ink) !important;
+}
+
+@media (max-width: 420px) {
+  .event-finance-name {
+    padding-right: 0.5rem;
+  }
+
+  .event-finance-btn {
+    font-size: 0.68rem !important;
+    padding: 0.28rem 0.35rem !important;
+  }
+}
+
+.event-page-section-title-spaced {
+  margin-top: 1.35rem;
+}
+
+.event-page-empty {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  justify-content: center;
+  min-height: 9rem;
+  padding: 1rem 0.5rem;
+  text-align: center;
+}
+
+.event-page-empty-icon {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  height: 2.5rem;
+  justify-content: center;
+  margin-bottom: 0.25rem;
+  opacity: 0.7;
+  width: 2.5rem;
+}
+
+.event-page-empty-icon svg {
+  height: 1.55rem;
+  width: 1.55rem;
+}
+
+.event-page-fee-row dd.is-set {
+  color: #15803d;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.event-page-fee-row dd.is-empty {
+  color: var(--muted);
+}
+
+.app-shell[data-theme="dark"] .event-page-fee-row dd.is-set {
+  color: var(--neon-lime, #b8ff00);
+}
+
+.event-page-full-details.is-muted,
+.event-page-full-details:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.event-page-full-details.is-muted:hover,
+.event-page-full-details:disabled:hover {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+  color: inherit !important;
+}
+
+.event-page-full-details-soon {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-left: 0.15rem;
+  text-transform: uppercase;
+}
+
+.finansije-page-btn {
+  align-items: center;
+  display: inline-flex !important;
+  justify-content: center;
+  line-height: 0;
+  min-width: 2.35rem;
+  padding: 0.35rem !important;
+}
+
+.finansije-page-btn svg {
+  display: block;
+  height: 1.05rem;
+  width: 1.05rem;
+}
+
+.finansije-date-phase.is-held {
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+  font-weight: 800;
+}
+
+.finansije-date-phase.is-upcoming {
+  color: #0284c7;
+}
+
+.app-shell[data-theme="dark"] .finansije-date-phase.is-upcoming {
+  color: var(--neon-cyan, #00f6ff);
+}
+
+.finansije .raspored-fee-unpaid {
+  color: color-mix(in srgb, var(--ink) 88%, #dc2626 12%) !important;
+  opacity: 0.92;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-unpaid {
+  color: color-mix(in srgb, var(--ink) 70%, #f97066 30%) !important;
+}
+
+.event-expenses {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.event-expenses-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.event-expenses-row-top,
+.event-expenses-row-bottom {
+  align-items: stretch;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.event-expenses-amount {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+}
+
+.event-expenses-amount input,
+.event-expenses-opis input {
+  width: 100%;
+}
+
+.event-expenses-row-top .field-select {
+  flex: 0 0 5.5rem;
+  min-width: 5.5rem;
+}
+
+.event-expenses-opis {
+  display: block;
+  margin: 0;
+  width: 100%;
+}
+
+.event-expenses-row-bottom .field-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.event-expenses-row-bottom .event-finance-btn {
+  flex-shrink: 0;
+  min-width: 4.5rem;
+}
+
+.event-expenses-empty {
+  border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  text-align: center;
+}
+
+.event-expenses-item {
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.45rem 0;
+}
+
+.event-expenses-item:last-child {
+  border-bottom: 0;
+}
+
+.event-expenses-item-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.event-expenses-item-amount {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.event-expenses-item-desc {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-expenses-item-payee {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
 }

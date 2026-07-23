@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   formatEur,
   formatScheduleDateParts,
@@ -9,6 +9,8 @@ import {
   todayText,
 } from "./calculations.js";
 import { useConfirm } from "./confirmDialog.jsx";
+import EventFinancePanel from "./EventFinancePanel.jsx";
+import EventExpensesPanel from "./EventExpensesPanel.jsx";
 
 const TABS = [
   { id: "osnovno", label: "Osnovno" },
@@ -17,7 +19,16 @@ const TABS = [
   { id: "finansije", label: "Finansije", leadOnly: true },
 ];
 
-export default function EventPage({ event, band = null, settings = {}, onBack, onUpdate, showToast }) {
+export default function EventPage({
+  event,
+  band = null,
+  settings = {},
+  onBack,
+  onUpdate,
+  onRefreshSchedule,
+  leaveSignal = 0,
+  showToast,
+}) {
   const { confirm } = useConfirm();
   const [tab, setTab] = useState("osnovno");
   const [editing, setEditing] = useState(false);
@@ -25,6 +36,12 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState(() => formFromEvent(event));
   const [initialForm, setInitialForm] = useState(() => formFromEvent(event));
+  const lastLeaveSignalRef = useRef(leaveSignal);
+  const editingRef = useRef(editing);
+  const dirtyRef = useRef(false);
+  const formRef = useRef(form);
+  const savingRef = useRef(saving);
+  const eventRef = useRef(event);
 
   const memberRole = band?.memberRole || "member";
   const canSeeFinance = memberRole === "owner" || memberRole === "lead";
@@ -51,6 +68,12 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
     form.venue !== initialForm.venue ||
     form.note !== initialForm.note;
 
+  editingRef.current = editing;
+  dirtyRef.current = isDirty;
+  formRef.current = form;
+  savingRef.current = saving;
+  eventRef.current = event;
+
   useEffect(() => {
     const next = formFromEvent(event);
     setForm(next);
@@ -62,6 +85,13 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
   useEffect(() => {
     if (tab === "finansije" && !canSeeFinance) setTab("osnovno");
   }, [tab, canSeeFinance]);
+
+  useEffect(() => {
+    if (leaveSignal === lastLeaveSignalRef.current) return;
+    lastLeaveSignalRef.current = leaveSignal;
+    void requestLeave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to nav leave signals
+  }, [leaveSignal]);
 
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -95,70 +125,97 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
     setEditing(false);
   }
 
-  async function requestBack() {
-    if (editing && isDirty) {
-      const confirmed = await confirm({
-        title: "Nesačuvane izmene",
-        message: "Imaš nesačuvane izmene. Napustiti stranicu bez čuvanja?",
-        confirmLabel: "Napusti",
-        cancelLabel: "Ostani",
-        danger: true,
-      });
-      if (!confirmed) return;
-    }
-    onBack?.();
-  }
+  function validateForm(current) {
+    const date = String(current.date || "").trim();
+    const city = String(current.city || "").trim();
+    const venue = String(current.venue || "").trim();
+    const note = String(current.note || "").trim();
 
-  async function saveEdit(submitEvent) {
-    submitEvent?.preventDefault?.();
-    if (saving || locked) return;
-
-    const date = String(form.date || "").trim();
-    const city = String(form.city || "").trim();
-    const venue = String(form.venue || "").trim();
-    const note = String(form.note || "").trim();
-
-    if (!date) {
-      setFormError("Datum je obavezan.");
-      return;
-    }
-
+    if (!date) return { error: "Datum je obavezan." };
     const parsed = parseDate(date);
     if (Number.isNaN(parsed.getTime())) {
-      setFormError("Datum nije ispravan. Izaberi datum iz kalendara.");
-      return;
+      return { error: "Datum nije ispravan. Izaberi datum iz kalendara." };
     }
-
     if (!city && !venue && !note) {
-      setFormError("Unesi bar mesto, lokal ili napomenu.");
-      return;
+      return { error: "Unesi bar mesto, lokal ili napomenu." };
+    }
+    return { date, city, venue, note };
+  }
+
+  async function persistEdit({ askConfirm = true } = {}) {
+    if (savingRef.current || locked) return false;
+    const current = formRef.current;
+    const validated = validateForm(current);
+    if (validated.error) {
+      setFormError(validated.error);
+      setTab("osnovno");
+      setEditing(true);
+      return false;
     }
 
-    if (!isDirty) {
-      setFormError("Nema izmena za čuvanje.");
-      return;
+    const { date, city, venue, note } = validated;
+    if (!dirtyRef.current) {
+      setEditing(false);
+      return true;
     }
 
-    const confirmed = await confirm({
-      title: "Sačuvati izmene?",
-      message: `${date}${city ? ` — ${city}` : ""}`,
-      confirmLabel: "Sačuvaj",
-      cancelLabel: "Otkaži",
-    });
-    if (!confirmed) return;
+    if (askConfirm) {
+      const confirmed = await confirm({
+        title: "Sačuvati izmene?",
+        message: `${date}${city ? ` — ${city}` : ""}`,
+        confirmLabel: "Sačuvaj",
+        cancelLabel: "Otkaži",
+      });
+      if (!confirmed) return false;
+    }
 
     try {
       setSaving(true);
       setFormError("");
-      await onUpdate?.(event.id, { date, city, venue, note });
+      await onUpdate?.(eventRef.current.id, { date, city, venue, note });
       setInitialForm({ date, city, venue, note });
       setForm({ date, city, venue, note });
       setEditing(false);
+      return true;
     } catch (error) {
       setFormError(error.message || "Nije moguće sačuvati termin.");
+      setTab("osnovno");
+      setEditing(true);
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  /** Back / Raspored: prompt Sačuvaj or Otkaži when Osnovno edits are dirty. */
+  async function requestLeave() {
+    if (savingRef.current) return false;
+
+    if (editingRef.current && dirtyRef.current) {
+      const save = await confirm({
+        title: "Nesačuvane izmene",
+        message: "Imaš nesačuvane izmene. Sačuvati pre povratka na raspored?",
+        confirmLabel: "Sačuvaj",
+        cancelLabel: "Otkaži",
+      });
+      if (!save) return false;
+      const saved = await persistEdit({ askConfirm: false });
+      if (!saved) return false;
+    } else if (editingRef.current) {
+      setEditing(false);
+    }
+
+    onBack?.();
+    return true;
+  }
+
+  async function requestBack() {
+    await requestLeave();
+  }
+
+  async function saveEdit(submitEvent) {
+    submitEvent?.preventDefault?.();
+    await persistEdit({ askConfirm: true });
   }
 
   if (!event) {
@@ -198,7 +255,7 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
           <p className="event-page-sub">{[event.venue, bandName].filter(Boolean).join(" · ") || "—"}</p>
         </div>
         {locked ? (
-          <span className="event-page-lock" title="Prošli termin je zaključan">
+          <span className="event-page-lock" title="Prošli termin je zaključan" aria-label="Zaključan termin">
             <LockIcon />
           </span>
         ) : (
@@ -327,7 +384,7 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
               </div>
               <div className="event-page-fields-full event-page-fee-row">
                 <dt>Moj honorar</dt>
-                <dd>{hasFee ? formatEur(myFee) : "—"}</dd>
+                <dd className={hasFee ? "is-set" : "is-empty"}>{hasFee ? formatEur(myFee) : "—"}</dd>
               </div>
             </dl>
           )}
@@ -336,37 +393,72 @@ export default function EventPage({ event, band = null, settings = {}, onBack, o
 
       {tab === "tehnicki" ? (
         <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Tehnički">
-          <h3 className="event-page-stub-title">Tehnički</h3>
-          <p className="event-page-stub-copy">Tehnički detalji termina — uskoro.</p>
+          <div className="event-page-empty">
+            <span className="event-page-empty-icon" aria-hidden="true">
+              <TechIcon />
+            </span>
+            <h3 className="event-page-stub-title">Tehnički</h3>
+            <p className="event-page-stub-copy">Rider, stage i tehnika — uskoro.</p>
+          </div>
         </section>
       ) : null}
 
       {tab === "show" ? (
         <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Show">
-          <h3 className="event-page-stub-title">Show</h3>
-          <p className="event-page-stub-copy">Setlista i show materijal — uskoro.</p>
+          <div className="event-page-empty">
+            <span className="event-page-empty-icon" aria-hidden="true">
+              <ShowIcon />
+            </span>
+            <h3 className="event-page-stub-title">Show</h3>
+            <p className="event-page-stub-copy">Setlista i show materijal — uskoro.</p>
+          </div>
         </section>
       ) : null}
 
       {tab === "finansije" && canSeeFinance ? (
-        <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Finansije">
-          <h3 className="event-page-stub-title">Finansije</h3>
-          <p className="event-page-stub-copy">Pregled finansija termina za vlasnika i lead — uskoro.</p>
+        <section className="event-page-panel event-page-finance" role="tabpanel" aria-label="Finansije">
+          <h3 className="event-page-section-title">
+            <HonorarIcon />
+            <span>Honorari</span>
+          </h3>
+          <EventFinancePanel
+            eventId={event.id}
+            bandId={event.bandId || band?.id}
+            showToast={showToast}
+            onChanged={async () => {
+              await onRefreshSchedule?.();
+            }}
+          />
+          <h3 className="event-page-section-title event-page-section-title-spaced">
+            <ExpenseIcon />
+            <span>Troškovi</span>
+          </h3>
+          <EventExpensesPanel
+            eventId={event.id}
+            bandId={event.bandId || band?.id}
+            showToast={showToast}
+            onChanged={async () => {
+              await onRefreshSchedule?.();
+            }}
+          />
         </section>
       ) : null}
 
-      <div className="event-page-footer">
-        <button
-          type="button"
-          className="event-page-full-details"
-          aria-label="Kompletni detalji"
-          title="Kompletni detalji"
-          onClick={() => showToast?.("Kompletni detalji — uskoro")}
-        >
-          <DetailsIcon />
-          <span>Kompletni detalji</span>
-        </button>
-      </div>
+      {tab === "osnovno" ? (
+        <div className="event-page-footer">
+          <button
+            type="button"
+            className="event-page-full-details is-muted"
+            aria-label="Kompletni detalji — uskoro"
+            title="Uskoro"
+            disabled
+          >
+            <DetailsIcon />
+            <span>Kompletni detalji</span>
+            <em className="event-page-full-details-soon">uskoro</em>
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -438,6 +530,60 @@ function DetailsIcon() {
       <circle cx="5" cy="7" r="1.1" fill="currentColor" />
       <circle cx="5" cy="12" r="1.1" fill="currentColor" />
       <circle cx="5" cy="17" r="1.1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function TechIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="4" y="6" width="16" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 10h8M8 14h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ShowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M5 7h14v11H5zM9 7V5.5A3 3 0 0 1 15 5.5V7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M9 12h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function HonorarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="7.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 8v8M14.5 9.5c0-1-1.1-1.75-2.5-1.75s-2.5.75-2.5 1.75 1.1 1.75 2.5 1.75 2.5.75 2.5 1.75-1.1 1.75-2.5 1.75-2.5-.75-2.5-1.75"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ExpenseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M6 7h12v12H6zM9 7V5.8A3 3 0 0 1 15 5.8V7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M9 12h6M9 15h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
