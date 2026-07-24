@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
-import { calculate, filteredClaimEur, formatEur, formatRsd, formatScheduleDateParts, parseDate } from "./calculations.js";
+import { calculate, expectedFutureEur, formatEur, formatRsd, formatScheduleDateParts, parseDate, unpaidClaimEur } from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
@@ -95,8 +95,9 @@ export default function ReportPage({
     });
   }, [bandRows, search, statusFilter, viewYear, dateSort]);
 
-  /** Potražuje follows Datumi filters (status, search, band, year) — including Buduće totals. */
-  const claimEur = useMemo(() => filteredClaimEur(filteredRows), [filteredRows]);
+  /** Potražuje = held unpaid; Očekivano = future totals. Both follow Datumi filters. */
+  const claimEur = useMemo(() => unpaidClaimEur(filteredRows), [filteredRows]);
+  const expectedEur = useMemo(() => expectedFutureEur(filteredRows), [filteredRows]);
 
   useEffect(() => {
     setListPage(0);
@@ -232,7 +233,15 @@ export default function ReportPage({
       <div className="finansije-year-meta-bar">
         <span className="finansije-year-meta">
           {financeMode === "band" ? <em className="finansije-mode-tag">Bend mod</em> : null}
-          Potražuje <strong>{formatEur(claimEur)}</strong>
+          <span className="finansije-meta-item">
+            Potražuje <strong>{formatEur(claimEur)}</strong>
+          </span>
+          <span className="finansije-meta-sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="finansije-meta-item">
+            Očekivano <strong>{formatEur(expectedEur)}</strong>
+          </span>
         </span>
       </div>
 

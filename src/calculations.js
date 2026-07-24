@@ -145,20 +145,11 @@ export function unpaidClaimEur(rows) {
   }, 0);
 }
 
-/**
- * Potražuje for the currently filtered Datumi list:
- * - held unpaid/partial → remaining amount
- * - future with a set amount → full totalEur (not yet settled)
- * - paid / zero → 0
- */
-export function filteredClaimEur(rows) {
+/** Sum of set amounts on future (not yet held) dates — Očekivano. */
+export function expectedFutureEur(rows) {
   return (rows || []).reduce((sum, row) => {
-    if (!row?.hasDate) return sum;
-    if (!row.done) return sum + Math.max(0, numberValue(row.totalEur));
-    if (row.paymentClass === "unpaid" || row.paymentClass === "partial") {
-      return sum + numberValue(row.paymentStatus);
-    }
-    return sum;
+    if (!row?.hasDate || row.done) return sum;
+    return sum + Math.max(0, numberValue(row.totalEur));
   }, 0);
 }
 

@@ -2708,13 +2708,21 @@ td input[data-field="note"] {
 }
 
 .finansije-year-meta {
+  align-items: baseline;
   color: var(--muted);
+  display: inline-flex;
+  flex-wrap: wrap;
   font-size: 0.85rem;
+  gap: 0.35rem 0.45rem;
   margin-left: auto;
 }
 
 .finansije-year-meta strong {
   color: var(--ink);
+}
+
+.finansije-meta-sep {
+  opacity: 0.55;
 }
 
 .finansije-tabs {
