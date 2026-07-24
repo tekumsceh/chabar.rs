@@ -2331,12 +2331,24 @@ td input[data-field="note"] {
 }
 
 .raspored-fee-mark {
-  color: #16a34a;
   opacity: 1;
 }
 
-.app-shell[data-theme="dark"] .raspored-fee-mark {
+.raspored-fee-mark.is-set {
+  color: #16a34a;
+}
+
+.raspored-fee-mark.is-unset {
+  color: var(--muted);
+  opacity: 0.22;
+}
+
+.app-shell[data-theme="dark"] .raspored-fee-mark.is-set {
   color: #4ade80;
+}
+
+.app-shell[data-theme="dark"] .raspored-fee-mark.is-unset {
+  opacity: 0.18;
 }
 
 .raspored-lock svg,

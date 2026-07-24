@@ -440,15 +440,13 @@ export default function SchedulePage({
                   <span className="raspored-band">{row.bandName || ""}</span>
                 </button>
                 <div className="raspored-actions">
-                  {feeMarked ? (
-                    <span
-                      className="raspored-fee-mark"
-                      title="Honorar postavljen"
-                      aria-label="Honorar postavljen"
-                    >
-                      <BillIcon />
-                    </span>
-                  ) : null}
+                  <span
+                    className={`raspored-fee-mark ${feeMarked ? "is-set" : "is-unset"}`}
+                    title={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
+                    aria-label={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
+                  >
+                    <BillIcon />
+                  </span>
                   {row.done ? (
                     <span className="raspored-lock" title="Prošli termin je zaključan">
                       <LockIcon />
