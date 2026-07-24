@@ -95,9 +95,17 @@ export default function ReportPage({
     });
   }, [bandRows, search, statusFilter, viewYear, dateSort]);
 
-  /** Potražuje = held unpaid; Očekivano = future totals. Both follow Datumi filters. */
+  /** Potražuje follows list filters (held unpaid). Očekivano = future dates only (year/band/search). */
   const claimEur = useMemo(() => unpaidClaimEur(filteredRows), [filteredRows]);
-  const expectedEur = useMemo(() => expectedFutureEur(filteredRows), [filteredRows]);
+  const expectedEur = useMemo(() => {
+    const futureRows = bandRows.filter((row) => {
+      const year = yearFromDate(row.date, row.parsedDate);
+      if (year !== viewYear) return false;
+      if (!row.hasDate || row.done) return false;
+      return matchesFilters(row, search, "all");
+    });
+    return expectedFutureEur(futureRows);
+  }, [bandRows, viewYear, search]);
 
   useEffect(() => {
     setListPage(0);
@@ -240,7 +248,7 @@ export default function ReportPage({
           <span className="finansije-meta-sep" aria-hidden="true">
             ·
           </span>
-          <span className="finansije-meta-item finansije-meta-expected" title="Zbir budućih datuma sa postavljenim iznosom">
+          <span className="finansije-meta-item finansije-meta-expected" title="Samo budući datumi sa postavljenim iznosom">
             <span className="finansije-meta-label">Očekivano</span>{" "}
             <strong>{formatEur(expectedEur)}</strong>
           </span>
