@@ -436,6 +436,7 @@ export default function EventPage({
           <EventExpensesPanel
             eventId={event.id}
             bandId={event.bandId || band?.id}
+            readOnly={locked}
             showToast={showToast}
             onChanged={async () => {
               await onRefreshSchedule?.();

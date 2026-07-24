@@ -233,14 +233,16 @@ export default function ReportPage({
       <div className="finansije-year-meta-bar">
         <span className="finansije-year-meta">
           {financeMode === "band" ? <em className="finansije-mode-tag">Bend mod</em> : null}
-          <span className="finansije-meta-item">
-            Potražuje <strong>{formatEur(claimEur)}</strong>
+          <span className="finansije-meta-item finansije-meta-owed" title="Neplaćeno na održanim datumima">
+            <span className="finansije-meta-label">Potražuje</span>{" "}
+            <strong>{formatEur(claimEur)}</strong>
           </span>
           <span className="finansije-meta-sep" aria-hidden="true">
             ·
           </span>
-          <span className="finansije-meta-item">
-            Očekivano <strong>{formatEur(expectedEur)}</strong>
+          <span className="finansije-meta-item finansije-meta-expected" title="Zbir budućih datuma sa postavljenim iznosom">
+            <span className="finansije-meta-label">Očekivano</span>{" "}
+            <strong>{formatEur(expectedEur)}</strong>
           </span>
         </span>
       </div>
@@ -510,12 +512,19 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
                 </strong>
               </li>
               {expenseItems.map((item) => (
-                <li key={item.id || item.label}>
-                  <span>{item.label || "Trošak"}</span>
+                <li key={item.id || `${item.description}-${item.amount}`}>
+                  <span>
+                    {item.description || "Trošak"}
+                    {item.payeeName ? (
+                      <small className="finance-detail-payee"> · kome: {item.payeeName}</small>
+                    ) : null}
+                  </span>
                   <strong>
                     {item.currency === "RSD"
                       ? formatRsd(numberish(item.amount))
-                      : formatEur(numberish(item.amount))}
+                      : item.currency && item.currency !== "EUR"
+                        ? `${formatNumberish(item.amount)} ${item.currency}`
+                        : formatEur(numberish(item.amount))}
                     {item.currency === "RSD" ? (
                       <small> ({formatEur(numberish(item.amount) / (rate || 1))})</small>
                     ) : null}
@@ -570,6 +579,13 @@ function numberish(value) {
   if (typeof value === "number") return value;
   const parsed = Number.parseFloat(String(value ?? "").replace(",", "."));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatNumberish(value) {
+  return new Intl.NumberFormat("sr-RS", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(numberish(value));
 }
 
 /** Short note: did the band receive money for this date (not a full payment ledger). */

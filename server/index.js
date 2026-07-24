@@ -1495,19 +1495,61 @@ async function getAllScheduleEventsForUser(userId) {
 async function getMyFinanceEvents(userId) {
   const result = await query(
     `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.note,
-            f.price_eur, f.transport_rsd
-     FROM event_member_finance f
-     JOIN events e ON e.id = f.event_id
+            COALESCE(f.price_eur, 0) AS price_eur,
+            COALESCE(f.transport_rsd, 0) AS transport_rsd
+     FROM events e
      JOIN bands b ON b.id = e.band_id
      JOIN band_members bm ON bm.band_id = e.band_id AND bm.user_id = :userId
-     WHERE f.user_id = :userId
-       AND ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
+     LEFT JOIN event_member_finance f
+       ON f.event_id = e.id AND f.user_id = :userId
+     WHERE ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
+       AND (
+         f.user_id IS NOT NULL
+         OR EXISTS (
+           SELECT 1 FROM event_expenses x
+           WHERE x.event_id = e.id AND x.payee_kind = 'member' AND x.payee_user_id = :userId
+         )
+       )
      ORDER BY e.sort_order, e.id`,
     { userId },
   );
+
+  if (!result.rows.length) return [];
+
+  const eventIds = result.rows.map((row) => row.id);
+  const expensesResult = await query(
+    `SELECT x.id, x.event_id, x.amount, x.currency, x.description, x.payee_kind, x.payee_user_id,
+            CASE
+              WHEN x.payee_kind = 'band' THEN 'Bend'
+              WHEN x.payee_kind = 'external' THEN 'Spoljnji'
+              ELSE COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Član')
+            END AS payee_name
+     FROM event_expenses x
+     LEFT JOIN profiles p ON p.id = x.payee_user_id
+     WHERE x.event_id = ANY(:eventIds::int[])
+     ORDER BY x.event_id, x.id`,
+    { eventIds },
+  );
+
+  const expensesByEvent = new Map();
+  for (const row of expensesResult.rows) {
+    const list = expensesByEvent.get(row.event_id) || [];
+    list.push({
+      id: row.id,
+      amount: Number(row.amount) || 0,
+      currency: row.currency || "EUR",
+      description: row.description || "",
+      payeeKind: row.payee_kind,
+      payeeUserId: row.payee_user_id || null,
+      payeeName: row.payee_name || null,
+    });
+    expensesByEvent.set(row.event_id, list);
+  }
+
   return result.rows.map((row) => ({
     ...mapEventRow(row),
     bandName: row.band_name,
+    expenseItems: expensesByEvent.get(row.id) || [],
   }));
 }
 
