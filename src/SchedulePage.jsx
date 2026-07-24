@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   formatScheduleDateParts,
   fromIsoDate,
+  numberValue,
   parseDate,
   sameMonth,
   toIsoDate,
@@ -414,6 +415,8 @@ export default function SchedulePage({
               const dateParts = formatScheduleDateParts(row.date);
               const band = bandsById.get(row.bandId);
               const bandColor = resolveBandColor(band, row.bandId || row.bandName || "");
+              const feeMarked =
+                numberValue(row.priceEur) > 0 || numberValue(row.defaultPriceEur) > 0;
               return (
               <li
                 key={row.id}
@@ -437,6 +440,15 @@ export default function SchedulePage({
                   <span className="raspored-band">{row.bandName || ""}</span>
                 </button>
                 <div className="raspored-actions">
+                  {feeMarked ? (
+                    <span
+                      className="raspored-fee-mark"
+                      title="Honorar postavljen"
+                      aria-label="Honorar postavljen"
+                    >
+                      <BillIcon />
+                    </span>
+                  ) : null}
                   {row.done ? (
                     <span className="raspored-lock" title="Prošli termin je zaključan">
                       <LockIcon />
@@ -781,6 +793,18 @@ function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Dollar-bill mark: fee (or default fee) is set for this user on the date. */
+function BillIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="2.5" y="6" width="19" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="6.2" cy="12" r="1" fill="currentColor" />
+      <circle cx="17.8" cy="12" r="1" fill="currentColor" />
     </svg>
   );
 }

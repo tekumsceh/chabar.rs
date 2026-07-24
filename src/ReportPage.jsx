@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
-import { calculate, formatEur, formatRsd, formatScheduleDateParts, parseDate, unpaidClaimEur } from "./calculations.js";
+import { calculate, filteredClaimEur, formatEur, formatRsd, formatScheduleDateParts, parseDate } from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
@@ -40,7 +40,7 @@ export default function ReportPage({
   const DATES_PAGE_SIZE = 20;
 
   // Waterfall always runs on the full loaded ledger (member: all bands; band-mode: that band).
-  // Band tiles only scopes the list + Potražuje — never re-runs calculate with a partial payment pool.
+  // Band tiles only scopes the list — never re-runs calculate with a partial payment pool.
   const calculations = useMemo(
     () => calculate(events, payments, settings),
     [events, payments, settings],
@@ -50,12 +50,6 @@ export default function ReportPage({
     if (!activeBandId || activeBandId === allBandsId) return calculations.rows;
     return calculations.rows.filter((row) => row.bandId === activeBandId);
   }, [calculations.rows, activeBandId, allBandsId]);
-
-  /** Potražuje for the selected band + year (statuses still come from the full-ledger waterfall). */
-  const claimEur = useMemo(() => {
-    const yearRows = bandRows.filter((row) => yearFromDate(row.date, row.parsedDate) === viewYear);
-    return unpaidClaimEur(yearRows);
-  }, [bandRows, viewYear]);
 
   const bandsById = useMemo(() => new Map(bands.map((band) => [band.id, band])), [bands]);
 
@@ -100,6 +94,9 @@ export default function ReportPage({
       return (a.parsedDate.getTime() - b.parsedDate.getTime()) * direction;
     });
   }, [bandRows, search, statusFilter, viewYear, dateSort]);
+
+  /** Potražuje follows Datumi filters (status, search, band, year) — including Buduće totals. */
+  const claimEur = useMemo(() => filteredClaimEur(filteredRows), [filteredRows]);
 
   useEffect(() => {
     setListPage(0);

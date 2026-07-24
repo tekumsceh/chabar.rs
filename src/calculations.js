@@ -136,12 +136,29 @@ export function calculate(events, payments, settings) {
   };
 }
 
-/** Sum of unpaid + partial remainders on due rows (Potražuje). */
+/** Sum of unpaid + partial remainders on due rows (held Potražuje). */
 export function unpaidClaimEur(rows) {
   return (rows || []).reduce((sum, row) => {
     if (!row?.done) return sum;
     if (row.paymentClass !== "unpaid" && row.paymentClass !== "partial") return sum;
     return sum + numberValue(row.paymentStatus);
+  }, 0);
+}
+
+/**
+ * Potražuje for the currently filtered Datumi list:
+ * - held unpaid/partial → remaining amount
+ * - future with a set amount → full totalEur (not yet settled)
+ * - paid / zero → 0
+ */
+export function filteredClaimEur(rows) {
+  return (rows || []).reduce((sum, row) => {
+    if (!row?.hasDate) return sum;
+    if (!row.done) return sum + Math.max(0, numberValue(row.totalEur));
+    if (row.paymentClass === "unpaid" || row.paymentClass === "partial") {
+      return sum + numberValue(row.paymentStatus);
+    }
+    return sum;
   }, 0);
 }
 
