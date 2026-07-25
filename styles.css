@@ -2088,7 +2088,8 @@ td input[data-field="note"] {
 
 .raspored-panel::-webkit-scrollbar,
 .settings-page::-webkit-scrollbar,
-.modal-panel::-webkit-scrollbar {
+.modal-panel::-webkit-scrollbar,
+.fade-scroll-viewport::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
@@ -2108,10 +2109,17 @@ td input[data-field="note"] {
 
 .fade-scroll-wrap > .raspored-panel,
 .fade-scroll-wrap > .settings-page,
-.fade-scroll-wrap > .modal-panel {
+.fade-scroll-wrap > .modal-panel,
+.fade-scroll-wrap > .fade-scroll-viewport {
   flex: 1;
   min-height: 0;
   width: 100%;
+}
+
+.fade-scroll-viewport {
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .fade-scroll-thumb {
@@ -5494,14 +5502,23 @@ html[data-theme="dark"] body {
   margin-left: auto;
 }
 
+.event-page-day-details-fade {
+  flex: 1;
+  min-height: 0;
+}
+
 .event-page-day-details-wrap {
   background: var(--panel, var(--surface));
   border: 1px solid var(--line);
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
   -webkit-overflow-scrolling: touch;
   padding: 0.75rem 0.85rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.event-page-day-details-wrap::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .event-day-details {

@@ -12,6 +12,7 @@ import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
 import EventDayDetails from "./EventDayDetails.jsx";
+import FadeScroll from "./FadeScroll.jsx";
 
 const TABS = [
   { id: "osnovno", label: "Osnovno" },
@@ -473,14 +474,14 @@ export default function EventPage({
             </em>
           </button>
           {detailsOpen ? (
-            <div className="event-page-day-details-wrap">
+            <FadeScroll className="event-page-day-details-fade" viewportClassName="event-page-day-details-wrap">
               <EventDayDetails
                 eventId={event.id}
                 bandId={event.bandId || band?.id}
                 readOnly={locked}
                 showToast={showToast}
               />
-            </div>
+            </FadeScroll>
           ) : null}
         </div>
       ) : null}
