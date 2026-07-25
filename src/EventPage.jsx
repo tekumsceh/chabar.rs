@@ -11,6 +11,7 @@ import {
 import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
+import EventDayDetails from "./EventDayDetails.jsx";
 
 const TABS = [
   { id: "osnovno", label: "Osnovno" },
@@ -32,6 +33,7 @@ export default function EventPage({
   const { confirm } = useConfirm();
   const [tab, setTab] = useState("osnovno");
   const [editing, setEditing] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState(() => formFromEvent(event));
@@ -79,6 +81,7 @@ export default function EventPage({
     setForm(next);
     setInitialForm(next);
     setEditing(false);
+    setDetailsOpen(false);
     setFormError("");
   }, [event?.id, event?.date, event?.city, event?.venue, event?.note, event?.priceEur]);
 
@@ -449,15 +452,28 @@ export default function EventPage({
         <div className="event-page-footer">
           <button
             type="button"
-            className="event-page-full-details is-muted"
-            aria-label="Kompletni detalji — uskoro"
-            title="Uskoro"
-            disabled
+            className={`event-page-full-details ${detailsOpen ? "is-open" : ""}`}
+            aria-label={detailsOpen ? "Zatvori kompletne detalje" : "Kompletni detalji"}
+            aria-expanded={detailsOpen}
+            title="Kompletni detalji"
+            onClick={() => setDetailsOpen((open) => !open)}
           >
             <DetailsIcon />
             <span>Kompletni detalji</span>
-            <em className="event-page-full-details-soon">uskoro</em>
+            <em className="event-page-full-details-chevron" aria-hidden="true">
+              {detailsOpen ? "▴" : "▾"}
+            </em>
           </button>
+          {detailsOpen ? (
+            <div className="event-page-day-details-wrap">
+              <EventDayDetails
+                eventId={event.id}
+                bandId={event.bandId || band?.id}
+                readOnly={locked}
+                showToast={showToast}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

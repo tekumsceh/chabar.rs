@@ -1102,6 +1102,113 @@ app.delete(
   },
 );
 
+const emptyDayDetails = {
+  gatheringTime: "",
+  departureTime: "",
+  lodgingArrivalTime: "",
+  loadInTime: "",
+  setUpTime: "",
+  soundcheckTime: "",
+  soundcheckDurationMin: null,
+  showStartTime: "",
+  showEndTime: "",
+  curfewTime: "",
+  leaveTime: "",
+};
+
+app.get("/api/events/:id/day-details", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: req.params.id, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const result = await query(
+      `SELECT gathering_time, departure_time, lodging_arrival_time, load_in_time, set_up_time,
+              soundcheck_time, soundcheck_duration_min, show_start_time, show_end_time,
+              curfew_time, leave_time
+       FROM event_day_details
+       WHERE event_id = :eventId AND band_id = :bandId
+       LIMIT 1`,
+      { eventId: req.params.id, bandId: req.bandId },
+    );
+
+    res.json({
+      eventId: Number(req.params.id),
+      bandId: req.bandId,
+      ...(result.rows[0] ? mapDayDetailsRow(result.rows[0]) : emptyDayDetails),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/events/:id/day-details", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+
+    const event = await query(
+      `SELECT id, event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    if (isPastEventDate(event.rows[0].event_date_text)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Prošli termini su zaključani — detalji se ne menjaju.",
+      });
+    }
+
+    const details = normalizeDayDetails(req.body || {});
+    const result = await query(
+      `INSERT INTO event_day_details (
+         event_id, band_id,
+         gathering_time, departure_time, lodging_arrival_time, load_in_time, set_up_time,
+         soundcheck_time, soundcheck_duration_min, show_start_time, show_end_time,
+         curfew_time, leave_time
+       ) VALUES (
+         :eventId, :bandId,
+         :gatheringTime, :departureTime, :lodgingArrivalTime, :loadInTime, :setUpTime,
+         :soundcheckTime, :soundcheckDurationMin, :showStartTime, :showEndTime,
+         :curfewTime, :leaveTime
+       )
+       ON CONFLICT (event_id) DO UPDATE SET
+         gathering_time = EXCLUDED.gathering_time,
+         departure_time = EXCLUDED.departure_time,
+         lodging_arrival_time = EXCLUDED.lodging_arrival_time,
+         load_in_time = EXCLUDED.load_in_time,
+         set_up_time = EXCLUDED.set_up_time,
+         soundcheck_time = EXCLUDED.soundcheck_time,
+         soundcheck_duration_min = EXCLUDED.soundcheck_duration_min,
+         show_start_time = EXCLUDED.show_start_time,
+         show_end_time = EXCLUDED.show_end_time,
+         curfew_time = EXCLUDED.curfew_time,
+         leave_time = EXCLUDED.leave_time,
+         updated_at = NOW()
+       RETURNING gathering_time, departure_time, lodging_arrival_time, load_in_time, set_up_time,
+                 soundcheck_time, soundcheck_duration_min, show_start_time, show_end_time,
+                 curfew_time, leave_time`,
+      { eventId, bandId: req.bandId, ...details },
+    );
+
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...mapDayDetailsRow(result.rows[0]),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/events/:id/comments", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const event = await query(
@@ -1754,6 +1861,60 @@ function mapEventRow(row) {
     note: row.note,
     priceEur: Number(row.price_eur),
     transportRsd: Number(row.transport_rsd),
+  };
+}
+
+function mapDayDetailsRow(row) {
+  const duration = row.soundcheck_duration_min;
+  return {
+    gatheringTime: row.gathering_time || "",
+    departureTime: row.departure_time || "",
+    lodgingArrivalTime: row.lodging_arrival_time || "",
+    loadInTime: row.load_in_time || "",
+    setUpTime: row.set_up_time || "",
+    soundcheckTime: row.soundcheck_time || "",
+    soundcheckDurationMin:
+      duration == null || duration === "" ? null : Number(duration),
+    showStartTime: row.show_start_time || "",
+    showEndTime: row.show_end_time || "",
+    curfewTime: row.curfew_time || "",
+    leaveTime: row.leave_time || "",
+  };
+}
+
+function normalizeTimeText(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return "";
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return "";
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function normalizeDayDetails(value) {
+  const durationRaw = value.soundcheckDurationMin;
+  let soundcheckDurationMin = null;
+  if (durationRaw !== null && durationRaw !== undefined && String(durationRaw).trim() !== "") {
+    const parsed = Math.round(Number(String(durationRaw).replace(",", ".")));
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 24 * 60) {
+      soundcheckDurationMin = parsed;
+    }
+  }
+
+  return {
+    gatheringTime: normalizeTimeText(value.gatheringTime),
+    departureTime: normalizeTimeText(value.departureTime),
+    lodgingArrivalTime: normalizeTimeText(value.lodgingArrivalTime),
+    loadInTime: normalizeTimeText(value.loadInTime),
+    setUpTime: normalizeTimeText(value.setUpTime),
+    soundcheckTime: normalizeTimeText(value.soundcheckTime),
+    soundcheckDurationMin,
+    showStartTime: normalizeTimeText(value.showStartTime),
+    showEndTime: normalizeTimeText(value.showEndTime),
+    curfewTime: normalizeTimeText(value.curfewTime),
+    leaveTime: normalizeTimeText(value.leaveTime),
   };
 }
 

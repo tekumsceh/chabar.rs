@@ -5463,27 +5463,94 @@ html[data-theme="dark"] body {
   color: var(--neon-lime, #b8ff00);
 }
 
-.event-page-full-details.is-muted,
-.event-page-full-details:disabled {
-  cursor: default;
-  opacity: 0.72;
+.event-page-full-details.is-open {
+  border-color: var(--brand, #ff2bd6) !important;
 }
 
-.event-page-full-details.is-muted:hover,
-.event-page-full-details:disabled:hover {
-  background: var(--surface) !important;
-  border-color: var(--line) !important;
-  color: inherit !important;
-}
-
-.event-page-full-details-soon {
+.event-page-full-details-soon,
+.event-page-full-details-chevron {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-style: normal;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  margin-left: 0.15rem;
-  text-transform: uppercase;
+  margin-left: auto;
+}
+
+.event-page-day-details-wrap {
+  margin-top: 0.65rem;
+}
+
+.event-day-details-list {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.event-day-details-row {
+  align-items: center;
+  display: grid;
+  gap: 0.45rem 0.75rem;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+
+.event-day-details-label {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.event-day-details-controls {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.event-day-details-controls input[type="time"] {
+  max-width: 8.5rem;
+  width: 100%;
+}
+
+.event-day-details-duration {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.event-day-details-duration input {
+  max-width: 4.25rem;
+  text-align: center;
+}
+
+.event-day-details-duration em {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.event-day-details-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.event-day-details-locknote {
+  margin: 0 0 0.55rem;
+}
+
+@media (max-width: 640px) {
+  .event-day-details-row {
+    grid-template-columns: 1fr;
+  }
+
+  .event-day-details-controls {
+    justify-content: flex-start;
+  }
 }
 
 .finansije-page-btn {
