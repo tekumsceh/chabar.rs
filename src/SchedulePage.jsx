@@ -289,7 +289,7 @@ export default function SchedulePage({
         <EventPage
           event={selectedEvent}
           band={selectedBand}
-          settings={settings}
+          bands={bands}
           onBack={() => setSelectedEventId(null)}
           onUpdate={onUpdate}
           onRefreshSchedule={onRefreshSchedule}

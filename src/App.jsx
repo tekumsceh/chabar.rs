@@ -627,13 +627,11 @@ export default function App() {
       throw new Error("Termin nije pronađen");
     }
 
-    const asOf = parseDate(settings.asOfDate || todayText());
     const eventDate = parseDate(current.date);
-    const calculationDate = Number.isNaN(asOf.getTime()) ? startOfToday() : asOf;
     const isPast =
       Boolean(String(current.date || "").trim()) &&
       !Number.isNaN(eventDate.getTime()) &&
-      eventDate <= calculationDate;
+      eventDate.getTime() <= startOfToday().getTime();
     if (isPast) {
       showToast("Prošli termini su zaključani — možeš samo dodati komentar", "error");
       throw new Error("Prošli termini su zaključani — možeš samo dodati komentar");
@@ -641,6 +639,7 @@ export default function App() {
 
     const nextEvent = {
       ...current,
+      bandId: fields.bandId ?? current.bandId,
       date: fields.date ?? current.date,
       city: fields.city ?? current.city,
       venue: fields.venue ?? current.venue,
@@ -650,11 +649,19 @@ export default function App() {
         fields.transportRsd !== undefined ? numberValue(fields.transportRsd) : numberValue(current.transportRsd),
     };
 
+    const fromBandId = eventBandId(current);
+    const toBandId = eventBandId(nextEvent);
+    if (!toBandId || toBandId === ALL_BANDS_ID) {
+      showToast("Moraš izabrati bend ili Personal", "error");
+      throw new Error("Moraš izabrati bend ili Personal.");
+    }
+
     try {
       await api(`/api/events/${id}`, {
         method: "PUT",
-        bandId: eventBandId(nextEvent),
+        bandId: fromBandId,
         body: {
+          bandId: toBandId,
           date: nextEvent.date ?? "",
           city: nextEvent.city ?? "",
           venue: nextEvent.venue ?? "",
@@ -663,7 +670,8 @@ export default function App() {
           transportRsd: numberValue(nextEvent.transportRsd),
         },
       });
-      invalidateScheduleCache(eventBandId(nextEvent));
+      invalidateScheduleCache(fromBandId);
+      if (toBandId !== fromBandId) invalidateScheduleCache(toBandId);
       await loadScheduleAndFinance();
       showToast(`Termin sačuvan: ${nextEvent.date}${nextEvent.city ? ` — ${nextEvent.city}` : ""}`);
     } catch (requestError) {
@@ -677,13 +685,11 @@ export default function App() {
       eventsRef.current.find((item) => item.id === id) || financeEventsRef.current.find((item) => item.id === id);
     if (!event) return;
 
-    const asOf = parseDate(settings.asOfDate || todayText());
     const eventDate = parseDate(event.date);
-    const calculationDate = Number.isNaN(asOf.getTime()) ? startOfToday() : asOf;
     const isPast =
       Boolean(String(event.date || "").trim()) &&
       !Number.isNaN(eventDate.getTime()) &&
-      eventDate <= calculationDate;
+      eventDate.getTime() <= startOfToday().getTime();
 
     if (isPast) {
       showToast("Prošli termini se ne mogu brisati", "error");

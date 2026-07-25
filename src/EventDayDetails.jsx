@@ -34,7 +34,7 @@ const emptyDetails = {
 export default function EventDayDetails({ eventId, bandId, readOnly = false, showToast }) {
   const [form, setForm] = useState(emptyDetails);
   const [initial, setInitial] = useState(emptyDetails);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(eventId && bandId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,7 +44,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
       if (!eventId || !bandId) {
         if (!cancelled) {
           setLoading(false);
-          setError(!eventId || !bandId ? "Nedostaje bend za ovaj termin." : "");
+          setError("Nedostaje bend za ovaj termin.");
         }
         return;
       }
@@ -59,8 +59,6 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
       } catch (requestError) {
         if (!cancelled) {
           setError(requestError.message || "Detalji nisu učitani.");
-          setForm(emptyDetails);
-          setInitial(emptyDetails);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -107,6 +105,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
       const next = detailsFromApi(saved);
       setForm(next);
       setInitial(next);
+      setError("");
       showToast?.("Detalji sačuvani");
     } catch (requestError) {
       showToast?.(requestError.message || "Čuvanje nije uspelo", "error");
@@ -119,12 +118,9 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
     setForm(initial);
   }
 
-  if (loading) {
-    return <p className="event-finance-status">Učitavam detalje…</p>;
-  }
-
   return (
     <form className={`event-day-details ${readOnly ? "is-readonly" : ""}`} onSubmit={save}>
+      {loading ? <p className="event-finance-status">Učitavam detalje…</p> : null}
       {error ? <p className="event-finance-status is-error">{error}</p> : null}
       {readOnly ? (
         <p className="event-finance-status event-day-details-locknote">
@@ -146,7 +142,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
                 id={`day-${field.key}`}
                 type="time"
                 value={form[field.key] || ""}
-                disabled={readOnly || saving}
+                disabled={readOnly || saving || loading}
                 onChange={(e) => updateField(field.key, e.target.value)}
               />
               {field.hasDuration ? (
@@ -161,7 +157,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
                     step={5}
                     placeholder="min"
                     value={form.soundcheckDurationMin}
-                    disabled={readOnly || saving}
+                    disabled={readOnly || saving || loading}
                     onChange={(e) => updateField("soundcheckDurationMin", e.target.value)}
                   />
                   <em>min</em>
@@ -174,10 +170,10 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
 
       {!readOnly ? (
         <div className="event-day-details-actions">
-          <button type="button" className="danger" onClick={cancel} disabled={saving || !dirty}>
+          <button type="button" className="danger" onClick={cancel} disabled={saving || loading || !dirty}>
             Otkaži
           </button>
-          <button type="submit" disabled={saving || !dirty || Boolean(error)}>
+          <button type="submit" disabled={saving || loading || !dirty}>
             {saving ? "Čuvam..." : "Sačuvaj"}
           </button>
         </div>

@@ -6,7 +6,7 @@ import { formatEur, numberValue } from "./calculations.js";
  * Owner/lead: set per-member honorar for one date.
  * Default button fills draft from member.defaultPriceEur (storage/UI TBD).
  */
-export default function EventFinancePanel({ eventId, bandId, showToast, onChanged }) {
+export default function EventFinancePanel({ eventId, bandId, readOnly = false, showToast, onChanged }) {
   const [members, setMembers] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [busyId, setBusyId] = useState("");
@@ -58,7 +58,7 @@ export default function EventFinancePanel({ eventId, bandId, showToast, onChange
   }
 
   async function setFee(member) {
-    if (busyId || !eventId || !bandId) return;
+    if (readOnly || busyId || !eventId || !bandId) return;
     const raw = String(drafts[member.id] ?? "").trim().replace(",", ".");
     if (raw === "") {
       showToast?.("Unesi iznos", "error");
@@ -120,7 +120,8 @@ export default function EventFinancePanel({ eventId, bandId, showToast, onChange
                 maxLength={6}
                 placeholder="€"
                 value={drafts[member.id] ?? ""}
-                disabled={busy || Boolean(busyId)}
+                disabled={readOnly || busy || Boolean(busyId)}
+                readOnly={readOnly}
                 onChange={(event) => updateDraft(member.id, event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -130,23 +131,27 @@ export default function EventFinancePanel({ eventId, bandId, showToast, onChange
                 }}
               />
             </label>
-            <button
-              type="button"
-              className="event-finance-btn event-finance-btn-set"
-              disabled={busy || Boolean(busyId)}
-              onClick={() => setFee(member)}
-            >
-              {busy ? "…" : "Postavi"}
-            </button>
-            <button
-              type="button"
-              className="event-finance-btn event-finance-btn-default"
-              disabled={busy || Boolean(busyId)}
-              title="Unesi podrazumevani honorar"
-              onClick={() => applyDefault(member)}
-            >
-              Podrazumevano
-            </button>
+            {readOnly ? null : (
+              <>
+                <button
+                  type="button"
+                  className="event-finance-btn event-finance-btn-set"
+                  disabled={busy || Boolean(busyId)}
+                  onClick={() => setFee(member)}
+                >
+                  {busy ? "…" : "Postavi"}
+                </button>
+                <button
+                  type="button"
+                  className="event-finance-btn event-finance-btn-default"
+                  disabled={busy || Boolean(busyId)}
+                  title="Unesi podrazumevani honorar"
+                  onClick={() => applyDefault(member)}
+                >
+                  Podrazumevano
+                </button>
+              </>
+            )}
           </li>
         );
       })}

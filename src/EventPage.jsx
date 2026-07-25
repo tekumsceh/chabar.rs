@@ -5,14 +5,14 @@ import {
   fromIsoDate,
   numberValue,
   parseDate,
+  startOfToday,
   toIsoDate,
-  todayText,
 } from "./calculations.js";
 import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
 import EventDayDetails from "./EventDayDetails.jsx";
-import FadeScroll from "./FadeScroll.jsx";
+import FieldSelect from "./FieldSelect.jsx";
 
 const TABS = [
   { id: "osnovno", label: "Osnovno" },
@@ -24,7 +24,7 @@ const TABS = [
 export default function EventPage({
   event,
   band = null,
-  settings = {},
+  bands = [],
   onBack,
   onUpdate,
   onRefreshSchedule,
@@ -53,19 +53,32 @@ export default function EventPage({
     [canSeeFinance],
   );
 
-  const asOfDate = parseDate(settings.asOfDate || todayText());
-  const calculationDate = Number.isNaN(asOfDate.getTime()) ? new Date() : asOfDate;
+  // Edit lock matches server: calendar today (not finance asOfDate).
   const parsedDate = parseDate(event?.date);
   const hasDate = Boolean(String(event?.date || "").trim());
   const locked =
-    hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate <= calculationDate;
+    hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() <= startOfToday().getTime();
 
   const dateParts = formatScheduleDateParts(event?.date);
+  const minEditableDateIso = (() => {
+    const next = startOfToday();
+    next.setDate(next.getDate() + 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  })();
   const myFee = numberValue(event?.priceEur);
   const hasFee = myFee > 0;
   const bandName = band?.name || event?.bandName || "—";
+  const bandOptions = useMemo(
+    () =>
+      (bands || []).map((item) => ({
+        id: item.id,
+        label: `${item.name}${item.kind === "personal" ? " (lično)" : ""}`,
+      })),
+    [bands],
+  );
 
   const isDirty =
+    form.bandId !== initialForm.bandId ||
     form.date !== initialForm.date ||
     form.city !== initialForm.city ||
     form.venue !== initialForm.venue ||
@@ -84,11 +97,20 @@ export default function EventPage({
     setEditing(false);
     setDetailsOpen(false);
     setFormError("");
-  }, [event?.id, event?.date, event?.city, event?.venue, event?.note, event?.priceEur]);
+  }, [event?.id, event?.bandId, event?.date, event?.city, event?.venue, event?.note, event?.priceEur]);
 
   useEffect(() => {
     if (tab === "finansije" && !canSeeFinance) setTab("osnovno");
   }, [tab, canSeeFinance]);
+
+  useEffect(() => {
+    if (locked && editing) {
+      setEditing(false);
+      setForm(formFromEvent(event));
+      setInitialForm(formFromEvent(event));
+      setFormError("");
+    }
+  }, [locked, editing, event]);
 
   useEffect(() => {
     if (leaveSignal === lastLeaveSignalRef.current) return;
@@ -130,20 +152,25 @@ export default function EventPage({
   }
 
   function validateForm(current) {
+    const bandId = String(current.bandId || "").trim();
     const date = String(current.date || "").trim();
     const city = String(current.city || "").trim();
     const venue = String(current.venue || "").trim();
     const note = String(current.note || "").trim();
 
+    if (!bandId) return { error: "Izaberi bend ili Personal." };
     if (!date) return { error: "Datum je obavezan." };
     const parsed = parseDate(date);
     if (Number.isNaN(parsed.getTime())) {
       return { error: "Datum nije ispravan. Izaberi datum iz kalendara." };
     }
+    if (parsed.getTime() <= startOfToday().getTime()) {
+      return { error: "Datum ne sme biti danas ili u prošlosti." };
+    }
     if (!city && !venue && !note) {
       return { error: "Unesi bar mesto, lokal ili napomenu." };
     }
-    return { date, city, venue, note };
+    return { bandId, date, city, venue, note };
   }
 
   async function persistEdit({ askConfirm = true } = {}) {
@@ -157,7 +184,7 @@ export default function EventPage({
       return false;
     }
 
-    const { date, city, venue, note } = validated;
+    const { bandId, date, city, venue, note } = validated;
     if (!dirtyRef.current) {
       setEditing(false);
       return true;
@@ -176,9 +203,9 @@ export default function EventPage({
     try {
       setSaving(true);
       setFormError("");
-      await onUpdate?.(eventRef.current.id, { date, city, venue, note });
-      setInitialForm({ date, city, venue, note });
-      setForm({ date, city, venue, note });
+      await onUpdate?.(eventRef.current.id, { bandId, date, city, venue, note });
+      setInitialForm({ bandId, date, city, venue, note });
+      setForm({ bandId, date, city, venue, note });
       setEditing(false);
       return true;
     } catch (error) {
@@ -239,7 +266,7 @@ export default function EventPage({
   }
 
   return (
-    <div className={`event-page ${detailsOpen && tab === "osnovno" ? "is-details-open" : ""}`}>
+    <div className="event-page">
       <header className="event-page-head">
         <button
           type="button"
@@ -298,9 +325,17 @@ export default function EventPage({
         <section className="event-page-panel" role="tabpanel" aria-label="Osnovno">
           {editing ? (
             <form className="event-page-form termin-form" onSubmit={saveEdit}>
-              <label className="termin-form-full">
+              <label htmlFor="eventBand" className="termin-form-full">
                 Bend / Personal
-                <input type="text" value={bandName} readOnly disabled />
+                <FieldSelect
+                  id="eventBand"
+                  label="Bend / Personal"
+                  value={form.bandId}
+                  placeholder="— Izaberi —"
+                  required
+                  options={bandOptions}
+                  onChange={(id) => updateForm("bandId", id)}
+                />
               </label>
               <label htmlFor="eventDate" className="termin-form-full">
                 Datum
@@ -308,6 +343,7 @@ export default function EventPage({
                   id="eventDate"
                   name="eventDate"
                   type="date"
+                  min={minEditableDateIso}
                   value={toIsoDate(form.date)}
                   onChange={(e) => updateForm("date", fromIsoDate(e.target.value))}
                   required
@@ -430,6 +466,7 @@ export default function EventPage({
           <EventFinancePanel
             eventId={event.id}
             bandId={event.bandId || band?.id}
+            readOnly={locked}
             showToast={showToast}
             onChanged={async () => {
               await onRefreshSchedule?.();
@@ -489,16 +526,17 @@ export default function EventPage({
               ▴
             </em>
           </button>
-          <div className="event-page-day-details-slot">
-            <FadeScroll className="event-page-day-details-fade" viewportClassName="event-page-day-details-wrap">
-              <EventDayDetails
-                eventId={event.id}
-                bandId={event.bandId || band?.id}
-                readOnly={locked}
-                showToast={showToast}
-              />
-            </FadeScroll>
-          </div>
+          <section className="event-page-panel" role="tabpanel" aria-label="Kompletni detalji">
+            <h3 className="event-page-section-title">
+              <span>Vremenski raspored</span>
+            </h3>
+            <EventDayDetails
+              eventId={event.id}
+              bandId={event.bandId || band?.id}
+              readOnly={locked}
+              showToast={showToast}
+            />
+          </section>
         </>
       ) : null}
     </div>
@@ -507,6 +545,7 @@ export default function EventPage({
 
 function formFromEvent(event) {
   return {
+    bandId: event?.bandId || "",
     date: event?.date || "",
     city: event?.city || "",
     venue: event?.venue || "",

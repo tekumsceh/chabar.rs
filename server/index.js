@@ -701,10 +701,28 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
       });
     }
 
+    const requestedBandId = String(req.body?.bandId || "").trim();
+    const nextBandId = requestedBandId || req.bandId;
+    if (nextBandId !== req.bandId) {
+      const membership = await query(
+        `SELECT user_id FROM band_members
+         WHERE band_id = :bandId AND user_id = :userId
+         LIMIT 1`,
+        { bandId: nextBandId, userId: req.user.id },
+      );
+      if (!membership.rows[0]) {
+        return res.status(403).json({
+          error: "Forbidden",
+          detail: "Nisi član izabranog benda.",
+        });
+      }
+    }
+
     const updated = await withTransaction(async (tx) => {
       const result = await tx(
         `UPDATE events
-         SET event_date_text = :date,
+         SET band_id = :nextBandId,
+             event_date_text = :date,
              city = :city,
              venue = :venue,
              note = :note,
@@ -712,15 +730,27 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
              transport_rsd = :transportRsd
          WHERE id = :id AND band_id = :bandId
          RETURNING id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd`,
-        { ...event, id: req.params.id, bandId: req.bandId },
+        { ...event, id: req.params.id, bandId: req.bandId, nextBandId },
       );
       if (!result.rowCount) {
         const err = new Error("Not found");
         err.status = 404;
         throw err;
       }
+
+      if (nextBandId !== req.bandId) {
+        await tx(`UPDATE event_day_details SET band_id = :nextBandId WHERE event_id = :eventId`, {
+          nextBandId,
+          eventId: req.params.id,
+        });
+        await tx(`UPDATE event_expenses SET band_id = :nextBandId WHERE event_id = :eventId`, {
+          nextBandId,
+          eventId: req.params.id,
+        });
+      }
+
       await upsertMemberFinance(Number(req.params.id), req.user.id, event.priceEur, event.transportRsd, {
-        bandId: req.bandId,
+        bandId: nextBandId,
         actorUserId: req.user.id,
         runQuery: tx,
       });
@@ -728,7 +758,7 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
         {
           entityType: "event",
           entityId: req.params.id,
-          bandId: req.bandId,
+          bandId: nextBandId,
           actorUserId: req.user.id,
           action: "update",
           before: snapshotEvent(existingRow),
@@ -739,15 +769,15 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
       return result.rows[0];
     });
 
-    const bandName = await getBandName(req.bandId);
+    const bandName = await getBandName(nextBandId);
     void syncEventUpsert({
       eventId: Number(req.params.id),
-      bandId: req.bandId,
-      event: { ...event, bandId: req.bandId },
+      bandId: nextBandId,
+      event: { ...event, bandId: nextBandId },
       bandName,
       actorUserId: req.user.id,
     });
-    res.json({ ...event, id: Number(req.params.id), bandId: req.bandId });
+    res.json({ ...event, id: Number(req.params.id), bandId: nextBandId, bandName });
   } catch (error) {
     next(error);
   }
@@ -861,11 +891,17 @@ app.put(
       }
 
       const event = await query(
-        `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+        `SELECT id, event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
         { id: eventId, bandId: req.bandId },
       );
       if (!event.rows[0]) {
         return res.status(404).json({ error: "Not found" });
+      }
+      if (isPastEventDate(event.rows[0].event_date_text)) {
+        return res.status(403).json({
+          error: "Forbidden",
+          detail: "Prošli termini su zaključani — honorari se ne menjaju.",
+        });
       }
 
       const membership = await query(
@@ -996,11 +1032,17 @@ app.post("/api/events/:id/expenses", requireAuth, requireBandMember, requireBand
   try {
     const eventId = Number(req.params.id);
     const event = await query(
-      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      `SELECT id, event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
       { id: eventId, bandId: req.bandId },
     );
     if (!event.rows[0]) {
       return res.status(404).json({ error: "Not found" });
+    }
+    if (isPastEventDate(event.rows[0].event_date_text)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Prošli termini su zaključani — troškovi se ne menjaju.",
+      });
     }
 
     const amount = numberValue(req.body?.amount);
@@ -1082,6 +1124,20 @@ app.delete(
   requireBandAdmin,
   async (req, res, next) => {
     try {
+      const event = await query(
+        `SELECT id, event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+        { id: req.params.id, bandId: req.bandId },
+      );
+      if (!event.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      if (isPastEventDate(event.rows[0].event_date_text)) {
+        return res.status(403).json({
+          error: "Forbidden",
+          detail: "Prošli termini su zaključani — troškovi se ne menjaju.",
+        });
+      }
+
       const result = await query(
         `DELETE FROM event_expenses
          WHERE id = :expenseId AND event_id = :eventId AND band_id = :bandId
