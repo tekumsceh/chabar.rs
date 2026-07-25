@@ -238,7 +238,7 @@ export default function EventPage({
   }
 
   return (
-    <div className="event-page">
+    <div className={`event-page ${detailsOpen && tab === "osnovno" ? "is-details-open" : ""}`}>
       <header className="event-page-head">
         <button
           type="button"
@@ -269,29 +269,31 @@ export default function EventPage({
             aria-label={editing ? "U režimu izmene" : "Izmeni termin"}
             aria-pressed={editing}
             onClick={() => (editing ? cancelEdit() : startEdit())}
-            disabled={saving}
+            disabled={saving || detailsOpen}
           >
             <PenIcon />
           </button>
         )}
       </header>
 
-      <div className="finansije-tabs" role="tablist" aria-label="Sekcije termina">
-        {visibleTabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            className={`finansije-tab ${tab === item.id ? "is-active" : ""}`}
-            aria-selected={tab === item.id}
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      {!detailsOpen ? (
+        <div className="finansije-tabs" role="tablist" aria-label="Sekcije termina">
+          {visibleTabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              className={`finansije-tab ${tab === item.id ? "is-active" : ""}`}
+              aria-selected={tab === item.id}
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
-      {tab === "osnovno" ? (
+      {tab === "osnovno" && !detailsOpen ? (
         <section className="event-page-panel" role="tabpanel" aria-label="Osnovno">
           {editing ? (
             <form className="event-page-form termin-form" onSubmit={saveEdit}>
@@ -394,7 +396,7 @@ export default function EventPage({
         </section>
       ) : null}
 
-      {tab === "tehnicki" ? (
+      {tab === "tehnicki" && !detailsOpen ? (
         <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Tehnički">
           <div className="event-page-empty">
             <span className="event-page-empty-icon" aria-hidden="true">
@@ -406,7 +408,7 @@ export default function EventPage({
         </section>
       ) : null}
 
-      {tab === "show" ? (
+      {tab === "show" && !detailsOpen ? (
         <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Show">
           <div className="event-page-empty">
             <span className="event-page-empty-icon" aria-hidden="true">
@@ -418,7 +420,7 @@ export default function EventPage({
         </section>
       ) : null}
 
-      {tab === "finansije" && canSeeFinance ? (
+      {tab === "finansije" && canSeeFinance && !detailsOpen ? (
         <section className="event-page-panel event-page-finance" role="tabpanel" aria-label="Finansije">
           <h3 className="event-page-section-title">
             <HonorarIcon />
@@ -456,7 +458,13 @@ export default function EventPage({
             aria-label={detailsOpen ? "Zatvori kompletne detalje" : "Kompletni detalji"}
             aria-expanded={detailsOpen}
             title="Kompletni detalji"
-            onClick={() => setDetailsOpen((open) => !open)}
+            onClick={() => {
+              setDetailsOpen((open) => {
+                const next = !open;
+                if (next) setEditing(false);
+                return next;
+              });
+            }}
           >
             <DetailsIcon />
             <span>Kompletni detalji</span>

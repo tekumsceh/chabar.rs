@@ -1958,6 +1958,7 @@ td input[data-field="note"] {
 .app-band-tiles {
   align-items: center;
   display: flex;
+  flex-shrink: 0;
   gap: 0.55rem;
   margin: 0 auto;
   max-width: 980px;
@@ -5050,10 +5051,17 @@ html[data-theme="dark"] body {
 /* —— Event / date detail page —— */
 .event-page {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
-  padding: 0.35rem 0 0.75rem;
+  overflow: hidden;
+  padding: 0.35rem 0 0.35rem;
+}
+
+.raspored.is-event-open .event-page {
+  flex: 1;
+  min-height: 0;
 }
 
 .event-page-head {
@@ -5235,9 +5243,18 @@ html[data-theme="dark"] body {
 }
 
 .event-page-footer {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
+  gap: 0.65rem;
   margin-top: auto;
+  min-height: 0;
   padding: 0.35rem 0 0.15rem;
+}
+
+.event-page.is-details-open .event-page-footer {
+  flex: 1;
+  margin-top: 0;
 }
 
 .event-page-full-details {
@@ -5247,6 +5264,7 @@ html[data-theme="dark"] body {
   box-shadow: none !important;
   color: inherit !important;
   display: flex !important;
+  flex-shrink: 0;
   font-weight: 800 !important;
   gap: 0.55rem;
   justify-content: center;
@@ -5477,7 +5495,19 @@ html[data-theme="dark"] body {
 }
 
 .event-page-day-details-wrap {
-  margin-top: 0.65rem;
+  background: var(--panel, var(--surface));
+  border: 1px solid var(--line);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.75rem 0.85rem;
+}
+
+.event-day-details {
+  display: flex;
+  flex-direction: column;
+  min-height: min-content;
 }
 
 .event-day-details-list {
@@ -5533,10 +5563,15 @@ html[data-theme="dark"] body {
 }
 
 .event-day-details-actions {
+  background: var(--panel, var(--surface));
+  bottom: 0;
   display: flex;
+  flex-shrink: 0;
   gap: 0.5rem;
   justify-content: flex-end;
   margin-top: 0.75rem;
+  padding-top: 0.55rem;
+  position: sticky;
 }
 
 .event-day-details-locknote {
