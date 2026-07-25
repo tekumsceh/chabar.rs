@@ -5263,9 +5263,21 @@ html[data-theme="dark"] body {
   padding: 0.35rem 0 0.15rem;
 }
 
-.event-page.is-details-open .event-page-footer {
-  flex: 1 1 auto;
-  margin-top: 0;
+.event-page.is-details-open {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.event-page.is-details-open > .event-page-head,
+.event-page.is-details-open > .event-page-full-details {
+  min-height: 0;
+}
+
+.event-page-day-details-slot {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }
@@ -5274,18 +5286,11 @@ html[data-theme="dark"] body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  /* Floor so fields never collapse to 0 height */
-  min-height: 12rem;
-}
-
-.event-page.is-details-open .event-page-day-details-fade {
-  flex: 1 1 0;
   height: 100%;
-  min-height: 12rem;
+  min-height: 0;
 }
 
-.event-page-day-details-fade > .fade-scroll-viewport,
-.event-page-day-details-fade > .event-page-day-details-wrap {
+.event-page-day-details-fade > .fade-scroll-viewport {
   flex: 1 1 auto;
   height: 100%;
   min-height: 0;

@@ -123,12 +123,9 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
     return <p className="event-finance-status">Učitavam detalje…</p>;
   }
 
-  if (error) {
-    return <p className="event-finance-status is-error">{error}</p>;
-  }
-
   return (
     <form className={`event-day-details ${readOnly ? "is-readonly" : ""}`} onSubmit={save}>
+      {error ? <p className="event-finance-status is-error">{error}</p> : null}
       {readOnly ? (
         <p className="event-finance-status event-day-details-locknote">
           Prošli termin — detalji su zaključani (samo pregled).
@@ -180,7 +177,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
           <button type="button" className="danger" onClick={cancel} disabled={saving || !dirty}>
             Otkaži
           </button>
-          <button type="submit" disabled={saving || !dirty}>
+          <button type="submit" disabled={saving || !dirty || Boolean(error)}>
             {saving ? "Čuvam..." : "Sačuvaj"}
           </button>
         </div>

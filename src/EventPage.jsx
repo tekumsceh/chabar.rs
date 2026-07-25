@@ -451,29 +451,45 @@ export default function EventPage({
         </section>
       ) : null}
 
-      {tab === "osnovno" ? (
+      {tab === "osnovno" && !detailsOpen ? (
         <div className="event-page-footer">
           <button
             type="button"
-            className={`event-page-full-details ${detailsOpen ? "is-open" : ""}`}
-            aria-label={detailsOpen ? "Zatvori kompletne detalje" : "Kompletni detalji"}
-            aria-expanded={detailsOpen}
+            className="event-page-full-details"
+            aria-label="Kompletni detalji"
+            aria-expanded={false}
             title="Kompletni detalji"
             onClick={() => {
-              setDetailsOpen((open) => {
-                const next = !open;
-                if (next) setEditing(false);
-                return next;
-              });
+              setEditing(false);
+              setDetailsOpen(true);
             }}
           >
             <DetailsIcon />
             <span>Kompletni detalji</span>
             <em className="event-page-full-details-chevron" aria-hidden="true">
-              {detailsOpen ? "▴" : "▾"}
+              ▾
             </em>
           </button>
-          {detailsOpen ? (
+        </div>
+      ) : null}
+
+      {tab === "osnovno" && detailsOpen ? (
+        <>
+          <button
+            type="button"
+            className="event-page-full-details is-open"
+            aria-label="Zatvori kompletne detalje"
+            aria-expanded
+            title="Zatvori kompletne detalje"
+            onClick={() => setDetailsOpen(false)}
+          >
+            <DetailsIcon />
+            <span>Kompletni detalji</span>
+            <em className="event-page-full-details-chevron" aria-hidden="true">
+              ▴
+            </em>
+          </button>
+          <div className="event-page-day-details-slot">
             <FadeScroll className="event-page-day-details-fade" viewportClassName="event-page-day-details-wrap">
               <EventDayDetails
                 eventId={event.id}
@@ -482,8 +498,8 @@ export default function EventPage({
                 showToast={showToast}
               />
             </FadeScroll>
-          ) : null}
-        </div>
+          </div>
+        </>
       ) : null}
     </div>
   );
