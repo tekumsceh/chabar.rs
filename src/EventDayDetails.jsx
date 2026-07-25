@@ -41,7 +41,13 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      if (!eventId || !bandId) return;
+      if (!eventId || !bandId) {
+        if (!cancelled) {
+          setLoading(false);
+          setError(!eventId || !bandId ? "Nedostaje bend za ovaj termin." : "");
+        }
+        return;
+      }
       setLoading(true);
       setError("");
       try {
