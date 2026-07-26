@@ -38,19 +38,13 @@ function compareFinanceRows(a, b) {
 /**
  * Member/band ledger:
  * - Convert RSD legs with the rate for that calendar date (legacy 116.5 through cutoff).
- * - Apply the payment pool to dated-due gigs in calendar order (not band sort_order).
+ * - Apply each band's payment pool only to that band's dated-due gigs (calendar order).
  * - Undated / invalid dates never earn and never consume the pool.
  */
 export function calculate(events, payments, settings) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
   const asOfDate = parseDate(settings.asOfDate);
   const calculationDate = Number.isNaN(asOfDate.getTime()) ? startOfToday() : asOfDate;
-  let paidPool = totalPaymentsEur(payments, settings);
-  let strictEur = 0;
-  let strictDin = 0;
-  let futureCount = 0;
-  let unpaidCount = 0;
-  let partialCount = 0;
 
   const enriched = (events || []).map((event, index) => {
     const parsedDate = parseDate(event.date);
@@ -76,44 +70,66 @@ export function calculate(events, payments, settings) {
     };
   });
 
-  // Waterfall must follow calendar order across bands.
-  const allocationOrder = [...enriched].sort(compareFinanceRows);
+  const paymentsByBand = new Map();
+  for (const payment of payments || []) {
+    const bandKey = String(payment.bandId || "").trim() || "_none";
+    if (!paymentsByBand.has(bandKey)) paymentsByBand.set(bandKey, []);
+    paymentsByBand.get(bandKey).push(payment);
+  }
 
-  for (const row of allocationOrder) {
-    if (!row.hasDate) continue;
+  const rowsByBand = new Map();
+  for (const row of enriched) {
+    const bandKey = String(row.bandId || "").trim() || "_none";
+    if (!rowsByBand.has(bandKey)) rowsByBand.set(bandKey, []);
+    rowsByBand.get(bandKey).push(row);
+  }
 
-    if (!row.done) {
-      futureCount += 1;
-      continue;
-    }
+  let strictEur = 0;
+  let strictDin = 0;
+  let futureCount = 0;
+  let unpaidCount = 0;
+  let partialCount = 0;
 
-    strictEur += row.totalEur;
-    strictDin += row.transportRsd;
+  for (const [bandKey, bandRows] of rowsByBand) {
+    let paidPool = totalPaymentsEur(paymentsByBand.get(bandKey) || [], settings);
+    const allocationOrder = [...bandRows].sort(compareFinanceRows);
 
-    if (row.totalEur <= paidPool + POOL_EPS) {
-      row.paymentStatus = "Plaćeno";
-      row.paymentClass = "paid";
-      paidPool = Math.max(0, paidPool - row.totalEur);
-    } else if (paidPool > POOL_EPS) {
-      const remaining = row.totalEur - paidPool;
-      row.paymentStatus = remaining;
-      row.paymentClass = "partial";
-      partialCount += 1;
-      unpaidCount += 1;
-      paidPool = 0;
-    } else {
-      row.paymentStatus = row.totalEur;
-      row.paymentClass = "unpaid";
-      unpaidCount += 1;
-      paidPool = 0;
+    for (const row of allocationOrder) {
+      if (!row.hasDate) continue;
+
+      if (!row.done) {
+        futureCount += 1;
+        continue;
+      }
+
+      strictEur += row.totalEur;
+      strictDin += row.transportRsd;
+
+      if (row.totalEur <= paidPool + POOL_EPS) {
+        row.paymentStatus = "Plaćeno";
+        row.paymentClass = "paid";
+        paidPool = Math.max(0, paidPool - row.totalEur);
+      } else if (paidPool > POOL_EPS) {
+        const remaining = row.totalEur - paidPool;
+        row.paymentStatus = remaining;
+        row.paymentClass = "partial";
+        partialCount += 1;
+        unpaidCount += 1;
+        paidPool = 0;
+      } else {
+        row.paymentStatus = row.totalEur;
+        row.paymentClass = "unpaid";
+        unpaidCount += 1;
+        paidPool = 0;
+      }
     }
   }
 
   const rows = [...enriched].sort(compareFinanceRows);
   const paidEur = totalPaymentsEur(payments, settings);
   const paidDin = totalPaymentsDin(payments, settings);
-  const claimEur = strictEur - paidEur;
   const unpaidClaim = unpaidClaimEur(rows);
+  const claimEur = unpaidClaim;
   const claimRate = rateForDate(calculationDate, settings);
 
   return {
@@ -140,8 +156,14 @@ export function calculate(events, payments, settings) {
 export function unpaidClaimEur(rows) {
   return (rows || []).reduce((sum, row) => {
     if (!row?.done) return sum;
-    if (row.paymentClass !== "unpaid" && row.paymentClass !== "partial") return sum;
-    return sum + numberValue(row.paymentStatus);
+    if (row.paymentClass === "partial") {
+      return sum + Math.max(0, numberValue(row.paymentStatus));
+    }
+    if (row.paymentClass === "unpaid") {
+      const remaining = numberValue(row.paymentStatus);
+      return sum + Math.max(0, remaining > 0 ? remaining : numberValue(row.totalEur));
+    }
+    return sum;
   }, 0);
 }
 

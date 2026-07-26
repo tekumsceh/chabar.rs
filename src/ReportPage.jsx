@@ -39,8 +39,8 @@ export default function ReportPage({
 
   const DATES_PAGE_SIZE = 20;
 
-  // Waterfall always runs on the full loaded ledger (member: all bands; band-mode: that band).
-  // Band tiles only scopes the list — never re-runs calculate with a partial payment pool.
+  // Waterfall is per-band (payments only clear dates on the same band).
+  // Band tiles / year / status / search only scope which rows feed Potražuje.
   const calculations = useMemo(
     () => calculate(events, payments, settings),
     [events, payments, settings],
@@ -95,8 +95,9 @@ export default function ReportPage({
     });
   }, [bandRows, search, statusFilter, viewYear, dateSort]);
 
-  /** Potražuje follows list filters (held unpaid). Očekivano = future dates only (year/band/search). */
+  /** Potražuje = held unpaid/partial in the filtered Datumi list (band/year/search/status). */
   const claimEur = useMemo(() => unpaidClaimEur(filteredRows), [filteredRows]);
+  /** Očekivano = future totals for year/band/search (ignores status filter). */
   const expectedEur = useMemo(() => {
     const futureRows = bandRows.filter((row) => {
       const year = yearFromDate(row.date, row.parsedDate);
