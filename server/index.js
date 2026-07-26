@@ -1718,7 +1718,7 @@ async function getMyFinanceEvents(userId) {
 
 async function getMyPayments(userId) {
   const result = await query(
-    `SELECT id, payment_date_text, amount, currency
+    `SELECT id, band_id, payment_date_text, amount, currency
      FROM payments
      WHERE user_id = :userId
        AND (
@@ -1732,6 +1732,7 @@ async function getMyPayments(userId) {
   );
   return result.rows.map((row) => ({
     id: row.id,
+    bandId: row.band_id,
     date: row.payment_date_text,
     amount: Number(row.amount),
     currency: row.currency,
@@ -1837,7 +1838,7 @@ async function getBandFinanceEvents(bandId) {
 
 async function getBandPayments(bandId) {
   const result = await query(
-    `SELECT id, payment_date_text, amount, currency
+    `SELECT id, band_id, payment_date_text, amount, currency
      FROM payments
      WHERE band_id = :bandId
        AND (
@@ -1851,6 +1852,7 @@ async function getBandPayments(bandId) {
   );
   return result.rows.map((row) => ({
     id: row.id,
+    bandId: row.band_id || bandId,
     date: row.payment_date_text,
     amount: Number(row.amount),
     currency: row.currency,

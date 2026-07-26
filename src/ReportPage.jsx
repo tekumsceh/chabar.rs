@@ -113,8 +113,8 @@ export default function ReportPage({
   }, [payments, viewYear, activeBandId, allBandsId]);
 
   /**
-   * Potražuje = sum(past dates in band/year/search) − sum(uplate in band/year).
-   * Status filter only changes the list, not this total.
+   * Potražuje = per band (past dates − uplate), then sum.
+   * Same year / band tile / search scope. Status filter only changes the list.
    */
   const claimEur = useMemo(() => {
     const pastRows = bandRows.filter((row) => {

@@ -161,11 +161,34 @@ export function heldDatesEur(rows) {
 }
 
 /**
- * Potražuje: sum(held date amounts) − sum(payments), floored at 0.
- * Pass the same filtered rows + payments that the current filters imply.
+ * Potražuje: per band, (sum past date amounts − sum uplate), then add those up.
+ * One band’s overpayment must not wipe another band’s debt.
+ * Pass rows + payments already scoped by year / band tile / search.
  */
 export function heldMinusPaidEur(rows, payments, settingsOrRate) {
-  return Math.max(0, heldDatesEur(rows) - totalPaymentsEur(payments, settingsOrRate));
+  const rowsByBand = new Map();
+  for (const row of rows || []) {
+    if (!row?.done || !row?.hasDate) continue;
+    const key = String(row.bandId || "").trim() || "_none";
+    if (!rowsByBand.has(key)) rowsByBand.set(key, []);
+    rowsByBand.get(key).push(row);
+  }
+
+  const paysByBand = new Map();
+  for (const payment of payments || []) {
+    const key = String(payment.bandId || "").trim() || "_none";
+    if (!paysByBand.has(key)) paysByBand.set(key, []);
+    paysByBand.get(key).push(payment);
+  }
+
+  let total = 0;
+  const keys = new Set([...rowsByBand.keys(), ...paysByBand.keys()]);
+  for (const key of keys) {
+    const held = heldDatesEur(rowsByBand.get(key) || []);
+    const paid = totalPaymentsEur(paysByBand.get(key) || [], settingsOrRate);
+    total += Math.max(0, held - paid);
+  }
+  return total;
 }
 
 /** @deprecated use heldMinusPaidEur — kept for any stray imports */
