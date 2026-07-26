@@ -47,8 +47,7 @@ export default function ReportPage({
 
   const DATES_PAGE_SIZE = 20;
 
-  // Waterfall is per-band (payments only clear dates on the same band).
-  // Band tiles / year / status / search only scope which rows feed Potražuje.
+  // Row colors use per-band payment waterfall. Potražuje uses past − uplate on the filtered set.
   const calculations = useMemo(
     () => calculate(events, payments, settings),
     [events, payments, settings],
@@ -56,7 +55,7 @@ export default function ReportPage({
 
   const bandRows = useMemo(() => {
     if (!activeBandId || activeBandId === allBandsId) return calculations.rows;
-    return calculations.rows.filter((row) => row.bandId === activeBandId);
+    return calculations.rows.filter((row) => String(row.bandId) === String(activeBandId));
   }, [calculations.rows, activeBandId, allBandsId]);
 
   const bandsById = useMemo(() => new Map(bands.map((band) => [band.id, band])), [bands]);
@@ -68,12 +67,15 @@ export default function ReportPage({
       if (year != null) years.add(year);
     }
     for (const payment of payments) {
+      if (activeBandId && activeBandId !== allBandsId && String(payment.bandId) !== String(activeBandId)) {
+        continue;
+      }
       const year = yearFromDate(payment.date);
       if (year != null) years.add(year);
     }
     if (years.size === 0) years.add(new Date().getFullYear());
     return [...years].sort((a, b) => a - b);
-  }, [bandRows, payments]);
+  }, [bandRows, payments, activeBandId, allBandsId]);
 
   useEffect(() => {
     if (!availableYears.includes(viewYear)) {
@@ -103,29 +105,27 @@ export default function ReportPage({
     });
   }, [bandRows, search, statusFilter, viewYear, dateSort]);
 
-  /** Payments in the same band + year scope as Datumi (search/status don't apply to uplate). */
+  /** Uplate: same band tile + year as Datumi. */
   const scopedPayments = useMemo(() => {
     return payments.filter((payment) => {
       if (yearFromDate(payment.date) !== viewYear) return false;
-      if (activeBandId && activeBandId !== allBandsId && payment.bandId !== activeBandId) return false;
+      if (activeBandId && activeBandId !== allBandsId && String(payment.bandId) !== String(activeBandId)) {
+        return false;
+      }
       return true;
     });
   }, [payments, viewYear, activeBandId, allBandsId]);
 
   /**
-   * Potražuje = per band (past dates − uplate), then sum.
-   * Same year / band tile / search scope. Status filter only changes the list.
+   * Potražuje follows the Datumi filters (band / year / search / status):
+   * past dates currently in the list − uplate in the same band/year.
    */
   const claimEur = useMemo(() => {
-    const pastRows = bandRows.filter((row) => {
-      if (!row.done || !row.hasDate) return false;
-      if (yearFromDate(row.date, row.parsedDate) !== viewYear) return false;
-      return matchesFilters(row, search, "all");
-    });
+    const pastRows = filteredRows.filter((row) => row.done && row.hasDate);
     return heldMinusPaidEur(pastRows, scopedPayments, settings);
-  }, [bandRows, scopedPayments, settings, viewYear, search]);
+  }, [filteredRows, scopedPayments, settings]);
 
-  /** Očekivano = future totals for year/band/search (ignores status filter). */
+  /** Očekivano = future totals for year/band/search (not status). */
   const expectedEur = useMemo(() => {
     const futureRows = bandRows.filter((row) => {
       const year = yearFromDate(row.date, row.parsedDate);
@@ -271,7 +271,7 @@ export default function ReportPage({
           {financeMode === "band" ? <em className="finansije-mode-tag">Bend mod</em> : null}
           <span
             className="finansije-meta-item finansije-meta-owed"
-            title="Zbir održanih datuma minus uplate (isti filter: bend / godina / pretraga)"
+            title="Zbir održanih datuma iz liste minus uplate (isti filteri)"
           >
             <span className="finansije-meta-label">Potražuje</span>{" "}
             <strong>{formatEur(claimEur)}</strong>
