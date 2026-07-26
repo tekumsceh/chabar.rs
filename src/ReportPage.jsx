@@ -117,13 +117,17 @@ export default function ReportPage({
   }, [payments, viewYear, activeBandId, allBandsId]);
 
   /**
-   * Potražuje follows the Datumi filters (band / year / search / status):
-   * past dates currently in the list − uplate in the same band/year.
+   * Potražuje = past dates (band/year/search) − uplate (band/year).
+   * Status filter only changes which rows are listed (e.g. Dospele neplaćene).
    */
   const claimEur = useMemo(() => {
-    const pastRows = filteredRows.filter((row) => row.done && row.hasDate);
+    const pastRows = bandRows.filter((row) => {
+      if (!row.done || !row.hasDate) return false;
+      if (yearFromDate(row.date, row.parsedDate) !== viewYear) return false;
+      return matchesFilters(row, search, "all");
+    });
     return heldMinusPaidEur(pastRows, scopedPayments, settings);
-  }, [filteredRows, scopedPayments, settings]);
+  }, [bandRows, scopedPayments, settings, viewYear, search]);
 
   /** Očekivano = future totals for year/band/search (not status). */
   const expectedEur = useMemo(() => {

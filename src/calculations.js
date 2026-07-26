@@ -37,14 +37,20 @@ function compareFinanceRows(a, b) {
 
 /**
  * Member/band ledger:
- * - Convert RSD legs with the rate for that calendar date (legacy 116.5 through cutoff).
- * - Apply each band's payment pool only to that band's dated-due gigs (calendar order).
+ * - Fee + transport + member-payee expenses (troškovi “meni”) on each date.
+ * - One personal uplate pool applied in calendar order across bands.
  * - Undated / invalid dates never earn and never consume the pool.
  */
 export function calculate(events, payments, settings) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
   const asOfDate = parseDate(settings.asOfDate);
   const calculationDate = Number.isNaN(asOfDate.getTime()) ? startOfToday() : asOfDate;
+  let paidPool = totalPaymentsEur(payments, settings);
+  let strictEur = 0;
+  let strictDin = 0;
+  let futureCount = 0;
+  let unpaidCount = 0;
+  let partialCount = 0;
 
   const enriched = (events || []).map((event, index) => {
     const parsedDate = parseDate(event.date);
@@ -53,7 +59,8 @@ export function calculate(events, payments, settings) {
     const priceEur = numberValue(event.priceEur);
     const transportRsd = numberValue(event.transportRsd);
     const rate = hasDate ? rateForDate(parsedDate, settings) : DEFAULT_RATE;
-    const totalEur = hasDate ? priceEur + transportRsd / rate : 0;
+    const expenseEur = memberPayeeExpenseEur(event.expenseItems, rate);
+    const totalEur = hasDate ? priceEur + transportRsd / rate + expenseEur : 0;
 
     return {
       ...event,
@@ -63,6 +70,7 @@ export function calculate(events, payments, settings) {
       done,
       priceEur,
       transportRsd,
+      expenseEur,
       rate,
       totalEur,
       paymentStatus: "",
@@ -70,65 +78,41 @@ export function calculate(events, payments, settings) {
     };
   });
 
-  const paymentsByBand = new Map();
-  for (const payment of payments || []) {
-    const bandKey = String(payment.bandId || "").trim() || "_none";
-    if (!paymentsByBand.has(bandKey)) paymentsByBand.set(bandKey, []);
-    paymentsByBand.get(bandKey).push(payment);
-  }
+  const allocationOrder = [...enriched].sort(compareFinanceRows);
 
-  const rowsByBand = new Map();
-  for (const row of enriched) {
-    const bandKey = String(row.bandId || "").trim() || "_none";
-    if (!rowsByBand.has(bandKey)) rowsByBand.set(bandKey, []);
-    rowsByBand.get(bandKey).push(row);
-  }
+  for (const row of allocationOrder) {
+    if (!row.hasDate) continue;
 
-  let strictEur = 0;
-  let strictDin = 0;
-  let futureCount = 0;
-  let unpaidCount = 0;
-  let partialCount = 0;
+    if (!row.done) {
+      futureCount += 1;
+      continue;
+    }
 
-  for (const [bandKey, bandRows] of rowsByBand) {
-    let paidPool = totalPaymentsEur(paymentsByBand.get(bandKey) || [], settings);
-    const allocationOrder = [...bandRows].sort(compareFinanceRows);
+    strictEur += row.totalEur;
+    strictDin += row.transportRsd;
 
-    for (const row of allocationOrder) {
-      if (!row.hasDate) continue;
-
-      if (!row.done) {
-        futureCount += 1;
-        continue;
-      }
-
-      strictEur += row.totalEur;
-      strictDin += row.transportRsd;
-
-      if (row.totalEur <= paidPool + POOL_EPS) {
-        row.paymentStatus = "Plaćeno";
-        row.paymentClass = "paid";
-        paidPool = Math.max(0, paidPool - row.totalEur);
-      } else if (paidPool > POOL_EPS) {
-        const remaining = row.totalEur - paidPool;
-        row.paymentStatus = remaining;
-        row.paymentClass = "partial";
-        partialCount += 1;
-        unpaidCount += 1;
-        paidPool = 0;
-      } else {
-        row.paymentStatus = row.totalEur;
-        row.paymentClass = "unpaid";
-        unpaidCount += 1;
-        paidPool = 0;
-      }
+    if (row.totalEur <= paidPool + POOL_EPS) {
+      row.paymentStatus = "Plaćeno";
+      row.paymentClass = "paid";
+      paidPool = Math.max(0, paidPool - row.totalEur);
+    } else if (paidPool > POOL_EPS) {
+      const remaining = row.totalEur - paidPool;
+      row.paymentStatus = remaining;
+      row.paymentClass = "partial";
+      partialCount += 1;
+      unpaidCount += 1;
+      paidPool = 0;
+    } else {
+      row.paymentStatus = row.totalEur;
+      row.paymentClass = "unpaid";
+      unpaidCount += 1;
+      paidPool = 0;
     }
   }
 
   const rows = [...enriched].sort(compareFinanceRows);
   const paidEur = totalPaymentsEur(payments, settings);
   const paidDin = totalPaymentsDin(payments, settings);
-  /** Potražuje = held date totals − payments (not waterfall remainders). */
   const unpaidClaim = heldMinusPaidEur(rows, payments, settings);
   const claimEur = unpaidClaim;
   const claimRate = rateForDate(calculationDate, settings);
@@ -152,6 +136,17 @@ export function calculate(events, payments, settings) {
   };
 }
 
+/** Expenses payable to a member (Isplata: meni / payee member), in EUR. */
+export function memberPayeeExpenseEur(expenseItems, rate) {
+  const safeRate = rate > 0 ? rate : DEFAULT_RATE;
+  return (expenseItems || []).reduce((sum, item) => {
+    if (String(item?.payeeKind || "").toLowerCase() !== "member") return sum;
+    const amount = numberValue(item.amount);
+    if (amount <= 0) return sum;
+    return sum + (String(item.currency || "EUR").toUpperCase() === "RSD" ? amount / safeRate : amount);
+  }, 0);
+}
+
 /** Sum of set amounts on held (past) dates. */
 export function heldDatesEur(rows) {
   return (rows || []).reduce((sum, row) => {
@@ -161,34 +156,11 @@ export function heldDatesEur(rows) {
 }
 
 /**
- * Potražuje: per band, (sum past date amounts − sum uplate), then add those up.
- * One band’s overpayment must not wipe another band’s debt.
+ * Potražuje: sum(past date amounts) − sum(uplate), floored at 0.
  * Pass rows + payments already scoped by year / band tile / search.
  */
 export function heldMinusPaidEur(rows, payments, settingsOrRate) {
-  const rowsByBand = new Map();
-  for (const row of rows || []) {
-    if (!row?.done || !row?.hasDate) continue;
-    const key = String(row.bandId || "").trim() || "_none";
-    if (!rowsByBand.has(key)) rowsByBand.set(key, []);
-    rowsByBand.get(key).push(row);
-  }
-
-  const paysByBand = new Map();
-  for (const payment of payments || []) {
-    const key = String(payment.bandId || "").trim() || "_none";
-    if (!paysByBand.has(key)) paysByBand.set(key, []);
-    paysByBand.get(key).push(payment);
-  }
-
-  let total = 0;
-  const keys = new Set([...rowsByBand.keys(), ...paysByBand.keys()]);
-  for (const key of keys) {
-    const held = heldDatesEur(rowsByBand.get(key) || []);
-    const paid = totalPaymentsEur(paysByBand.get(key) || [], settingsOrRate);
-    total += Math.max(0, held - paid);
-  }
-  return total;
+  return Math.max(0, heldDatesEur(rows) - totalPaymentsEur(payments, settingsOrRate));
 }
 
 /** @deprecated use heldMinusPaidEur — kept for any stray imports */
