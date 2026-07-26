@@ -128,7 +128,8 @@ export function calculate(events, payments, settings) {
   const rows = [...enriched].sort(compareFinanceRows);
   const paidEur = totalPaymentsEur(payments, settings);
   const paidDin = totalPaymentsDin(payments, settings);
-  const unpaidClaim = unpaidClaimEur(rows);
+  /** Potražuje = held date totals − payments (not waterfall remainders). */
+  const unpaidClaim = heldMinusPaidEur(rows, payments, settings);
   const claimEur = unpaidClaim;
   const claimRate = rateForDate(calculationDate, settings);
 
@@ -142,7 +143,6 @@ export function calculate(events, payments, settings) {
     paidEur,
     paidDin,
     claimEur,
-    /** Amount still owed to the member (never negative). Matches sum of unpaid/partial remainders. */
     unpaidClaimEur: unpaidClaim,
     claimDin: Math.max(0, claimEur) * claimRate,
     unpaidCount,
@@ -152,8 +152,26 @@ export function calculate(events, payments, settings) {
   };
 }
 
-/** Sum of unpaid + partial remainders on due rows (held Potražuje). */
-export function unpaidClaimEur(rows) {
+/** Sum of set amounts on held (past) dates. */
+export function heldDatesEur(rows) {
+  return (rows || []).reduce((sum, row) => {
+    if (!row?.done || !row?.hasDate) return sum;
+    return sum + Math.max(0, numberValue(row.totalEur));
+  }, 0);
+}
+
+/**
+ * Potražuje: sum(held date amounts) − sum(payments), floored at 0.
+ * Pass the same filtered rows + payments that the current filters imply.
+ */
+export function heldMinusPaidEur(rows, payments, settingsOrRate) {
+  return Math.max(0, heldDatesEur(rows) - totalPaymentsEur(payments, settingsOrRate));
+}
+
+/** @deprecated use heldMinusPaidEur — kept for any stray imports */
+export function unpaidClaimEur(rows, payments, settingsOrRate) {
+  if (payments) return heldMinusPaidEur(rows, payments, settingsOrRate);
+  // Legacy: sum waterfall remainders if payments omitted
   return (rows || []).reduce((sum, row) => {
     if (!row?.done) return sum;
     if (row.paymentClass === "partial") {

@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
-import { calculate, expectedFutureEur, formatEur, formatRsd, formatScheduleDateParts, parseDate, unpaidClaimEur } from "./calculations.js";
+import {
+  calculate,
+  expectedFutureEur,
+  formatEur,
+  formatRsd,
+  formatScheduleDateParts,
+  heldMinusPaidEur,
+  parseDate,
+} from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
@@ -95,8 +103,28 @@ export default function ReportPage({
     });
   }, [bandRows, search, statusFilter, viewYear, dateSort]);
 
-  /** Potražuje = held unpaid/partial in the filtered Datumi list (band/year/search/status). */
-  const claimEur = useMemo(() => unpaidClaimEur(filteredRows), [filteredRows]);
+  /** Payments in the same band + year scope as Datumi (search/status don't apply to uplate). */
+  const scopedPayments = useMemo(() => {
+    return payments.filter((payment) => {
+      if (yearFromDate(payment.date) !== viewYear) return false;
+      if (activeBandId && activeBandId !== allBandsId && payment.bandId !== activeBandId) return false;
+      return true;
+    });
+  }, [payments, viewYear, activeBandId, allBandsId]);
+
+  /**
+   * Potražuje = sum(past dates in band/year/search) − sum(uplate in band/year).
+   * Status filter only changes the list, not this total.
+   */
+  const claimEur = useMemo(() => {
+    const pastRows = bandRows.filter((row) => {
+      if (!row.done || !row.hasDate) return false;
+      if (yearFromDate(row.date, row.parsedDate) !== viewYear) return false;
+      return matchesFilters(row, search, "all");
+    });
+    return heldMinusPaidEur(pastRows, scopedPayments, settings);
+  }, [bandRows, scopedPayments, settings, viewYear, search]);
+
   /** Očekivano = future totals for year/band/search (ignores status filter). */
   const expectedEur = useMemo(() => {
     const futureRows = bandRows.filter((row) => {
@@ -121,9 +149,8 @@ export default function ReportPage({
   }, [filteredRows, safePage]);
 
   const visiblePayments = useMemo(() => {
-    const filtered = payments.filter((payment) => yearFromDate(payment.date) === viewYear);
     const direction = dateSort === "desc" ? -1 : 1;
-    return [...filtered].sort((a, b) => {
+    return [...scopedPayments].sort((a, b) => {
       const aParsed = parseDate(a.date);
       const bParsed = parseDate(b.date);
       const aOk = !Number.isNaN(aParsed.getTime());
@@ -133,7 +160,7 @@ export default function ReportPage({
       if (!bOk) return -1;
       return (aParsed.getTime() - bParsed.getTime()) * direction;
     });
-  }, [payments, viewYear, dateSort]);
+  }, [scopedPayments, dateSort]);
 
   const selectedRow = useMemo(
     () => bandRows.find((row) => row.id === selectedId) || null,
@@ -242,7 +269,10 @@ export default function ReportPage({
       <div className="finansije-year-meta-bar">
         <span className="finansije-year-meta">
           {financeMode === "band" ? <em className="finansije-mode-tag">Bend mod</em> : null}
-          <span className="finansije-meta-item finansije-meta-owed" title="Neplaćeno na održanim datumima">
+          <span
+            className="finansije-meta-item finansije-meta-owed"
+            title="Zbir održanih datuma minus uplate (isti filter: bend / godina / pretraga)"
+          >
             <span className="finansije-meta-label">Potražuje</span>{" "}
             <strong>{formatEur(claimEur)}</strong>
           </span>
