@@ -11,8 +11,10 @@ import {
 import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
+import EventAssigneesPanel from "./EventAssigneesPanel.jsx";
 import EventDayDetails from "./EventDayDetails.jsx";
 import FieldSelect from "./FieldSelect.jsx";
+import FadeScroll from "./FadeScroll.jsx";
 
 const TABS = [
   { id: "osnovno", label: "Osnovno" },
@@ -323,6 +325,7 @@ export default function EventPage({
 
       {tab === "osnovno" && !detailsOpen ? (
         <section className="event-page-panel" role="tabpanel" aria-label="Osnovno">
+          <FadeScroll viewportClassName="event-page-panel-scroll">
           {editing ? (
             <form className="event-page-form termin-form" onSubmit={saveEdit}>
               <label htmlFor="eventBand" className="termin-form-full">
@@ -430,11 +433,13 @@ export default function EventPage({
               </div>
             </dl>
           )}
+          </FadeScroll>
         </section>
       ) : null}
 
       {tab === "tehnicki" && !detailsOpen ? (
         <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Tehnički">
+          <FadeScroll viewportClassName="event-page-panel-scroll">
           <div className="event-page-empty">
             <span className="event-page-empty-icon" aria-hidden="true">
               <TechIcon />
@@ -442,11 +447,13 @@ export default function EventPage({
             <h3 className="event-page-stub-title">Tehnički</h3>
             <p className="event-page-stub-copy">Rider, stage i tehnika — uskoro.</p>
           </div>
+          </FadeScroll>
         </section>
       ) : null}
 
       {tab === "show" && !detailsOpen ? (
         <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Show">
+          <FadeScroll viewportClassName="event-page-panel-scroll">
           <div className="event-page-empty">
             <span className="event-page-empty-icon" aria-hidden="true">
               <ShowIcon />
@@ -454,11 +461,13 @@ export default function EventPage({
             <h3 className="event-page-stub-title">Show</h3>
             <p className="event-page-stub-copy">Setlista i show materijal — uskoro.</p>
           </div>
+          </FadeScroll>
         </section>
       ) : null}
 
       {tab === "finansije" && canSeeFinance && !detailsOpen ? (
         <section className="event-page-panel event-page-finance" role="tabpanel" aria-label="Finansije">
+          <FadeScroll viewportClassName="event-page-panel-scroll">
           <h3 className="event-page-section-title">
             <HonorarIcon />
             <span>Honorari</span>
@@ -485,6 +494,16 @@ export default function EventPage({
               await onRefreshSchedule?.();
             }}
           />
+          <h3 className="event-page-section-title event-page-section-title-spaced">
+            <AssignIcon />
+            <span>Saradnici na terminu</span>
+          </h3>
+          <EventAssigneesPanel
+            eventId={event.id}
+            bandId={event.bandId || band?.id}
+            showToast={showToast}
+          />
+          </FadeScroll>
         </section>
       ) : null}
 
@@ -527,6 +546,7 @@ export default function EventPage({
             </em>
           </button>
           <section className="event-page-panel" role="tabpanel" aria-label="Kompletni detalji">
+            <FadeScroll viewportClassName="event-page-panel-scroll">
             <h3 className="event-page-section-title">
               <span>Vremenski raspored</span>
             </h3>
@@ -536,6 +556,7 @@ export default function EventPage({
               readOnly={locked}
               showToast={showToast}
             />
+            </FadeScroll>
           </section>
         </>
       ) : null}
@@ -665,6 +686,16 @@ function ExpenseIcon() {
         strokeLinejoin="round"
       />
       <path d="M9 12h6M9 15h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AssignIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.5 19c.6-3 2.6-4.7 5.5-4.7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M16 11v6M13 14h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

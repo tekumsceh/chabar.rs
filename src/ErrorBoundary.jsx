@@ -1,4 +1,5 @@
 import { Component } from "react";
+import FadeScroll from "./FadeScroll.jsx";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -28,7 +29,9 @@ export default class ErrorBoundary extends Component {
               Osveži
             </button>
           </div>
-          <pre className="app-crash-detail">{String(this.state.error?.message || this.state.error)}</pre>
+          <FadeScroll className="fade-scroll-inset app-crash-detail-scroll">
+            <pre className="app-crash-detail">{String(this.state.error?.message || this.state.error)}</pre>
+          </FadeScroll>
         </main>
       );
     }

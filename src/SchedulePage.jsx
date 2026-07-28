@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   formatScheduleDateParts,
   fromIsoDate,
@@ -13,8 +13,10 @@ import { api } from "./api.js";
 import { useConfirm } from "./confirmDialog.jsx";
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
+import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import EventPage from "./EventPage.jsx";
+import FadeScroll from "./FadeScroll.jsx";
 import { ownerBandLimit } from "../shared/bandLimits.js";
 
 const scheduleFilters = [
@@ -37,6 +39,7 @@ export default function SchedulePage({
   bands = [],
   settings,
   activeBandId,
+  allBandsId = "__all__",
   onBandChange,
   onBandsChanged,
   showToast,
@@ -230,7 +233,7 @@ export default function SchedulePage({
     const label = [row.date, row.city, row.venue].filter(Boolean).join(" — ") || "ovaj termin";
     const confirmed = await confirm({
       title: "Obrisati termin?",
-      message: `${label}\n\nOva akcija se ne može poništiti.`,
+      message: `Da li si siguran/a da želiš da obrišeš ovaj termin?\n\n${label}\n\nOva akcija se ne može poništiti.`,
       confirmLabel: "Obriši",
       cancelLabel: "Otkaži",
       danger: true,
@@ -301,6 +304,12 @@ export default function SchedulePage({
       <div className="raspored-list-view" hidden={eventOpen} aria-hidden={eventOpen}>
       <header className="raspored-bar">
         <div className="raspored-tools raspored-tools-start" aria-label="Filteri rasporeda">
+          <BandFilterSelect
+            bands={bands}
+            activeBandId={activeBandId}
+            allBandsId={allBandsId}
+            onSelectBand={onBandChange}
+          />
           <MenuSelect
             label="Prikaz datuma"
             icon={<CalendarFilterIcon />}
@@ -434,37 +443,28 @@ export default function SchedulePage({
                     <span className="raspored-date-month">{dateParts.month}</span>
                   </time>
                   <div className="raspored-main">
-                    <strong className="raspored-city">{row.city || "—"}</strong>
-                    {row.venue ? <span className="raspored-venue">{row.venue}</span> : null}
+                    <div className="raspored-main-line">
+                      <strong className="raspored-city">{row.city || "—"}</strong>
+                      {row.venue ? (
+                        <span className="raspored-venue">
+                          <span className="raspored-venue-pin" aria-hidden="true">
+                            <VenuePinIcon />
+                          </span>
+                          <span className="raspored-venue-text">{row.venue}</span>
+                        </span>
+                      ) : (
+                        <span className="raspored-venue is-empty" aria-hidden="true" />
+                      )}
+                    </div>
+                    {row.bandName ? <span className="raspored-band">{row.bandName}</span> : null}
                   </div>
-                  <span className="raspored-band">{row.bandName || ""}</span>
                 </button>
                 <div className="raspored-actions">
-                  <span
-                    className={`raspored-fee-mark ${feeMarked ? "is-set" : "is-unset"}`}
-                    title={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
-                    aria-label={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
-                  >
-                    <BillIcon />
-                  </span>
-                  {row.done ? (
-                    <span className="raspored-lock" title="Prošli termin je zaključan">
-                      <LockIcon />
-                    </span>
-                  ) : (
-                    <button
-                      className="raspored-icon-btn raspored-icon-btn-danger"
-                      type="button"
-                      aria-label="Obriši termin"
-                      title="Obriši termin"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        requestRemove(row);
-                      }}
-                    >
-                      <CloseIcon />
-                    </button>
-                  )}
+                  <DateRowMenu
+                    feeMarked={feeMarked}
+                    locked={Boolean(row.done)}
+                    onDelete={() => requestRemove(row)}
+                  />
                 </div>
               </li>
               );
@@ -508,6 +508,7 @@ export default function SchedulePage({
       {formOpen ? (
         <div className="modal-backdrop" role="presentation">
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="addTerminTitle">
+            <FadeScroll>
             <div className="panel-heading compact">
               <div>
                 <h2 id="addTerminTitle">Novi termin</h2>
@@ -590,6 +591,7 @@ export default function SchedulePage({
                 </button>
               </div>
             </form>
+            </FadeScroll>
           </div>
         </div>
       ) : null}
@@ -603,6 +605,7 @@ export default function SchedulePage({
           }}
         >
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="createBandTitle">
+            <FadeScroll>
             <div className="panel-heading compact">
               <div>
                 <h2 id="createBandTitle">Novi bend</h2>
@@ -643,6 +646,7 @@ export default function SchedulePage({
                 </button>
               </div>
             </form>
+            </FadeScroll>
           </div>
         </div>
       ) : null}
@@ -653,6 +657,144 @@ export default function SchedulePage({
 function isFinancialOnlyEntry(event) {
   const note = String(event.note || "").trim().toLowerCase();
   return note === "od prosle godine";
+}
+
+function DateRowMenu({ feeMarked, locked, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const idleTimerRef = useRef(0);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const IDLE_MS = 5000;
+
+    function clearIdle() {
+      window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = 0;
+    }
+
+    function armIdle() {
+      clearIdle();
+      idleTimerRef.current = window.setTimeout(() => setOpen(false), IDLE_MS);
+    }
+
+    function onPointerDown(event) {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+        return;
+      }
+      armIdle();
+    }
+
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (rootRef.current?.contains(event.target)) armIdle();
+    }
+
+    function onMenuInteract() {
+      armIdle();
+    }
+
+    armIdle();
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    const root = rootRef.current;
+    root?.addEventListener("pointermove", onMenuInteract);
+    root?.addEventListener("focusin", onMenuInteract);
+
+    return () => {
+      clearIdle();
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      root?.removeEventListener("pointermove", onMenuInteract);
+      root?.removeEventListener("focusin", onMenuInteract);
+    };
+  }, [open]);
+
+  return (
+    <div className={`date-row-menu ${open ? "is-open" : ""}`} ref={rootRef}>
+      <button
+        type="button"
+        className={`date-row-menu-trigger ${open ? "is-open" : ""}`}
+        aria-label="Više radnji za termin"
+        title="Više"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        <MoreDotsIcon />
+      </button>
+      {open ? (
+        <ul className="date-row-menu-list" id={menuId} role="menu" aria-label="Radnje termina">
+          <li role="none">
+            <div
+              className={`date-row-menu-item is-status ${feeMarked ? "is-fee-set" : "is-fee-unset"}`}
+              role="menuitem"
+              aria-disabled="true"
+            >
+              {feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
+            </div>
+          </li>
+          {locked ? (
+            <li role="none">
+              <div className="date-row-menu-item is-status" role="menuitem" aria-disabled="true">
+                Prošli termin — zaključan
+              </div>
+            </li>
+          ) : (
+            <li role="none">
+              <button
+                type="button"
+                className="date-row-menu-item is-danger"
+                role="menuitem"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOpen(false);
+                  onDelete?.();
+                }}
+              >
+                Obriši termin
+              </button>
+            </li>
+          )}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function VenuePinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 21s6.5-5.2 6.5-11a6.5 6.5 0 1 0-13 0c0 5.8 6.5 11 6.5 11z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="10" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function MoreDotsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="6" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="18" r="1.6" fill="currentColor" />
+    </svg>
+  );
 }
 
 function enrichScheduleRows(events, asOfDateText) {
@@ -720,30 +862,6 @@ function PageChevronRightIcon() {
   );
 }
 
-function LockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect
-        x="5"
-        y="10"
-        width="14"
-        height="10"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M8 10V7a4 4 0 0 1 8 0v3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -783,26 +901,6 @@ function NewBandIcon() {
         strokeLinecap="round"
       />
       <path d="M17 8v6M14 11h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/** Dollar-bill mark: fee (or default fee) is set for this user on the date. */
-function BillIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="2.5" y="6" width="19" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="6.2" cy="12" r="1" fill="currentColor" />
-      <circle cx="17.8" cy="12" r="1" fill="currentColor" />
     </svg>
   );
 }

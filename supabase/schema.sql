@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS bands (
 CREATE TABLE IF NOT EXISTS band_members (
   band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('owner', 'lead', 'member')),
+  member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('owner', 'lead', 'member', 'saradnik')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (band_id, user_id)
 );
@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS event_member_finance (
 
 CREATE INDEX IF NOT EXISTS event_member_finance_user_id_idx ON event_member_finance(user_id);
 CREATE INDEX IF NOT EXISTS payments_user_id_idx ON payments(user_id);
+
+CREATE TABLE IF NOT EXISTS event_assignees (
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  assigned_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (event_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS event_assignees_user_id_idx ON event_assignees(user_id);
+CREATE INDEX IF NOT EXISTS event_assignees_event_id_idx ON event_assignees(event_id);
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$

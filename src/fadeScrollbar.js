@@ -1,5 +1,8 @@
-const SCROLL_HOSTS = ".raspored-panel, .settings-page";
+/** Persistent page hosts (stay mounted via app-page[hidden]). Modals/login use <FadeScroll>. */
+const SCROLL_HOSTS =
+  ".raspored-panel, .settings-page, .band-home-main, .band-home-side-body";
 const FADE_OUT_MS = 1000;
+const INIT_ATTR = "data-fade-init";
 
 /**
  * Custom 2px scrollbar:
@@ -8,10 +11,19 @@ const FADE_OUT_MS = 1000;
  *
  * Important: never leave a React-managed node reparented under a detached wrap.
  * Cleanup always restores the host to its original parent before removing the wrap.
+ * Never touch React <FadeScroll> wraps (those have .fade-scroll-viewport, no data-fade-init).
  */
 export function initFadeScrollbars() {
   const hideTimers = new WeakMap();
   const touching = new WeakSet();
+
+  function isInitWrap(wrap) {
+    return wrap instanceof HTMLElement && wrap.getAttribute(INIT_ATTR) === "1";
+  }
+
+  function getInitHost(wrap) {
+    return [...wrap.children].find((child) => child.matches?.(SCROLL_HOSTS)) || null;
+  }
 
   function isScrollable(viewport) {
     return viewport.scrollHeight > viewport.clientHeight + 1;
@@ -79,7 +91,8 @@ export function initFadeScrollbars() {
   }
 
   function destroyWrap(wrap) {
-    const viewport = wrap.querySelector(SCROLL_HOSTS);
+    if (!isInitWrap(wrap)) return;
+    const viewport = getInitHost(wrap);
     try {
       wrap._fadeScrollCleanup?.();
     } catch {
@@ -92,7 +105,7 @@ export function initFadeScrollbars() {
   function enhance(viewport) {
     if (!(viewport instanceof HTMLElement)) return;
     if (viewport.closest(".fade-scroll-wrap")) return;
-    // Event detail panels scroll inside the page; wrapping them fights React unmounts.
+    // Nested event panels remount often — use <FadeScroll> there instead of reparenting.
     if (viewport.classList.contains("event-page-panel")) return;
 
     const parent = viewport.parentElement;
@@ -100,6 +113,7 @@ export function initFadeScrollbars() {
 
     const wrap = document.createElement("div");
     wrap.className = "fade-scroll-wrap";
+    wrap.setAttribute(INIT_ATTR, "1");
     parent.insertBefore(wrap, viewport);
     wrap.appendChild(viewport);
 
@@ -164,8 +178,8 @@ export function initFadeScrollbars() {
   }
 
   function scan() {
-    document.querySelectorAll(".fade-scroll-wrap").forEach((wrap) => {
-      const host = wrap.querySelector(SCROLL_HOSTS);
+    document.querySelectorAll(`.fade-scroll-wrap[${INIT_ATTR}="1"]`).forEach((wrap) => {
+      const host = getInitHost(wrap);
       if (!host || !document.contains(host)) {
         destroyWrap(wrap);
       }
@@ -183,8 +197,8 @@ export function initFadeScrollbars() {
     queueMicrotask(() => {
       scheduled = false;
       // Restore hosts that React still owns before it tries to remove them mid-tree.
-      document.querySelectorAll(".fade-scroll-wrap").forEach((wrap) => {
-        const host = wrap.querySelector(SCROLL_HOSTS);
+      document.querySelectorAll(`.fade-scroll-wrap[${INIT_ATTR}="1"]`).forEach((wrap) => {
+        const host = getInitHost(wrap);
         if (host && !document.contains(wrap)) {
           destroyWrap(wrap);
         }
@@ -196,6 +210,6 @@ export function initFadeScrollbars() {
 
   return () => {
     mo.disconnect();
-    document.querySelectorAll(".fade-scroll-wrap").forEach(destroyWrap);
+    document.querySelectorAll(`.fade-scroll-wrap[${INIT_ATTR}="1"]`).forEach(destroyWrap);
   };
 }

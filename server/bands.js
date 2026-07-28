@@ -359,7 +359,7 @@ export async function getBandHome(req, res, next) {
          JOIN profiles p ON p.id = bm.user_id
          WHERE bm.band_id = :bandId
          ORDER BY
-           CASE bm.member_role WHEN 'owner' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END,
+           CASE bm.member_role WHEN 'owner' THEN 0 WHEN 'lead' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
            p.display_name, p.email`,
         { bandId },
       ),
@@ -578,8 +578,8 @@ export async function addBandMember(req, res, next) {
 }
 
 /**
- * Owner: set lead/member.
- * Lead: can promote member → lead (not demote other leads; not touch owner).
+ * Owner: set lead/member/saradnik.
+ * Lead: promote member → lead; set member ↔ saradnik (not demote other leads; not touch owner).
  */
 export async function updateMemberRole(req, res, next) {
   try {
@@ -592,8 +592,8 @@ export async function updateMemberRole(req, res, next) {
     if (!targetUserId) {
       return res.status(400).json({ error: "Missing user" });
     }
-    if (nextRole !== "lead" && nextRole !== "member") {
-      return res.status(400).json({ error: "Invalid role", detail: "Dozvoljeno: lead ili member." });
+    if (nextRole !== "lead" && nextRole !== "member" && nextRole !== "saradnik") {
+      return res.status(400).json({ error: "Invalid role", detail: "Dozvoljeno: lead, član ili saradnik." });
     }
     if (targetUserId === req.user.id) {
       return res.status(400).json({ error: "Invalid role", detail: "Ne možeš menjati sopstvenu ulogu ovde." });
@@ -611,22 +611,25 @@ export async function updateMemberRole(req, res, next) {
     }
 
     if (req.memberRole === "lead") {
-      if (target.rows[0].member_role === "lead" && nextRole === "member") {
+      if (target.rows[0].member_role === "lead") {
         return res.status(403).json({
           error: "Forbidden",
-          detail: "Lead ne može sniziti drugog lead-a. To radi vlasnik.",
+          detail: "Lead ne može menjati drugog lead-a. To radi vlasnik.",
         });
       }
-      if (nextRole !== "lead") {
+      if (nextRole === "lead" && target.rows[0].member_role !== "member") {
         return res.status(403).json({
           error: "Forbidden",
-          detail: "Lead može samo unaprediti člana u lead.",
+          detail: "Lead može unaprediti samo člana u lead.",
         });
       }
     }
 
     await query(
-      `UPDATE band_members SET member_role = :role WHERE band_id = :bandId AND user_id = :userId`,
+      `UPDATE band_members
+       SET member_role = :role,
+           can_invite = CASE WHEN :role::text = 'saradnik' THEN FALSE ELSE can_invite END
+       WHERE band_id = :bandId AND user_id = :userId`,
       { role: nextRole, bandId: req.bandId, userId: targetUserId },
     );
     clearMembershipCache();
@@ -715,10 +718,10 @@ export async function removeBandMember(req, res, next) {
     if (target.rows[0].member_role === "owner") {
       return res.status(400).json({ error: "Invalid user", detail: "Vlasnik se ne može ukloniti — prenesi vlasništvo." });
     }
-    if (req.memberRole === "lead" && target.rows[0].member_role !== "member") {
+    if (req.memberRole === "lead" && target.rows[0].member_role !== "member" && target.rows[0].member_role !== "saradnik") {
       return res.status(403).json({
         error: "Forbidden",
-        detail: "Lead može ukloniti samo obične članove.",
+        detail: "Lead može ukloniti samo članove i saradnike.",
       });
     }
 

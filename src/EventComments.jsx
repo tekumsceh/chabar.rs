@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
+import FadeScroll from "./FadeScroll.jsx";
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -77,17 +78,19 @@ export default function EventComments({ eventId, bandId, showToast, compact = fa
       ) : comments.length === 0 ? (
         <p className="event-comments-empty">Nema komentara još.</p>
       ) : (
-        <ul className="event-comments-list">
-          {comments.map((comment) => (
-            <li key={comment.id} className="event-comments-item">
-              <div className="event-comments-meta">
-                <strong>{comment.authorName || "Korisnik"}</strong>
-                <time dateTime={comment.createdAt}>{formatDatedStamp(comment.createdAt)}</time>
-              </div>
-              <p className="event-comments-body">{comment.body}</p>
-            </li>
-          ))}
-        </ul>
+        <FadeScroll className="fade-scroll-inset event-comments-scroll">
+          <ul className="event-comments-list">
+            {comments.map((comment) => (
+              <li key={comment.id} className="event-comments-item">
+                <div className="event-comments-meta">
+                  <strong>{comment.authorName || "Korisnik"}</strong>
+                  <time dateTime={comment.createdAt}>{formatDatedStamp(comment.createdAt)}</time>
+                </div>
+                <p className="event-comments-body">{comment.body}</p>
+              </li>
+            ))}
+          </ul>
+        </FadeScroll>
       )}
       <form className="event-comments-form" onSubmit={submit}>
         <label className="sr-only" htmlFor={`event-comment-${eventId}`}>

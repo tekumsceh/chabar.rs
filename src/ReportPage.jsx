@@ -11,8 +11,10 @@ import {
 } from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
+import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import EventComments from "./EventComments.jsx";
+import FadeScroll from "./FadeScroll.jsx";
 
 const statusOptions = [
   { id: "all", label: "Sve stavke" },
@@ -28,6 +30,7 @@ export default function ReportPage({
   bands = [],
   activeBandId,
   allBandsId,
+  onBandChange,
   financeMode = "member",
   canUseBandMode = false,
   onFinanceModeChange,
@@ -186,6 +189,12 @@ export default function ReportPage({
     <div className="raspored finansije">
       <header className="raspored-bar">
         <div className="raspored-tools raspored-tools-start" aria-label="Filteri finansija">
+          <BandFilterSelect
+            bands={bands}
+            activeBandId={activeBandId}
+            allBandsId={allBandsId}
+            onSelectBand={onBandChange}
+          />
           {canUseBandMode ? (
             <button
               type="button"
@@ -490,7 +499,7 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
           </button>
         </header>
 
-        <div className="finance-detail-body">
+        <FadeScroll viewportClassName="finance-detail-body">
           <section className="finance-detail-section">
             <h3>Osnovno</h3>
             <dl className="finance-detail-grid">
@@ -612,7 +621,7 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
           <section className="finance-detail-section">
             <EventComments eventId={row.id} bandId={row.bandId} showToast={showToast} compact />
           </section>
-        </div>
+        </FadeScroll>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, setApiAuth } from "./api.js";
 import BandPage from "./BandPage.jsx";
-import BandTiles from "./BandTiles.jsx";
+import ChatPage from "./ChatPage.jsx";
+import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText } from "./calculations.js";
 import LegalPage, { isLegalPage } from "./LegalPage.jsx";
 import LoginPage from "./LoginPage.jsx";
@@ -12,13 +13,81 @@ import UserMenu from "./UserMenu.jsx";
 import { log } from "./logger.js";
 import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase.js";
 import { takePendingJoinToken } from "./joinLink.js";
+import { isBandLead } from "../shared/roles.js";
 
-const pages = [
-  ["schedule", "Raspored"],
-  ["report", "Finansije"],
+function ScheduleNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 3.5V7M16 3.5V7M3.5 10h17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BandsNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <circle cx="17" cy="9" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M14.2 19c.4-2.2 1.9-3.5 3.8-3.5 1.2 0 2.2.5 2.9 1.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FinanceNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 19V5M4 19h16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8 15v-4M12 15V8M16 15v-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ChatNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M5 6.5h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2H10l-4.5 3.2V17H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SettingsNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M10.2 3.2h3.6l.4 2.1c.55.2 1.06.48 1.52.83l2-.9 1.8 3.1-1.6 1.4c.08.37.12.75.12 1.14s-.04.77-.12 1.14l1.6 1.4-1.8 3.1-2-.9c-.46.35-.97.63-1.52.83l-.4 2.1h-3.6l-.4-2.1a6.4 6.4 0 0 1-1.52-.83l-2 .9-1.8-3.1 1.6-1.4A6.4 6.4 0 0 1 5.8 12c0-.39.04-.77.12-1.14l-1.6-1.4 1.8-3.1 2 .9c.46-.35.97-.63 1.52-.83l.4-2.1z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+const NAV_ITEMS = [
+  { id: "schedule", label: "Raspored", icon: ScheduleNavIcon },
+  { id: "band", label: "Bendovi", icon: BandsNavIcon },
+  { id: "report", label: "Finansije", icon: FinanceNavIcon },
+  { id: "chat", label: "Chat", icon: ChatNavIcon },
+  { id: "settings", label: "Podešavanja", icon: SettingsNavIcon },
 ];
 
-const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings"]);
+const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "chat", "settings"]);
 const DEFAULT_PAGE = "schedule";
 
 function normalizePage(page) {
@@ -78,11 +147,30 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
+  const [bandsSheetOpen, setBandsSheetOpen] = useState(false);
+  const [bandsAnchor, setBandsAnchor] = useState(null);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const bandsNavRef = useRef(null);
   const eventsRef = useRef(events);
   const financeEventsRef = useRef(financeEvents);
   const scheduleCacheRef = useRef(readStoredScheduleCache());
   const scheduleRequestIdRef = useRef(0);
   const prefetchStartedRef = useRef(false);
+
+  function placeBandsAnchor(anchorEl) {
+    const el = anchorEl || bandsNavRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pad = 8;
+    const sheetW = Math.min(17.5 * 16, window.innerWidth - pad * 2);
+    let centerX = rect.left + rect.width / 2;
+    centerX = Math.min(Math.max(centerX, pad + sheetW / 2), window.innerWidth - pad - sheetW / 2);
+    setBandsAnchor({
+      left: Math.round(centerX),
+      bottom: Math.round(window.innerHeight - rect.top + 8),
+      width: Math.round(sheetW),
+    });
+  }
 
   useEffect(() => {
     eventsRef.current = events;
@@ -142,10 +230,42 @@ export default function App() {
 
   function openBandPage(bandId) {
     const id = bandId || activeBandId;
-    if (!id || id === ALL_BANDS_ID) return;
+    if (!id || id === ALL_BANDS_ID) {
+      setPage("band");
+      return;
+    }
     setActiveBandId(id);
     setPage("band");
+    setBandsSheetOpen(false);
   }
+
+  function handleNav(id, event) {
+    if (id === "schedule") {
+      setBandsSheetOpen(false);
+      goToSchedule();
+      return;
+    }
+    if (id === "band") {
+      if (bandsSheetOpen) {
+        setBandsSheetOpen(false);
+        return;
+      }
+      placeBandsAnchor(event?.currentTarget);
+      setBandsSheetOpen(true);
+      return;
+    }
+    setBandsSheetOpen(false);
+    setPage(id);
+  }
+
+  useEffect(() => {
+    if (!bandsSheetOpen) return undefined;
+    function onReposition() {
+      placeBandsAnchor();
+    }
+    window.addEventListener("resize", onReposition);
+    return () => window.removeEventListener("resize", onReposition);
+  }, [bandsSheetOpen]);
 
   useEffect(() => {
     if (financeMode === "band" && !canUseBandMode) {
@@ -186,12 +306,23 @@ export default function App() {
 
   const skipBandScheduleReload = useRef(true);
 
+  // Set token before child useEffects so pages like BandPage don't 401 on mount.
+  useLayoutEffect(() => {
+    if (!session?.access_token) {
+      setApiAuth({ token: "", bandId: "" });
+      return;
+    }
+    setApiAuth({
+      token: session.access_token,
+      bandId: activeBandId === ALL_BANDS_ID ? "" : activeBandId,
+    });
+  }, [session?.access_token, activeBandId]);
+
   useEffect(() => {
     if (!authReady) return;
 
     if (!session?.access_token) {
       skipBandScheduleReload.current = true;
-      setApiAuth({ token: "", bandId: "" });
       setProfile(null);
       setBands([]);
       setPendingInvites([]);
@@ -207,14 +338,12 @@ export default function App() {
     }
 
     skipBandScheduleReload.current = true;
-    setApiAuth({ token: session.access_token, bandId: activeBandId === ALL_BANDS_ID ? "" : activeBandId });
     bootstrapSession(session.access_token);
   }, [authReady, session?.access_token]);
 
   useEffect(() => {
     if (!session?.access_token || !activeBandId) return;
     localStorage.setItem(ACTIVE_BAND_KEY, activeBandId);
-    setApiAuth({ token: session.access_token, bandId: activeBandId === ALL_BANDS_ID ? "" : activeBandId });
     if (skipBandScheduleReload.current) return;
     // Band switch only needs schedule; finance is always "mine across bands"
     loadScheduleAndFinance({ scheduleOnly: true });
@@ -784,29 +913,42 @@ export default function App() {
   const showSchedule = activePage === "schedule";
   const showBand = activePage === "band";
   const showReport = activePage === "report";
+  const showChat = activePage === "chat";
   const showSettings = activePage === "settings";
-  const forceSchedule = !showSchedule && !showBand && !showReport && !showSettings;
+  const forceSchedule = !showSchedule && !showBand && !showReport && !showChat && !showSettings;
 
   return (
     <div className="app-shell" data-theme={theme}>
-      <nav className="top-nav" aria-label="Glavna navigacija">
-        <div className="top-nav-brand" aria-hidden="true" />
-        <div className="top-nav-links">
-          {pages.map(([id, label]) => (
-            <button
-              key={id}
-              className={`top-nav-link ${activePage === id ? "active" : ""}`}
-              type="button"
-              onClick={() => {
-                if (id === "schedule") goToSchedule();
-                else setPage(id);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="top-nav-user">
+      <header className="app-topbar">
+        <button
+          type="button"
+          className="app-topbar-brand"
+          aria-label="Chabar — Raspored"
+          title="Raspored"
+          onClick={() => {
+            setBandsSheetOpen(false);
+            goToSchedule();
+          }}
+        >
+          Chabar
+        </button>
+        <label className="app-topbar-search">
+          <span className="sr-only">Pretraga</span>
+          <span className="app-topbar-search-icon" aria-hidden="true">
+            <TopSearchIcon />
+          </span>
+          <input
+            type="search"
+            name="globalSearch"
+            enterKeyHint="search"
+            autoComplete="off"
+            placeholder="Pretraga…"
+            className="app-topbar-search-field"
+            value={globalSearch}
+            onChange={(event) => setGlobalSearch(event.target.value)}
+          />
+        </label>
+        <div className="app-topbar-user">
           <UserMenu
             email={profile?.email || session.user?.email || ""}
             displayName={
@@ -831,7 +973,7 @@ export default function App() {
             onSignOut={handleSignOut}
           />
         </div>
-      </nav>
+      </header>
 
       {error ? <div className="app-alert app-alert-global">{error}</div> : null}
 
@@ -844,6 +986,7 @@ export default function App() {
           bands={bands}
           settings={settings}
           activeBandId={activeBandId}
+          allBandsId={ALL_BANDS_ID}
           onBandChange={setActiveBandId}
           onBandsChanged={async () => {
             const me = await api("/api/me");
@@ -868,6 +1011,8 @@ export default function App() {
           bands={bands}
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
+          isActive={showBand}
+          authReady={Boolean(session?.access_token)}
           onBandChange={setActiveBandId}
           onBack={goToSchedule}
           onBandsChanged={async () => {
@@ -888,6 +1033,7 @@ export default function App() {
           bands={bands}
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
+          onBandChange={setActiveBandId}
           financeMode={effectiveFinanceMode}
           canUseBandMode={canUseBandMode}
           onFinanceModeChange={handleFinanceModeChange}
@@ -913,15 +1059,87 @@ export default function App() {
         />
       </div>
 
-      {showSchedule || forceSchedule || showBand || showReport ? (
-        <BandTiles
-          bands={bands}
-          activeBandId={activeBandId}
-          allBandsId={ALL_BANDS_ID}
-          onSelectBand={setActiveBandId}
-          onOpenBand={openBandPage}
+      <div className={`app-page ${showChat ? "is-active" : ""}`} hidden={!showChat}>
+        <ChatPage />
+      </div>
+
+      {bandsSheetOpen ? (
+        <div
+          className="bands-sheet-backdrop"
+          role="presentation"
+          onClick={() => setBandsSheetOpen(false)}
         />
       ) : null}
+
+      {bandsSheetOpen ? (
+        <div
+          className="bands-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Bendovi"
+          style={
+            bandsAnchor
+              ? {
+                  left: `${bandsAnchor.left}px`,
+                  bottom: `${bandsAnchor.bottom}px`,
+                  width: `${bandsAnchor.width}px`,
+                }
+              : undefined
+          }
+        >
+          <ul className="bands-sheet-list">
+            {bands.map((band) => {
+              const color = resolveBandColor(band, band.id);
+              const manage = isBandLead(band.memberRole);
+              const label = band.kind === "personal" ? `${band.name} (lično)` : band.name;
+              return (
+                <li key={band.id}>
+                  <button
+                    type="button"
+                    className="bands-sheet-item"
+                    onClick={() => openBandPage(band.id)}
+                  >
+                    <span className="band-chip" style={{ backgroundColor: color }} aria-hidden="true">
+                      {bandInitials(band.name)}
+                    </span>
+                    <span className="bands-sheet-item-name">{label}</span>
+                    <span className={`bands-sheet-badge ${manage ? "is-manage" : ""}`}>
+                      {manage ? "Upravljaj" : "Otvori"}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {!bands.length ? <p className="bands-sheet-empty">Nema benda.</p> : null}
+        </div>
+      ) : null}
+
+      <nav className="app-tabbar" aria-label="Glavna navigacija">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            item.id === "band"
+              ? showBand || bandsSheetOpen
+              : activePage === item.id || (item.id === "schedule" && forceSchedule);
+          return (
+            <button
+              key={item.id}
+              ref={item.id === "band" ? bandsNavRef : undefined}
+              type="button"
+              className={`app-tabbar-item ${isActive ? "is-active" : ""}`}
+              aria-current={isActive ? "page" : undefined}
+              aria-expanded={item.id === "band" ? bandsSheetOpen : undefined}
+              aria-label={item.label}
+              title={item.label}
+              onClick={(event) => handleNav(item.id, event)}
+            >
+              <Icon />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {toast ? (
         <div id="toast" className={`show toast-${toast.type || "success"}`} role="status" aria-live="polite">
@@ -947,5 +1165,22 @@ function AppBoot() {
         <span />
       </div>
     </main>
+  );
+}
+
+function SheetCloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TopSearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="10.5" cy="10.5" r="5.75" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M15.2 15.2 19.5 19.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }

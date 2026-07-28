@@ -101,6 +101,8 @@ export default function FadeScroll({ children, className = "", viewportClassName
 
     const ro = new ResizeObserver(sync);
     ro.observe(viewport);
+    const mo = new MutationObserver(sync);
+    mo.observe(viewport, { childList: true, subtree: true, characterData: true });
     sync();
 
     return () => {
@@ -112,6 +114,7 @@ export default function FadeScroll({ children, className = "", viewportClassName
       viewport.removeEventListener("touchend", onTouchEnd);
       viewport.removeEventListener("touchcancel", onTouchEnd);
       ro.disconnect();
+      mo.disconnect();
     };
   }, []);
 

@@ -5,6 +5,7 @@ import { useConfirm } from "./confirmDialog.jsx";
 import { bandRoleLabel } from "../shared/roles.js";
 import { parseDate, sameMonth, startOfToday } from "./calculations.js";
 import { joinUrlForToken, qrImageUrlForJoin } from "./joinLink.js";
+import FadeScroll from "./FadeScroll.jsx";
 
 const WEEKDAYS = ["P", "U", "S", "Č", "P", "S", "N"];
 const SIDE_RATIO = 0.88;
@@ -18,6 +19,8 @@ export default function BandPage({
   bands = [],
   activeBandId,
   allBandsId,
+  isActive = true,
+  authReady = true,
   onBandChange,
   onBack,
   onBandsChanged,
@@ -80,8 +83,8 @@ export default function BandPage({
   // Members / invites for the focused band (when not “Svi”, that's the selection).
   useEffect(() => {
     let cancelled = false;
-    if (!manageBandId || isAllBands) {
-      setDetail(null);
+    if (!isActive || !authReady || !manageBandId || isAllBands) {
+      if (!manageBandId || isAllBands) setDetail(null);
       return undefined;
     }
     (async () => {
@@ -95,11 +98,12 @@ export default function BandPage({
     return () => {
       cancelled = true;
     };
-  }, [manageBandId, isAllBands]);
+  }, [manageBandId, isAllBands, isActive, authReady]);
 
   // Calendar dates from DB — all bands or one band.
   useEffect(() => {
     let cancelled = false;
+    if (!isActive || !authReady) return undefined;
     (async () => {
       try {
         if (isAllBands) {
@@ -120,7 +124,7 @@ export default function BandPage({
     return () => {
       cancelled = true;
     };
-  }, [isAllBands, activeBandId]);
+  }, [isAllBands, activeBandId, isActive, authReady]);
 
   useEffect(() => {
     setAddOpen(false);
@@ -809,28 +813,30 @@ export default function BandPage({
                   {busy ? "…" : "Pozovi"}
                 </button>
               </div>
-              <ul className="band-user-results" role="listbox" aria-label="Registrovani korisnici">
-                {searching && searchResults.length === 0 ? <li className="band-user-empty">Učitavam…</li> : null}
-                {!searching && searchResults.length === 0 ? (
-                  <li className="band-user-empty">
-                    Nema drugih registrovanih. Unesi email i pritisni Pozovi.
-                  </li>
-                ) : null}
-                {searchResults.map((user) => (
-                  <li key={user.id}>
-                    <button
-                      type="button"
-                      className="band-user-result"
-                      role="option"
-                      disabled={busy}
-                      onClick={() => handlePickUser(user)}
-                    >
-                      <span className="band-user-result-name">{user.displayName}</span>
-                      <span className="band-user-result-email">{user.email}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <FadeScroll className="fade-scroll-inset band-user-results-scroll">
+                <ul className="band-user-results" role="listbox" aria-label="Registrovani korisnici">
+                  {searching && searchResults.length === 0 ? <li className="band-user-empty">Učitavam…</li> : null}
+                  {!searching && searchResults.length === 0 ? (
+                    <li className="band-user-empty">
+                      Nema drugih registrovanih. Unesi email i pritisni Pozovi.
+                    </li>
+                  ) : null}
+                  {searchResults.map((user) => (
+                    <li key={user.id}>
+                      <button
+                        type="button"
+                        className="band-user-result"
+                        role="option"
+                        disabled={busy}
+                        onClick={() => handlePickUser(user)}
+                      >
+                        <span className="band-user-result-name">{user.displayName}</span>
+                        <span className="band-user-result-email">{user.email}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </FadeScroll>
               <p className="band-add-hint">Šalje se pozivnica — ulaze tek kad potvrde.</p>
             </form>
           ) : null}
@@ -844,7 +850,7 @@ export default function BandPage({
                 {members
                   .filter((member) => {
                     if (member.memberRole === "owner") return false;
-                    if (isLead && member.memberRole !== "member") return false;
+                    if (isLead && member.memberRole !== "member" && member.memberRole !== "saradnik") return false;
                     return true;
                   })
                   .map((member) => (
@@ -863,7 +869,7 @@ export default function BandPage({
               </ul>
               {!members.some((member) => {
                 if (member.memberRole === "owner") return false;
-                if (isLead && member.memberRole !== "member") return false;
+                if (isLead && member.memberRole !== "member" && member.memberRole !== "saradnik") return false;
                 return true;
               }) ? (
                 <p className="band-home-note">Nema članova za uklanjanje.</p>
@@ -875,16 +881,19 @@ export default function BandPage({
             <div className="band-role-panel" aria-label="Uloge članova">
               <p className="band-add-hint">
                 {isOwner
-                  ? "Postavi lead / člana. Isključi pozivnice po članu."
-                  : "Lead može unaprediti člana u lead. Isključi pozivnice običnim članovima."}
+                  ? "Postavi lead / člana / saradnika. Saradnik vidi samo datume na koje ga dodaš."
+                  : "Lead može unaprediti člana u lead ili postaviti saradnika. Saradnik vidi samo dodele datume."}
               </p>
               <ul className="band-member-list">
                 {members
                   .filter((member) => member.memberRole !== "owner")
                   .map((member) => {
-                    const leadCanTouch = isOwner || (isLead && member.memberRole === "member");
-                    const canDemote = isOwner;
-                    const canToggleInvite = isOwner || (isLead && member.memberRole === "member");
+                    const leadCanTouch =
+                      isOwner || (isLead && (member.memberRole === "member" || member.memberRole === "saradnik"));
+                    const canDemote = isOwner || (isLead && member.memberRole === "saradnik");
+                    const canSetSaradnik = isOwner || (isLead && member.memberRole !== "lead");
+                    const canToggleInvite =
+                      (isOwner || (isLead && member.memberRole === "member")) && member.memberRole !== "saradnik";
                     return (
                       <li key={member.id} className="band-member-row band-role-row band-role-row-stack">
                         <div className="band-role-row-top">
@@ -903,10 +912,23 @@ export default function BandPage({
                           <button
                             type="button"
                             className={member.memberRole === "member" ? "is-active" : ""}
-                            disabled={busy || member.memberRole === "member" || !canDemote}
+                            disabled={
+                              busy ||
+                              member.memberRole === "member" ||
+                              !(isOwner || (isLead && member.memberRole === "saradnik"))
+                            }
                             onClick={() => handleSetRole(member, "member")}
                           >
                             član
+                          </button>
+                          <button
+                            type="button"
+                            className={member.memberRole === "saradnik" ? "is-active" : ""}
+                            disabled={busy || member.memberRole === "saradnik" || !canSetSaradnik}
+                            onClick={() => handleSetRole(member, "saradnik")}
+                            title="Vidi samo datume na koje je dodeljen"
+                          >
+                            saradnik
                           </button>
                           <button
                             type="button"

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import FadeScroll from "./FadeScroll.jsx";
 
 export default function UserMenu({
   email,
@@ -134,34 +135,36 @@ export default function UserMenu({
               {pendingInvites.length === 0 ? (
                 <p className="user-menu-empty">Nema novih pozivnica.</p>
               ) : (
-                <ul className="user-invite-list">
-                  {pendingInvites.map((invite) => (
-                    <li key={invite.id} className="user-invite-row">
-                      <p className="user-invite-copy">
-                        <strong>{invite.bandName}</strong>
-                        <span>{invite.invitedByName} te poziva da se pridružiš</span>
-                      </p>
-                      <div className="user-invite-actions">
-                        <button
-                          type="button"
-                          className="invite-accept"
-                          disabled={busyId === invite.id}
-                          onClick={() => handleAccept(invite.id)}
-                        >
-                          Prihvati
-                        </button>
-                        <button
-                          type="button"
-                          className="invite-decline"
-                          disabled={busyId === invite.id}
-                          onClick={() => handleDecline(invite.id)}
-                        >
-                          Odbij
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <FadeScroll className="fade-scroll-inset user-invite-scroll">
+                  <ul className="user-invite-list">
+                    {pendingInvites.map((invite) => (
+                      <li key={invite.id} className="user-invite-row">
+                        <p className="user-invite-copy">
+                          <strong>{invite.bandName}</strong>
+                          <span>{invite.invitedByName} te poziva da se pridružiš</span>
+                        </p>
+                        <div className="user-invite-actions">
+                          <button
+                            type="button"
+                            className="invite-accept"
+                            disabled={busyId === invite.id}
+                            onClick={() => handleAccept(invite.id)}
+                          >
+                            Prihvati
+                          </button>
+                          <button
+                            type="button"
+                            className="invite-decline"
+                            disabled={busyId === invite.id}
+                            onClick={() => handleDecline(invite.id)}
+                          >
+                            Odbij
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </FadeScroll>
               )}
             </>
           ) : view === "notices" ? (
@@ -194,31 +197,33 @@ export default function UserMenu({
               {notifications.length === 0 ? (
                 <p className="user-menu-empty">Nema obaveštenja.</p>
               ) : (
-                <ul className="user-invite-list">
-                  {notifications.map((notice) => (
-                    <li
-                      key={notice.id}
-                      className={`user-invite-row user-notice-row ${notice.readAt ? "is-read" : ""}`}
-                    >
-                      <p className="user-invite-copy">
-                        <strong>{notice.bandName || "Bend"}</strong>
-                        <span>{notice.message}</span>
-                      </p>
-                      {!notice.readAt ? (
-                        <div className="user-invite-actions">
-                          <button
-                            type="button"
-                            className="invite-accept"
-                            disabled={busyId === notice.id}
-                            onClick={() => handleMarkRead(notice.id)}
-                          >
-                            U redu
-                          </button>
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
+                <FadeScroll className="fade-scroll-inset user-invite-scroll">
+                  <ul className="user-invite-list">
+                    {notifications.map((notice) => (
+                      <li
+                        key={notice.id}
+                        className={`user-invite-row user-notice-row ${notice.readAt ? "is-read" : ""}`}
+                      >
+                        <p className="user-invite-copy">
+                          <strong>{notice.bandName || "Bend"}</strong>
+                          <span>{notice.message}</span>
+                        </p>
+                        {!notice.readAt ? (
+                          <div className="user-invite-actions">
+                            <button
+                              type="button"
+                              className="invite-accept"
+                              disabled={busyId === notice.id}
+                              onClick={() => handleMarkRead(notice.id)}
+                            >
+                              U redu
+                            </button>
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </FadeScroll>
               )}
             </>
           ) : (

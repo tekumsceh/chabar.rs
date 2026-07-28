@@ -160,7 +160,7 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
         </p>
       ) : (
         <form className="event-expenses-form" onSubmit={addExpense}>
-          <div className="event-expenses-row-top">
+          <div className="event-expenses-row-main">
             <label className="event-expenses-amount">
               <span className="sr-only">Iznos</span>
               <input
@@ -176,34 +176,36 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
             <FieldSelect
               id="expenseCurrency"
               label="Valuta"
+              className="event-expenses-currency"
               value={form.currency}
               options={currencyOptions}
               disabled={saving}
               onChange={(id) => updateForm("currency", id)}
             />
-          </div>
-          <label className="event-expenses-opis">
-            <span className="sr-only">Opis</span>
-            <input
-              type="text"
-              autoComplete="off"
-              placeholder="Opis"
-              maxLength={200}
-              value={form.description}
-              disabled={saving}
-              onChange={(e) => updateForm("description", e.target.value)}
-            />
-          </label>
-          <div className="event-expenses-row-bottom">
             <FieldSelect
               id="expensePayee"
               label="Kome"
+              className="event-expenses-payee"
               value={form.payee}
               placeholder="Kome"
               options={payeeOptions}
               disabled={saving}
               onChange={(id) => updateForm("payee", id)}
             />
+          </div>
+          <div className="event-expenses-row-opis">
+            <label className="event-expenses-opis">
+              <span className="sr-only">Opis</span>
+              <input
+                type="text"
+                autoComplete="off"
+                placeholder="Opis"
+                maxLength={200}
+                value={form.description}
+                disabled={saving}
+                onChange={(e) => updateForm("description", e.target.value)}
+              />
+            </label>
             <button type="submit" className="event-finance-btn event-finance-btn-set" disabled={saving}>
               {saving ? "…" : "Dodaj"}
             </button>

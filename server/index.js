@@ -65,7 +65,7 @@ import {
   deleteGoogleImportedEvents,
 } from "./googleCalendar.js";
 import { rateLimit } from "./rateLimit.js";
-import { isBandLead } from "../shared/roles.js";
+import { isBandLead, isBandSaradnik } from "../shared/roles.js";
 import { parseDate, startOfToday } from "../src/calculations.js";
 
 const app = express();
@@ -616,6 +616,12 @@ app.get("/api/exchange-rate", requireAuth, async (req, res, next) => {
 
 app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) => {
   try {
+    if (isBandSaradnik(req.memberRole)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Saradnik ne može da dodaje termine — treba mu dodele na postojeće datume.",
+      });
+    }
     const event = normalizeEvent(req.body);
     if (isPastEventDate(event.date)) {
       return res.status(400).json({
@@ -676,6 +682,12 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
 
 app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next) => {
   try {
+    if (isBandSaradnik(req.memberRole)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Saradnik ne može da menja termine.",
+      });
+    }
     const existing = await query(
       `SELECT id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd
        FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
@@ -785,6 +797,12 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
 
 app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, next) => {
   try {
+    if (isBandSaradnik(req.memberRole)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Saradnik ne može da briše termine.",
+      });
+    }
     const existing = await query(
       `SELECT id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd
        FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
@@ -1023,6 +1041,116 @@ app.get("/api/events/:id/expenses", requireAuth, requireBandMember, requireBandA
       })),
       expenses: expensesResult.rows.map(mapExpenseRow),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/events/:id/assignees", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) return res.status(404).json({ error: "Not found" });
+
+    const [assignees, candidates] = await Promise.all([
+      query(
+        `SELECT ea.user_id, p.email, p.display_name
+         FROM event_assignees ea
+         JOIN profiles p ON p.id = ea.user_id
+         WHERE ea.event_id = :eventId
+         ORDER BY p.display_name, p.email`,
+        { eventId },
+      ),
+      query(
+        `SELECT bm.user_id, bm.member_role, p.email, p.display_name
+         FROM band_members bm
+         JOIN profiles p ON p.id = bm.user_id
+         WHERE bm.band_id = :bandId AND bm.member_role = 'saradnik'
+         ORDER BY p.display_name, p.email`,
+        { bandId: req.bandId },
+      ),
+    ]);
+
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      assignees: assignees.rows.map((row) => ({
+        id: row.user_id,
+        name: row.display_name || row.email?.split("@")[0] || "Saradnik",
+      })),
+      candidates: candidates.rows.map((row) => ({
+        id: row.user_id,
+        name: row.display_name || row.email?.split("@")[0] || "Saradnik",
+        memberRole: row.member_role,
+      })),
+      canManage: isBandLead(req.memberRole),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/events/:id/assignees", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const userId = String(req.body?.userId || "").trim();
+    if (!userId) return res.status(400).json({ error: "Missing user" });
+
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) return res.status(404).json({ error: "Not found" });
+
+    const member = await query(
+      `SELECT member_role FROM band_members WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+      { bandId: req.bandId, userId },
+    );
+    if (!member.rows[0] || member.rows[0].member_role !== "saradnik") {
+      return res.status(400).json({
+        error: "Invalid user",
+        detail: "Na termin se dodeljuju samo saradnici benda.",
+      });
+    }
+
+    await query(
+      `INSERT INTO event_assignees (event_id, user_id, assigned_by)
+       VALUES (:eventId, :userId, :actorId)
+       ON CONFLICT (event_id, user_id) DO NOTHING`,
+      { eventId, userId, actorId: req.user.id },
+    );
+
+    const profile = await query(
+      `SELECT email, display_name FROM profiles WHERE id = :userId LIMIT 1`,
+      { userId },
+    );
+    res.status(201).json({
+      id: userId,
+      name: profile.rows[0]?.display_name || profile.rows[0]?.email?.split("@")[0] || "Saradnik",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/events/:id/assignees/:userId", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const userId = String(req.params.userId || "").trim();
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) return res.status(404).json({ error: "Not found" });
+
+    await query(`DELETE FROM event_assignees WHERE event_id = :eventId AND user_id = :userId`, {
+      eventId,
+      userId,
+    });
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
@@ -1628,10 +1756,18 @@ async function getBandEventsForUser(bandId, userId) {
             COALESCE(f.transport_rsd, 0) AS transport_rsd
      FROM events e
      JOIN bands b ON b.id = e.band_id
+     JOIN band_members bm ON bm.band_id = e.band_id AND bm.user_id = :userId
      LEFT JOIN event_member_finance f
        ON f.event_id = e.id AND f.user_id = :userId
      WHERE e.band_id = :bandId
        AND ${eventDateWithinLookbackSql("e", SCHEDULE_LOOKBACK)}
+       AND (
+         bm.member_role IS DISTINCT FROM 'saradnik'
+         OR EXISTS (
+           SELECT 1 FROM event_assignees ea
+           WHERE ea.event_id = e.id AND ea.user_id = :userId
+         )
+       )
      ORDER BY e.sort_order, e.id`,
     { bandId, userId },
   );
@@ -1649,6 +1785,13 @@ async function getAllScheduleEventsForUser(userId) {
      LEFT JOIN event_member_finance f
        ON f.event_id = e.id AND f.user_id = :userId
      WHERE ${eventDateWithinLookbackSql("e", SCHEDULE_LOOKBACK)}
+       AND (
+         bm.member_role IS DISTINCT FROM 'saradnik'
+         OR EXISTS (
+           SELECT 1 FROM event_assignees ea
+           WHERE ea.event_id = e.id AND ea.user_id = :userId
+         )
+       )
      ORDER BY e.sort_order, e.id`,
     { userId },
   );
@@ -1666,6 +1809,13 @@ async function getMyFinanceEvents(userId) {
      LEFT JOIN event_member_finance f
        ON f.event_id = e.id AND f.user_id = :userId
      WHERE ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
+       AND (
+         bm.member_role IS DISTINCT FROM 'saradnik'
+         OR EXISTS (
+           SELECT 1 FROM event_assignees ea
+           WHERE ea.event_id = e.id AND ea.user_id = :userId
+         )
+       )
        AND (
          f.user_id IS NOT NULL
          OR EXISTS (

@@ -5,12 +5,13 @@
 export const WEB_ROLES = ["superadmin", "admin", "assistant", "editor", "member"];
 
 /** Band roles — never use web "admin" here; band elevated role is "lead". */
-export const BAND_ROLES = ["owner", "lead", "member"];
+export const BAND_ROLES = ["owner", "lead", "member", "saradnik"];
 
 export const BAND_ROLE_LABELS = {
   owner: "vlasnik",
   lead: "lead",
   member: "član",
+  saradnik: "saradnik",
 };
 
 export function normalizeWebRole(role) {
@@ -32,6 +33,11 @@ export function isWebAdmin(webRole) {
 /** Owner or lead of a band (band roles only). */
 export function isBandLead(bandRole) {
   return bandRole === "owner" || bandRole === "lead";
+}
+
+/** Collaborator: only assigned dates, no band management. */
+export function isBandSaradnik(bandRole) {
+  return bandRole === "saradnik";
 }
 
 export function bandRoleLabel(role) {

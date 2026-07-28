@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { authRedirectTo, friendlyAuthError, supabase } from "./supabase.js";
 import { peekPendingJoinToken, rememberJoinToken } from "./joinLink.js";
+import FadeScroll from "./FadeScroll.jsx";
 
 export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }) {
   const [email, setEmail] = useState("");
@@ -94,7 +95,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
   }
 
   return (
-    <main className="login-page">
+    <FadeScroll className="login-page-fade" viewportClassName="login-page">
       <article className="login-card panel">
         <div className="panel-heading compact">
           <div>
@@ -173,7 +174,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
           </button>
         </nav>
       </article>
-    </main>
+    </FadeScroll>
   );
 }
 

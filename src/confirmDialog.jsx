@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
+import FadeScroll from "./FadeScroll.jsx";
 
 const ConfirmContext = createContext(null);
 
@@ -87,6 +88,7 @@ export function ConfirmProvider({ children }) {
             aria-labelledby={titleId}
             aria-describedby={dialog.message ? descId : undefined}
           >
+            <FadeScroll>
             <div className="confirm-body">
               <h2 id={titleId} className="confirm-title">
                 {dialog.title}
@@ -112,6 +114,7 @@ export function ConfirmProvider({ children }) {
                 {dialog.confirmLabel}
               </button>
             </div>
+            </FadeScroll>
           </div>
         </div>
       ) : null}

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import FadeScroll from "./FadeScroll.jsx";
 
 /**
  * Labeled / form-style single-choice dropdown (replaces native <select>).
@@ -73,28 +74,32 @@ export default function FieldSelect({
       </button>
 
       {open ? (
-        <ul className="field-select-list" id={listId} role="listbox" aria-label={label}>
-          {options.map((option) => (
-            <li key={String(option.id)} role="option" aria-selected={String(option.id) === String(value)}>
-              <button
-                type="button"
-                className={`field-select-item ${String(option.id) === String(value) ? "is-selected" : ""}`}
-                disabled={option.disabled}
-                onClick={() => {
-                  if (option.disabled) return;
-                  onChange(option.id);
-                  setOpen(false);
-                }}
-              >
-                <span className="field-select-item-main">
-                  {option.icon ? <span className="field-select-item-icon">{option.icon}</span> : null}
-                  <span>{option.label}</span>
-                </span>
-                {String(option.id) === String(value) ? <CheckIcon /> : null}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="field-select-list" id={listId}>
+          <FadeScroll className="fade-scroll-inset" viewportClassName="field-select-list-viewport">
+            <ul role="listbox" aria-label={label}>
+              {options.map((option) => (
+                <li key={String(option.id)} role="option" aria-selected={String(option.id) === String(value)}>
+                  <button
+                    type="button"
+                    className={`field-select-item ${String(option.id) === String(value) ? "is-selected" : ""}`}
+                    disabled={option.disabled}
+                    onClick={() => {
+                      if (option.disabled) return;
+                      onChange(option.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <span className="field-select-item-main">
+                      {option.icon ? <span className="field-select-item-icon">{option.icon}</span> : null}
+                      <span>{option.label}</span>
+                    </span>
+                    {String(option.id) === String(value) ? <CheckIcon /> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </FadeScroll>
+        </div>
       ) : null}
     </div>
   );
