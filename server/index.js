@@ -44,6 +44,15 @@ import {
   writeAudit,
 } from "./audit.js";
 import {
+  deletePushSubscription,
+  actorLabel,
+  formatEventLabel,
+  getVapidPublicKey,
+  notifyBandEvent,
+  savePushSubscription,
+  sendTestNotification,
+} from "./notifications.js";
+import {
   buildAuthUrl,
   disconnectGoogleAccount,
   frontendReturnUrl,
@@ -197,6 +206,48 @@ app.post("/api/me/invites/:inviteId/accept", requireAuth, acceptInvite);
 app.post("/api/me/invites/:inviteId/decline", requireAuth, declineInvite);
 app.post("/api/me/notifications/:notificationId/read", requireAuth, markNotificationRead);
 app.post("/api/me/notifications/read-all", requireAuth, markAllNotificationsRead);
+
+app.post("/api/me/notifications/test", requireAuth, async (req, res, next) => {
+  try {
+    const result = await sendTestNotification(req.user.id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/me/push/vapid-public-key", requireAuth, (req, res) => {
+  const key = getVapidPublicKey();
+  if (!key) {
+    return res.status(503).json({
+      error: "Push not configured",
+      detail: "VAPID ključevi nisu podešeni na serveru.",
+    });
+  }
+  res.json({ publicKey: key });
+});
+
+app.post("/api/me/push/subscribe", requireAuth, async (req, res, next) => {
+  try {
+    await savePushSubscription(req.user.id, req.body?.subscription || req.body, req.headers["user-agent"]);
+    res.json({ status: "ok" });
+  } catch (error) {
+    if (error.status === 400) {
+      return res.status(400).json({ error: "Invalid subscription", detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.delete("/api/me/push/subscribe", requireAuth, async (req, res, next) => {
+  try {
+    const endpoint = req.body?.endpoint || "";
+    await deletePushSubscription(req.user.id, endpoint);
+    res.json({ status: "ok" });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.patch("/api/me/preferences", requireAuth, async (req, res, next) => {
   try {
@@ -650,6 +701,7 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
         bandId: req.bandId,
         actorUserId: req.user.id,
         runQuery: tx,
+        notify: false,
       });
       await writeAudit(
         {
@@ -673,6 +725,16 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
       event: { ...event, bandId: req.bandId },
       bandName,
       actorUserId: req.user.id,
+    });
+    const who = await actorLabel(req.user.id);
+    await notifyBandEvent({
+      bandId: req.bandId,
+      type: "event_created",
+      actorUserId: req.user.id,
+      audience: "band_visible",
+      eventId: created.id,
+      message: `${who} je kreirao/la termin ${formatEventLabel(event)}`,
+      payload: { page: "schedule", eventId: String(created.id), bandId: req.bandId },
     });
     res.status(201).json({ ...event, id: created.id, bandId: req.bandId });
   } catch (error) {
@@ -765,6 +827,7 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
         bandId: nextBandId,
         actorUserId: req.user.id,
         runQuery: tx,
+        notify: false,
       });
       await writeAudit(
         {
@@ -788,6 +851,16 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
       event: { ...event, bandId: nextBandId },
       bandName,
       actorUserId: req.user.id,
+    });
+    const who = await actorLabel(req.user.id);
+    await notifyBandEvent({
+      bandId: nextBandId,
+      type: "event_updated",
+      actorUserId: req.user.id,
+      audience: "band_visible",
+      eventId: req.params.id,
+      message: `${who} je ažurirao/la termin ${formatEventLabel(event)}`,
+      payload: { page: "schedule", eventId: String(req.params.id), bandId: nextBandId },
     });
     res.json({ ...event, id: Number(req.params.id), bandId: nextBandId, bandName });
   } catch (error) {
@@ -845,13 +918,25 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
       );
     });
 
+    const who = await actorLabel(req.user.id);
+    await notifyBandEvent({
+      bandId: req.bandId,
+      type: "event_deleted",
+      actorUserId: req.user.id,
+      audience: "band_visible",
+      eventId: req.params.id,
+      message: `${who} je obrisao/la termin ${formatEventLabel({
+        date: existing.rows[0].event_date_text,
+        city: existing.rows[0].city,
+      })}`,
+      payload: { page: "schedule", bandId: req.bandId },
+    });
+
     res.status(204).end();
   } catch (error) {
     next(error);
   }
 });
-
-/** Owner/lead: per-member fees for one date. Past dates allowed (settling after the gig). */
 app.get("/api/events/:id/member-finance", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
   try {
     const event = await query(
@@ -1240,6 +1325,18 @@ app.post("/api/events/:id/expenses", requireAuth, requireBandMember, requireBand
         payee_name: payeeName,
       }),
     );
+
+    const who = await actorLabel(req.user.id);
+    await notifyBandEvent({
+      bandId: req.bandId,
+      type: "expense_changed",
+      actorUserId: req.user.id,
+      audience: "finance",
+      eventId,
+      subjectUserId: payeeKind === "member" ? payeeUserId : null,
+      message: `${who} je dodao/la trošak (${description || "trošak"}): ${amount} ${currency}`,
+      payload: { page: "schedule", eventId: String(eventId), bandId: req.bandId },
+    });
   } catch (error) {
     next(error);
   }
@@ -1462,6 +1559,24 @@ app.post("/api/events/:id/comments", requireAuth, requireBandMember, async (req,
       userId: row.user_id,
       authorName: profile.rows[0]?.author_name || "Korisnik",
     });
+
+    const eventMeta = await query(
+      `SELECT event_date_text, city FROM events WHERE id = :id LIMIT 1`,
+      { id: req.params.id },
+    );
+    const who = profile.rows[0]?.author_name || "Korisnik";
+    await notifyBandEvent({
+      bandId: req.bandId,
+      type: "comment_added",
+      actorUserId: req.user.id,
+      audience: "band_visible",
+      eventId: req.params.id,
+      message: `${who} je komentarisao/la termin ${formatEventLabel({
+        date: eventMeta.rows[0]?.event_date_text,
+        city: eventMeta.rows[0]?.city,
+      })}`,
+      payload: { page: "schedule", eventId: String(req.params.id), bandId: req.bandId },
+    });
   } catch (error) {
     next(error);
   }
@@ -1556,6 +1671,17 @@ app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next)
       ...payment,
       id: created.id,
       bandId: req.bandId,
+    });
+
+    const who = await actorLabel(req.user.id);
+    await notifyBandEvent({
+      bandId: req.bandId,
+      type: "payment_changed",
+      actorUserId: req.user.id,
+      audience: "finance",
+      subjectUserId: req.user.id,
+      message: `${who} je uneo/la uplatu: ${payment.amount} ${payment.currency}`,
+      payload: { page: "report", bandId: req.bandId },
     });
   } catch (error) {
     next(error);
@@ -2050,6 +2176,22 @@ async function upsertMemberFinance(eventId, userId, priceEur, transportRsd, opti
     },
     runQuery,
   );
+
+  if (options.bandId && options.notify !== false) {
+    const who = await actorLabel(options.actorUserId || userId);
+    await notifyBandEvent({
+      bandId: options.bandId,
+      type: "finance_changed",
+      actorUserId: options.actorUserId || userId,
+      audience: "finance",
+      eventId,
+      subjectUserId: userId,
+      message: before
+        ? `${who} je ažurirao/la honorar`
+        : `${who} je postavio/la honorar`,
+      payload: { page: "schedule", eventId: String(eventId), bandId: options.bandId },
+    });
+  }
 }
 
 async function getBandName(bandId) {

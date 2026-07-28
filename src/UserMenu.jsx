@@ -12,6 +12,7 @@ export default function UserMenu({
   onOpenNotifications,
   onMarkNotificationRead,
   onMarkAllNotificationsRead,
+  onOpenNotification,
   onOpenSettings,
   onSignOut,
 }) {
@@ -76,10 +77,14 @@ export default function UserMenu({
     onOpenNotifications?.();
   }
 
-  async function handleMarkRead(id) {
-    setBusyId(id);
+  async function handleNoticeAction(notice) {
+    setBusyId(notice.id);
     try {
-      await onMarkNotificationRead?.(id);
+      if (isNoticeViewable(notice)) {
+        await onOpenNotification?.(notice);
+      } else {
+        await onMarkNotificationRead?.(notice.id);
+      }
     } finally {
       setBusyId("");
     }
@@ -204,22 +209,22 @@ export default function UserMenu({
                         key={notice.id}
                         className={`user-invite-row user-notice-row ${notice.readAt ? "is-read" : ""}`}
                       >
-                        <p className="user-invite-copy">
-                          <strong>{notice.bandName || "Bend"}</strong>
-                          <span>{notice.message}</span>
-                        </p>
-                        {!notice.readAt ? (
-                          <div className="user-invite-actions">
+                        <div className="user-notice-main">
+                          <p className="user-invite-copy">
+                            <strong>{notice.bandName || "Chabar"}</strong>
+                            <span>{notice.message}</span>
+                          </p>
+                          {!notice.readAt ? (
                             <button
                               type="button"
-                              className="invite-accept"
+                              className="user-notice-action"
                               disabled={busyId === notice.id}
-                              onClick={() => handleMarkRead(notice.id)}
+                              onClick={() => handleNoticeAction(notice)}
                             >
-                              U redu
+                              {isNoticeViewable(notice) ? "Pogledaj" : "U redu"}
                             </button>
-                          </div>
-                        ) : null}
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -309,6 +314,30 @@ function BackIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function isNoticeViewable(notice) {
+  if (!notice || notice.payload?.test) return false;
+  const type = String(notice.type || "");
+  if (
+    type === "member_joined" ||
+    type === "member_role_changed" ||
+    type === "member_removed"
+  ) {
+    return false;
+  }
+  const page = notice.payload?.page;
+  if (page === "band" || page === "settings") return false;
+  return Boolean(
+    notice.payload?.eventId ||
+      page === "schedule" ||
+      page === "report" ||
+      type.startsWith("event_") ||
+      type === "comment_added" ||
+      type === "finance_changed" ||
+      type === "expense_changed" ||
+      type === "payment_changed",
   );
 }
 

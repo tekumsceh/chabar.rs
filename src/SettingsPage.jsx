@@ -1,7 +1,14 @@
 import { DEFAULT_RATE, LEGACY_RATE_THROUGH_TEXT, positiveNumber } from "./calculations.js";
 import { INVITE_PREFERENCE_LABELS, INVITE_PREFERENCES } from "../shared/bandLimits.js";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FieldSelect from "./FieldSelect.jsx";
+import {
+  disablePush,
+  enablePush,
+  getPushPrefEnabled,
+  isPushSupported,
+} from "./pushNotifications.js";
+import { api } from "./api.js";
 
 export default function SettingsPage({
   theme,
@@ -14,9 +21,18 @@ export default function SettingsPage({
   onInvitePreferenceChange,
   ownedGroupBands = 0,
   ownerLimit = 5,
+  showToast,
 }) {
   const [rateBusy, setRateBusy] = useState(false);
   const [rateMeta, setRateMeta] = useState(null);
+  const [pushOn, setPushOn] = useState(() => getPushPrefEnabled());
+  const [pushBusy, setPushBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
+  const pushSupported = isPushSupported();
+
+  useEffect(() => {
+    setPushOn(getPushPrefEnabled());
+  }, []);
 
   async function handleFetchRate() {
     if (rateBusy || !onFetchExchangeRate) return;
@@ -28,6 +44,43 @@ export default function SettingsPage({
       // toast handled in App
     } finally {
       setRateBusy(false);
+    }
+  }
+
+  async function handlePushToggle() {
+    if (pushBusy || !pushSupported) return;
+    setPushBusy(true);
+    try {
+      if (pushOn) {
+        await disablePush(api);
+        setPushOn(false);
+        showToast?.("Push obaveštenja isključena");
+      } else {
+        await enablePush(api);
+        setPushOn(true);
+        showToast?.("Push obaveštenja uključena");
+      }
+    } catch (error) {
+      showToast?.(error.message || "Push nije uspeo", "error");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleTestNotification() {
+    if (testBusy) return;
+    setTestBusy(true);
+    try {
+      const result = await api("/api/me/notifications/test", { method: "POST" });
+      const pushHint =
+        result.pushSubscriptions > 0
+          ? " · push poslat (ako je dozvola data)"
+          : " · samo u aplikaciji (uključi Push iznad)";
+      showToast?.(`Test poslat${pushHint}`);
+    } catch (error) {
+      showToast?.(error.message || "Test nije uspeo", "error");
+    } finally {
+      setTestBusy(false);
     }
   }
 
@@ -55,6 +108,41 @@ export default function SettingsPage({
             {theme === "light" ? "Svetla" : "Tamna"}
           </button>
         </label>
+      </section>
+
+      <section className="settings-card" aria-label="Obaveštenja">
+        <h2>Obaveštenja</h2>
+        <label className="settings-row">
+          <span>
+            <strong>Push obaveštenja</strong>
+            <small>
+              {pushSupported
+                ? "Na telefonu: dodaj Chabar na Home Screen za pouzdan push (iOS)."
+                : "Ovaj pregledač ne podržava push."}
+            </small>
+          </span>
+          <button
+            type="button"
+            className="settings-toggle"
+            disabled={!pushSupported || pushBusy}
+            onClick={handlePushToggle}
+            aria-pressed={pushOn}
+          >
+            {pushBusy ? "…" : pushOn ? "Uključeno" : "Isključeno"}
+          </button>
+        </label>
+        <p className="settings-note">
+          Uključivanje traži dozvolu pregledača. Lični bend ne šalje obaveštenja.
+        </p>
+        <button
+          type="button"
+          className="settings-rate-fetch"
+          disabled={testBusy}
+          onClick={handleTestNotification}
+          style={{ marginTop: "0.65rem" }}
+        >
+          {testBusy ? "…" : "Pošalji test obaveštenje"}
+        </button>
       </section>
 
       <section className="settings-card" aria-label="Bendovi">

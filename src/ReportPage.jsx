@@ -6,7 +6,7 @@ import {
   formatEur,
   formatRsd,
   formatScheduleDateParts,
-  heldMinusPaidEur,
+  waterfallClaimEur,
   parseDate,
 } from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
@@ -50,7 +50,7 @@ export default function ReportPage({
 
   const DATES_PAGE_SIZE = 20;
 
-  // Row colors use per-band payment waterfall. Potražuje uses past − uplate on the filtered set.
+  // Row colors + Potražuje share one global payment waterfall (calculate).
   const calculations = useMemo(
     () => calculate(events, payments, settings),
     [events, payments, settings],
@@ -120,8 +120,8 @@ export default function ReportPage({
   }, [payments, viewYear, activeBandId, allBandsId]);
 
   /**
-   * Potražuje = past dates (band/year/search) − uplate (band/year).
-   * Status filter only changes which rows are listed (e.g. Dospele neplaćene).
+   * Potražuje = unpaid remainders on past rows (band/year/search), after the
+   * global uplate waterfall — not held minus scoped uplate (that breaks per band).
    */
   const claimEur = useMemo(() => {
     const pastRows = bandRows.filter((row) => {
@@ -129,8 +129,8 @@ export default function ReportPage({
       if (yearFromDate(row.date, row.parsedDate) !== viewYear) return false;
       return matchesFilters(row, search, "all");
     });
-    return heldMinusPaidEur(pastRows, scopedPayments, settings);
-  }, [bandRows, scopedPayments, settings, viewYear, search]);
+    return waterfallClaimEur(pastRows);
+  }, [bandRows, viewYear, search]);
 
   /** Očekivano = future totals for year/band/search (not status). */
   const expectedEur = useMemo(() => {
@@ -284,7 +284,7 @@ export default function ReportPage({
           {financeMode === "band" ? <em className="finansije-mode-tag">Bend mod</em> : null}
           <span
             className="finansije-meta-item finansije-meta-owed"
-            title="Zbir održanih datuma iz liste minus uplate (isti filteri)"
+            title="Neplaćeno na održanim datumima (uplata ide redom po kalendaru, isti filteri)"
           >
             <span className="finansije-meta-label">Potražuje</span>{" "}
             <strong>{formatEur(claimEur)}</strong>
@@ -452,18 +452,15 @@ export default function ReportPage({
 function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
   const name = band?.name || row.bandName || "";
   const color = resolveBandColor(band, row.bandId || name);
-  const transportEur = rate > 0 ? row.transportRsd / rate : 0;
   const memberWages = Array.isArray(row.memberWages) ? row.memberWages.filter(Boolean) : [];
-  const expenseItems = Array.isArray(row.expenseItems) ? row.expenseItems.filter(Boolean) : [];
+  const expenseItems = (Array.isArray(row.expenseItems) ? row.expenseItems : []).filter(
+    (item) => String(item?.payeeKind || "").toLowerCase() === "member",
+  );
   const honorarTotal = memberWages.length
     ? memberWages.reduce((sum, member) => sum + numberish(member.priceEur), 0)
     : numberish(row.priceEur);
   const honorarLabel = memberWages.length > 1 ? "Honorari" : "Honorar";
-  const extraExpensesEur = expenseItems.reduce((sum, item) => {
-    const amount = numberish(item.amount);
-    return sum + (item.currency === "RSD" ? amount / (rate || 1) : amount);
-  }, 0);
-  const detailTotalEur = honorarTotal + transportEur + extraExpensesEur;
+  const detailTotalEur = numberish(row.totalEur);
   const remaining =
     row.paymentClass === "partial" || row.paymentClass === "unpaid"
       ? numberish(row.paymentStatus)
@@ -555,13 +552,6 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
                   ) : null}
                 </span>
                 <strong>{formatEur(honorarTotal)}</strong>
-              </li>
-              <li>
-                <span>Prevoz</span>
-                <strong>
-                  {formatRsd(row.transportRsd)}
-                  <small> ({formatEur(transportEur)})</small>
-                </strong>
               </li>
               {expenseItems.map((item) => (
                 <li key={item.id || `${item.description}-${item.amount}`}>

@@ -15,43 +15,29 @@ import {
   ownerBandLimit,
 } from "../shared/bandLimits.js";
 import { isBandLead } from "../shared/roles.js";
+import { notifyBandEvent, actorLabel } from "./notifications.js";
 
 function makeInviteToken() {
   return crypto.randomBytes(18).toString("base64url");
 }
 
-async function actorLabel(userId) {
-  if (!userId) return "Neko";
-  const result = await query(
-    `SELECT display_name, email FROM profiles WHERE id = :id LIMIT 1`,
-    { id: userId },
-  );
-  const row = result.rows[0];
-  if (!row) return "Neko";
-  return row.display_name || String(row.email || "").split("@")[0] || "Neko";
-}
-
-/** Best-effort in-app notice; never fails the join/accept flow. */
-async function notifyMemberJoined(recipientUserId, { bandId, bandName, actorUserId }) {
-  if (!recipientUserId || !bandId || !actorUserId) return;
-  if (recipientUserId === actorUserId) return;
-  try {
-    const who = await actorLabel(actorUserId);
-    const band = String(bandName || "bend").trim() || "bend";
-    const message = `${who} se pridružio/la bendu „${band}”.`;
-    await query(
-      `INSERT INTO user_notifications (user_id, type, band_id, actor_user_id, message)
-       VALUES (:userId, 'member_joined', :bandId, :actorUserId, :message)`,
-      { userId: recipientUserId, bandId, actorUserId, message },
-    );
-  } catch (error) {
-    console.warn("notifyMemberJoined failed", error.message || error);
-  }
+/** @deprecated use notifyBandEvent — kept for call-site migration */
+async function notifyMemberJoined(_recipientUserId, { bandId, bandName, actorUserId }) {
+  const who = await actorLabel(actorUserId);
+  await notifyBandEvent({
+    bandId,
+    type: "member_joined",
+    actorUserId,
+    audience: "leads",
+    message: `${who} je prihvatio/la pozivnicu.`,
+    payload: { page: "band", bandId },
+    title: "Chabar",
+  });
 }
 
 export async function listNotificationsForUser(user, { limit = 20 } = {}) {
   const result = await query(
-    `SELECT n.id, n.type, n.band_id, n.actor_user_id, n.message, n.read_at, n.created_at,
+    `SELECT n.id, n.type, n.band_id, n.actor_user_id, n.message, n.payload, n.read_at, n.created_at,
             b.name AS band_name, b.color AS band_color
      FROM user_notifications n
      LEFT JOIN bands b ON b.id = n.band_id
@@ -68,6 +54,7 @@ export async function listNotificationsForUser(user, { limit = 20 } = {}) {
     bandColor: row.band_color || null,
     actorUserId: row.actor_user_id,
     message: row.message,
+    payload: row.payload || null,
     readAt: row.read_at,
     createdAt: row.created_at,
   }));
@@ -214,7 +201,7 @@ export async function acceptInvite(req, res, next) {
       bandId: row.band_id,
     });
     const bandName = band.rows[0]?.name || "";
-    await notifyMemberJoined(row.invited_by, {
+    await notifyMemberJoined(null, {
       bandId: row.band_id,
       bandName,
       actorUserId: req.user.id,
@@ -633,6 +620,23 @@ export async function updateMemberRole(req, res, next) {
       { role: nextRole, bandId: req.bandId, userId: targetUserId },
     );
     clearMembershipCache();
+
+    const who = await actorLabel(req.user.id);
+    const roleLabel =
+      nextRole === "lead" ? "lead" : nextRole === "saradnik" ? "saradnik" : "član";
+    const band = await query(`SELECT name FROM bands WHERE id = :bandId LIMIT 1`, {
+      bandId: req.bandId,
+    });
+    await notifyBandEvent({
+      bandId: req.bandId,
+      type: "member_role_changed",
+      actorUserId: req.user.id,
+      audience: "membership",
+      subjectUserId: targetUserId,
+      message: `${who} je promenio/la ulogu u „${band.rows[0]?.name || "bend"}” → ${roleLabel}.`,
+      payload: { page: "band", bandId: req.bandId },
+    });
+
     res.json({ userId: targetUserId, memberRole: nextRole });
   } catch (error) {
     next(error);
@@ -730,6 +734,21 @@ export async function removeBandMember(req, res, next) {
       userId: targetUserId,
     });
     clearMembershipCache();
+
+    const who = await actorLabel(req.user.id);
+    const band = await query(`SELECT name FROM bands WHERE id = :bandId LIMIT 1`, {
+      bandId: req.bandId,
+    });
+    await notifyBandEvent({
+      bandId: req.bandId,
+      type: "member_removed",
+      actorUserId: req.user.id,
+      audience: "membership",
+      subjectUserId: targetUserId,
+      message: `${who} je uklonio/la člana iz „${band.rows[0]?.name || "bend"}”.`,
+      payload: { page: "band", bandId: req.bandId },
+    });
+
     res.json({ status: "removed", userId: targetUserId });
   } catch (error) {
     next(error);
@@ -980,7 +999,6 @@ export async function acceptJoinLink(req, res, next) {
 
     const bandId = link.rows[0].band_id;
     const bandName = link.rows[0].band_name;
-    const linkCreatorId = link.rows[0].created_by;
 
     const existing = await query(
       `SELECT member_role FROM band_members
@@ -1002,19 +1020,11 @@ export async function acceptJoinLink(req, res, next) {
        ON CONFLICT (band_id, user_id) DO NOTHING`,
       { bandId, userId: req.user.id },
     );
-    // Drop any pending email invite for this user/band (and notify that inviter too).
+    // Drop any pending email invite for this user/band.
     const email = String(req.user.email || "")
       .trim()
       .toLowerCase();
-    let emailInviterId = null;
     if (email) {
-      const pending = await query(
-        `SELECT invited_by FROM band_invites
-         WHERE band_id = :bandId AND lower(email) = :email
-         LIMIT 1`,
-        { bandId, email },
-      );
-      emailInviterId = pending.rows[0]?.invited_by || null;
       await query(`DELETE FROM band_invites WHERE band_id = :bandId AND lower(email) = :email`, {
         bandId,
         email,
@@ -1022,14 +1032,11 @@ export async function acceptJoinLink(req, res, next) {
     }
     clearMembershipCache();
 
-    const notifyIds = new Set([linkCreatorId, emailInviterId].filter(Boolean));
-    for (const recipientId of notifyIds) {
-      await notifyMemberJoined(recipientId, {
-        bandId,
-        bandName,
-        actorUserId: req.user.id,
-      });
-    }
+    await notifyMemberJoined(null, {
+      bandId,
+      bandName,
+      actorUserId: req.user.id,
+    });
 
     res.json({
       status: "joined",

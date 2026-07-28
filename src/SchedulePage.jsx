@@ -1,22 +1,22 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   formatScheduleDateParts,
-  fromIsoDate,
   numberValue,
   parseDate,
   sameMonth,
-  toIsoDate,
+  startOfToday,
   todayText,
 } from "./calculations.js";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { api } from "./api.js";
 import { useConfirm } from "./confirmDialog.jsx";
-import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import EventPage from "./EventPage.jsx";
 import FadeScroll from "./FadeScroll.jsx";
+import DateMonthPicker from "./DateMonthPicker.jsx";
+import { QUICK_CREATE_CITIES } from "./quickCreateCities.js";
 import { ownerBandLimit } from "../shared/bandLimits.js";
 
 const scheduleFilters = [
@@ -49,6 +49,10 @@ export default function SchedulePage({
   onRemove,
   onRefreshSchedule,
   leaveEventSignal = 0,
+  focusEventId = null,
+  onFocusEventConsumed,
+  addActionRequest = null,
+  onAddActionConsumed,
   loading = false,
 }) {
   const { confirm } = useConfirm();
@@ -64,11 +68,9 @@ export default function SchedulePage({
   const [initialForm, setInitialForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [createBandOpen, setCreateBandOpen] = useState(false);
   const [createBandName, setCreateBandName] = useState("");
   const [createBandBusy, setCreateBandBusy] = useState(false);
-  const addMenuRef = useRef(null);
 
   const ownedGroupBands = profile?.ownedGroupBands ?? 0;
   const ownerLimit = profile?.ownerLimit ?? ownerBandLimit(0);
@@ -100,6 +102,12 @@ export default function SchedulePage({
     setSelectedEventId(null);
   }, [activeBandId]);
 
+  useEffect(() => {
+    if (focusEventId == null || focusEventId === "") return;
+    setSelectedEventId(focusEventId);
+    onFocusEventConsumed?.();
+  }, [focusEventId, onFocusEventConsumed]);
+
   const totalPages =
     filter === "all" ? Math.max(1, Math.ceil(filteredRows.length / ALL_PAGE_SIZE)) : 1;
   const safePage = Math.min(listPage, totalPages - 1);
@@ -127,9 +135,7 @@ export default function SchedulePage({
   const isDirty =
     form.bandId !== initialForm.bandId ||
     form.date !== initialForm.date ||
-    form.city !== initialForm.city ||
-    form.venue !== initialForm.venue ||
-    form.note !== initialForm.note;
+    form.city !== initialForm.city;
 
   useEffect(() => {
     if (!formOpen) return undefined;
@@ -145,39 +151,29 @@ export default function SchedulePage({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [formOpen, isDirty, saving]);
 
-  useEffect(() => {
-    if (!addMenuOpen) return undefined;
-
-    function onPointerDown(event) {
-      if (!addMenuRef.current?.contains(event.target)) setAddMenuOpen(false);
-    }
-
-    function onKeyDown(event) {
-      if (event.key === "Escape") setAddMenuOpen(false);
-    }
-
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [addMenuOpen]);
-
   function openForm() {
-    const next = { ...emptyForm, date: todayText(), bandId: "" };
+    const defaultBandId = bands.length === 1 ? bands[0].id : "";
+    const next = { ...emptyForm, date: todayText(), bandId: defaultBandId };
     setForm(next);
     setInitialForm(next);
     setFormError("");
     setFormOpen(true);
-    setAddMenuOpen(false);
+    setSelectedEventId(null);
   }
 
   function openCreateBand() {
-    setAddMenuOpen(false);
     setCreateBandName("");
     setCreateBandOpen(true);
   }
+
+  useEffect(() => {
+    if (!addActionRequest?.nonce) return;
+    const type = addActionRequest.type;
+    if (type === "termin") openForm();
+    else if (type === "band") openCreateBand();
+    onAddActionConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per nonce
+  }, [addActionRequest?.nonce]);
 
   async function submitCreateBand(event) {
     event.preventDefault();
@@ -242,46 +238,66 @@ export default function SchedulePage({
     onRemove(row.id);
   }
 
-  async function submitForm(event) {
-    event.preventDefault();
-
+  async function validateAndCreate(openAfter = false) {
     const bandId = String(form.bandId || "").trim();
     const date = String(form.date || "").trim();
     const city = String(form.city || "").trim();
-    const venue = String(form.venue || "").trim();
-    const note = String(form.note || "").trim();
 
     if (!bandId) {
-      setFormError("Moraš izabrati bend ili Personal.");
-      return;
+      setFormError("Moraš izabrati bend.");
+      return null;
     }
 
     if (!date) {
       setFormError("Datum je obavezan.");
-      return;
+      return null;
     }
 
     const parsed = parseDate(date);
     if (Number.isNaN(parsed.getTime())) {
       setFormError("Datum nije ispravan. Izaberi datum iz kalendara.");
-      return;
+      return null;
     }
 
-    if (!city && !venue && !note) {
-      setFormError("Unesi bar mesto, lokal ili napomenu.");
-      return;
+    const today = startOfToday();
+    if (parsed.getTime() < today.getTime()) {
+      setFormError("Datum ne sme biti u prošlosti.");
+      return null;
     }
 
     try {
       setSaving(true);
       setFormError("");
-      await onAdd({ bandId, date, city, venue, note, priceEur: 0, transportRsd: 0 });
+      const created = await onAdd({
+        bandId,
+        date,
+        city,
+        venue: "",
+        note: "",
+        priceEur: 0,
+        transportRsd: 0,
+      });
       forceCloseForm();
+      if (openAfter && created?.id != null) {
+        setSelectedEventId(created.id);
+      }
+      return created;
     } catch (error) {
       setFormError(error.message || "Nije moguće sačuvati termin.");
+      return null;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function submitForm(event) {
+    event.preventDefault();
+    await validateAndCreate(false);
+  }
+
+  async function submitFullDetails(event) {
+    event.preventDefault();
+    await validateAndCreate(true);
   }
 
   const eventOpen = Boolean(selectedEventId);
@@ -357,57 +373,6 @@ export default function SchedulePage({
                 autoComplete="off"
                 autoFocus={searchOpen && !search}
               />
-            ) : null}
-          </div>
-
-          <div className={`menu-select menu-select-end ${addMenuOpen ? "is-open" : ""}`} ref={addMenuRef}>
-            <button
-              type="button"
-              className={`raspored-icon-btn raspored-icon-btn-accent ${addMenuOpen ? "is-active-filter" : ""}`}
-              onClick={() => setAddMenuOpen((open) => !open)}
-              aria-label="Dodaj"
-              aria-haspopup="menu"
-              aria-expanded={addMenuOpen}
-              title="Dodaj termin ili bend"
-            >
-              <PlusIcon />
-            </button>
-            {addMenuOpen ? (
-              <ul className="menu-select-list" role="menu" aria-label="Dodaj">
-                <li role="none">
-                  <button type="button" className="menu-select-item" role="menuitem" onClick={openForm}>
-                    <span className="menu-select-item-main">
-                      <span className="menu-select-item-icon">
-                        <CalendarPlusIcon />
-                      </span>
-                      <span className="menu-select-item-label">Dodaj termin</span>
-                    </span>
-                  </button>
-                </li>
-                <li role="none">
-                  <button
-                    type="button"
-                    className="menu-select-item"
-                    role="menuitem"
-                    disabled={!canCreateBand}
-                    title={
-                      canCreateBand
-                        ? "Kreiraj grupni bend"
-                        : `Limit ${ownedGroupBands}/${ownerLimit} grupnih bendova`
-                    }
-                    onClick={openCreateBand}
-                  >
-                    <span className="menu-select-item-main">
-                      <span className="menu-select-item-icon">
-                        <NewBandIcon />
-                      </span>
-                      <span className="menu-select-item-label">
-                        {canCreateBand ? "Novi bend" : `Limit ${ownedGroupBands}/${ownerLimit}`}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              </ul>
             ) : null}
           </div>
         </div>
@@ -515,79 +480,88 @@ export default function SchedulePage({
               </div>
             </div>
 
-            <form className="termin-form" onSubmit={submitForm}>
-              <label htmlFor="terminBand" className="termin-form-full">
-                Bend / Personal
-                <FieldSelect
-                  id="terminBand"
-                  label="Bend / Personal"
-                  value={form.bandId}
-                  placeholder="— Izaberi —"
-                  required
-                  autoFocus
-                  options={bands.map((band) => ({
-                    id: band.id,
-                    label: `${band.name}${band.kind === "personal" ? " (lično)" : ""}`,
-                  }))}
-                  onChange={(id) => updateForm("bandId", id)}
-                />
-              </label>
-              <label htmlFor="terminDate" className="termin-form-full">
-                Datum
-                <input
-                  id="terminDate"
-                  name="terminDate"
-                  type="date"
-                  value={toIsoDate(form.date)}
-                  onChange={(event) => updateForm("date", fromIsoDate(event.target.value))}
-                  required
-                />
-              </label>
-              <label htmlFor="terminCity">
-                Mesto
-                <input
-                  id="terminCity"
-                  name="terminCity"
-                  type="text"
-                  placeholder="Beograd, Novi Sad..."
-                  value={form.city}
-                  onChange={(event) => updateForm("city", event.target.value)}
-                  autoComplete="address-level2"
-                />
-              </label>
-              <label htmlFor="terminVenue">
-                Lokal
-                <input
-                  id="terminVenue"
-                  name="terminVenue"
-                  type="text"
-                  placeholder="Ime kluba / prostora"
-                  value={form.venue}
-                  onChange={(event) => updateForm("venue", event.target.value)}
-                  autoComplete="organization"
-                />
-              </label>
-              <label className="termin-form-full" htmlFor="terminNote">
-                Napomena
-                <input
-                  id="terminNote"
-                  name="terminNote"
-                  type="text"
-                  placeholder="Bend, tip događaja..."
-                  value={form.note}
-                  onChange={(event) => updateForm("note", event.target.value)}
-                  autoComplete="off"
-                />
-              </label>
+            <form className="termin-form termin-form-tactile" onSubmit={submitForm}>
+              <fieldset className="termin-form-section termin-form-full">
+                <legend>Datum</legend>
+                <DateMonthPicker value={form.date} onChange={(date) => updateForm("date", date)} />
+              </fieldset>
+
+              <fieldset className="termin-form-section termin-form-full">
+                <legend>Bend</legend>
+                <div className="termin-band-grid" role="group" aria-label="Izaberi bend">
+                  {bands.map((band) => {
+                    const selected = form.bandId === band.id;
+                    const color = resolveBandColor(band, band.id);
+                    const label =
+                      band.kind === "personal" ? `${band.name} (lično)` : band.name;
+                    return (
+                      <button
+                        key={band.id}
+                        type="button"
+                        className={`termin-band-tile ${selected ? "is-selected" : ""}`}
+                        aria-label={label}
+                        aria-pressed={selected}
+                        title={label}
+                        onClick={() => updateForm("bandId", band.id)}
+                      >
+                        <span
+                          className={`termin-band-led ${selected ? "is-on" : ""}`}
+                          aria-hidden="true"
+                        />
+                        <span className="termin-band-tile-inner" style={{ backgroundColor: color }}>
+                          {bandInitials(band.name)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <fieldset className="termin-form-section termin-form-full">
+                <legend>Mesto</legend>
+                <div className="termin-city-grid" role="group" aria-label="Uobičajena mesta">
+                  {QUICK_CREATE_CITIES.map((city) => {
+                    const selected = form.city.trim() === city.name;
+                    return (
+                      <button
+                        key={city.name}
+                        type="button"
+                        className={`termin-city-tile ${selected ? "is-selected" : ""}`}
+                        aria-label={city.name}
+                        aria-pressed={selected}
+                        title={city.name}
+                        onClick={() => updateForm("city", city.name)}
+                      >
+                        {city.short}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="termin-city-other" htmlFor="terminCity">
+                  <span className="sr-only">Drugo mesto</span>
+                  <input
+                    id="terminCity"
+                    name="terminCity"
+                    type="text"
+                    placeholder="Drugo mesto…"
+                    value={form.city}
+                    onChange={(event) => updateForm("city", event.target.value)}
+                    autoComplete="address-level2"
+                  />
+                </label>
+              </fieldset>
 
               {formError ? <div className="app-alert termin-form-full">{formError}</div> : null}
 
-              <div className="termin-form-actions termin-form-full">
-                <button type="button" className="danger" onClick={requestCloseForm} disabled={saving}>
-                  Otkaži
-                </button>
+              <div className="termin-form-actions termin-form-full termin-form-actions-stack">
                 <button type="submit" disabled={saving}>
-                  {saving ? "Čuvam..." : "Sačuvaj termin"}
+                  {saving ? "Čuvam…" : "Sačuvaj termin"}
+                </button>
+                <button type="button" className="termin-form-secondary" disabled={saving} onClick={submitFullDetails}>
+                  Unesi kompletne detalje
+                </button>
+                <button type="button" className="termin-form-ghost" onClick={requestCloseForm} disabled={saving}>
+                  Otkaži
                 </button>
               </div>
             </form>
@@ -867,40 +841,6 @@ function SearchIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
       <path d="M16.5 16.5 21 21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CalendarPlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 3.5V7M16 3.5V7M3.5 10h17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M12 13v5M9.5 15.5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function NewBandIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M3.5 19c.5-3 2.6-4.8 5.5-4.8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path d="M17 8v6M14 11h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

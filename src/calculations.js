@@ -37,7 +37,7 @@ function compareFinanceRows(a, b) {
 
 /**
  * Member/band ledger:
- * - Fee + transport + member-payee expenses (troškovi “meni”) on each date.
+ * - Honorar + troškovi “meni” (member-payee, incl. legacy prevoz) on each date.
  * - One personal uplate pool applied in calendar order across bands.
  * - Undated / invalid dates never earn and never consume the pool.
  */
@@ -57,10 +57,10 @@ export function calculate(events, payments, settings) {
     const hasDate = Boolean(String(event.date || "").trim()) && !Number.isNaN(parsedDate.getTime());
     const done = hasDate && parsedDate.getTime() <= calculationDate.getTime();
     const priceEur = numberValue(event.priceEur);
-    const transportRsd = numberValue(event.transportRsd);
     const rate = hasDate ? rateForDate(parsedDate, settings) : DEFAULT_RATE;
-    const expenseEur = memberPayeeExpenseEur(event.expenseItems, rate);
-    const totalEur = hasDate ? priceEur + transportRsd / rate + expenseEur : 0;
+    const expenseItems = financeExpenseItems(event);
+    const expenseEur = memberPayeeExpenseEur(expenseItems, rate);
+    const totalEur = hasDate ? priceEur + expenseEur : 0;
 
     return {
       ...event,
@@ -69,7 +69,7 @@ export function calculate(events, payments, settings) {
       parsedDate: hasDate ? parsedDate : new Date(Number.NaN),
       done,
       priceEur,
-      transportRsd,
+      expenseItems,
       expenseEur,
       rate,
       totalEur,
@@ -89,7 +89,7 @@ export function calculate(events, payments, settings) {
     }
 
     strictEur += row.totalEur;
-    strictDin += row.transportRsd;
+    strictDin += memberPayeeExpenseRsd(row.expenseItems);
 
     if (row.totalEur <= paidPool + POOL_EPS) {
       row.paymentStatus = "Plaćeno";
@@ -113,7 +113,7 @@ export function calculate(events, payments, settings) {
   const rows = [...enriched].sort(compareFinanceRows);
   const paidEur = totalPaymentsEur(payments, settings);
   const paidDin = totalPaymentsDin(payments, settings);
-  const unpaidClaim = heldMinusPaidEur(rows, payments, settings);
+  const unpaidClaim = waterfallClaimEur(rows);
   const claimEur = unpaidClaim;
   const claimRate = rateForDate(calculationDate, settings);
 
@@ -147,6 +147,56 @@ export function memberPayeeExpenseEur(expenseItems, rate) {
   }, 0);
 }
 
+/** Member-payee expenses in RSD (for legacy din totals). */
+export function memberPayeeExpenseRsd(expenseItems) {
+  return (expenseItems || []).reduce((sum, item) => {
+    if (String(item?.payeeKind || "").toLowerCase() !== "member") return sum;
+    const amount = numberValue(item.amount);
+    if (amount <= 0) return sum;
+    return sum + (String(item.currency || "EUR").toUpperCase() === "RSD" ? amount : 0);
+  }, 0);
+}
+
+/**
+ * Ledger expense lines: real troškovi + legacy transport_rsd as “Prevoz” trošak.
+ * Avoids double-count once prevoz is stored only in event_expenses.
+ */
+export function financeExpenseItems(event) {
+  const items = Array.isArray(event?.expenseItems) ? [...event.expenseItems] : [];
+
+  function hasPrevozExpense(userId = null) {
+    return items.some((item) => {
+      if (String(item?.payeeKind || "").toLowerCase() !== "member") return false;
+      if (userId && item.payeeUserId && String(item.payeeUserId) !== String(userId)) return false;
+      return String(item?.description || "").trim().toLowerCase() === "prevoz";
+    });
+  }
+
+  function appendPrevoz(amountRsd, userId = null) {
+    const amount = numberValue(amountRsd);
+    if (amount <= 0 || hasPrevozExpense(userId)) return;
+    items.push({
+      id: `legacy-prevoz-${event?.id ?? "x"}-${userId || "self"}`,
+      amount,
+      currency: "RSD",
+      description: "Prevoz",
+      payeeKind: "member",
+      payeeUserId: userId,
+    });
+  }
+
+  const memberWages = Array.isArray(event?.memberWages) ? event.memberWages : [];
+  if (memberWages.some((member) => numberValue(member?.transportRsd) > 0)) {
+    for (const member of memberWages) {
+      appendPrevoz(member.transportRsd, member.id);
+    }
+  } else {
+    appendPrevoz(event?.transportRsd);
+  }
+
+  return items;
+}
+
 /** Sum of set amounts on held (past) dates. */
 export function heldDatesEur(rows) {
   return (rows || []).reduce((sum, row) => {
@@ -156,28 +206,37 @@ export function heldDatesEur(rows) {
 }
 
 /**
- * Potražuje: sum(past date amounts) − sum(uplate), floored at 0.
- * Pass rows + payments already scoped by year / band tile / search.
+ * Potražuje on filtered rows: sum unpaid/partial remainders after the global
+ * payment waterfall (calculate). Safe per band / year / search — parts add up.
+ */
+export function waterfallClaimEur(rows) {
+  return (rows || []).reduce((sum, row) => {
+    if (!row?.done || !row?.hasDate) return sum;
+    if (row.paymentClass === "paid") return sum;
+    if (row.paymentClass === "partial") {
+      return sum + Math.max(0, numberValue(row.paymentStatus));
+    }
+    if (row.paymentClass === "unpaid") {
+      return sum + Math.max(0, numberValue(row.totalEur));
+    }
+    return sum;
+  }, 0);
+}
+
+/**
+ * Simple held − uplate (only valid on the full unfiltered ledger).
+ * Do not use for per-band or per-year Potražuje — use waterfallClaimEur on
+ * rows from calculate() instead.
  */
 export function heldMinusPaidEur(rows, payments, settingsOrRate) {
   return Math.max(0, heldDatesEur(rows) - totalPaymentsEur(payments, settingsOrRate));
 }
 
-/** @deprecated use heldMinusPaidEur — kept for any stray imports */
+/** @deprecated prefer waterfallClaimEur on calculate() rows */
 export function unpaidClaimEur(rows, payments, settingsOrRate) {
+  if (rows?.some((row) => row?.paymentClass)) return waterfallClaimEur(rows);
   if (payments) return heldMinusPaidEur(rows, payments, settingsOrRate);
-  // Legacy: sum waterfall remainders if payments omitted
-  return (rows || []).reduce((sum, row) => {
-    if (!row?.done) return sum;
-    if (row.paymentClass === "partial") {
-      return sum + Math.max(0, numberValue(row.paymentStatus));
-    }
-    if (row.paymentClass === "unpaid") {
-      const remaining = numberValue(row.paymentStatus);
-      return sum + Math.max(0, remaining > 0 ? remaining : numberValue(row.totalEur));
-    }
-    return sum;
-  }, 0);
+  return waterfallClaimEur(rows);
 }
 
 /** Sum of set amounts on future (not yet held) dates — Očekivano. */

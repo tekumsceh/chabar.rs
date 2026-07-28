@@ -12,8 +12,8 @@ const SIDE_RATIO = 0.88;
 const OPEN_THRESHOLD = 0.32;
 
 /**
- * Band home — calendar + tools on the main pane;
- * swipe left (Viber-style) for members and more.
+ * Band home — calendar on the main pane;
+ * swipe left (Viber-style) for members, management, and more.
  */
 export default function BandPage({
   bands = [],
@@ -46,10 +46,8 @@ export default function BandPage({
     const today = startOfToday();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
-  const [addOpen, setAddOpen] = useState(false);
-  const [roleOpen, setRoleOpen] = useState(false);
-  const [kickOpen, setKickOpen] = useState(false);
-  const [ownerOpen, setOwnerOpen] = useState(false);
+  /** Active panel inside swipe «Upravljanje»: invite | kick | roles | transfer | delete */
+  const [managePanel, setManagePanel] = useState("");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -127,10 +125,7 @@ export default function BandPage({
   }, [isAllBands, activeBandId, isActive, authReady]);
 
   useEffect(() => {
-    setAddOpen(false);
-    setRoleOpen(false);
-    setKickOpen(false);
-    setOwnerOpen(false);
+    setManagePanel("");
     setQuery("");
     setSearchResults([]);
     setSideOpen(false);
@@ -149,13 +144,17 @@ export default function BandPage({
     return () => window.removeEventListener("resize", measure);
   }, [sideOpen, activeBandId]);
 
-  function closeToolPanels() {
-    setAddOpen(false);
-    setRoleOpen(false);
-    setKickOpen(false);
-    setOwnerOpen(false);
-    setQuery("");
-    setSearchResults([]);
+  function toggleManagePanel(id) {
+    setManagePanel((current) => {
+      if (current === id) {
+        setQuery("");
+        setSearchResults([]);
+        return "";
+      }
+      setQuery("");
+      setSearchResults([]);
+      return id;
+    });
   }
 
   function openSide() {
@@ -379,7 +378,7 @@ export default function BandPage({
   const progress = panelWidth ? reveal / panelWidth : 0;
 
   useEffect(() => {
-    if (!addOpen || !activeBandId || isAllBands) {
+    if (managePanel !== "invite" || !activeBandId || isAllBands) {
       setSearchResults([]);
       setSearching(false);
       return undefined;
@@ -405,7 +404,7 @@ export default function BandPage({
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [query, addOpen, activeBandId, isAllBands]);
+  }, [query, managePanel, activeBandId, isAllBands]);
 
   async function addMember(body) {
     if (!activeBandId || isAllBands || busy) return;
@@ -427,7 +426,7 @@ export default function BandPage({
       }
       setQuery("");
       setSearchResults([]);
-      setAddOpen(false);
+      setManagePanel("");
       const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
       setDetail(data);
       setCalendarEvents(data.events || []);
@@ -556,7 +555,7 @@ export default function BandPage({
         body: { userId: member.id },
       });
       showToast?.(`Vlasništvo: ${member.name}`);
-      setOwnerOpen(false);
+      setManagePanel("");
       await onBandsChanged?.();
       const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
       setDetail(data);
@@ -582,7 +581,7 @@ export default function BandPage({
     try {
       await api(`/api/bands/${activeBandId}`, { method: "DELETE", bandId: activeBandId });
       showToast?.(`Obrisan bend: ${name}`);
-      setOwnerOpen(false);
+      setManagePanel("");
       await onBandsChanged?.();
       onBandChange?.(allBandsId);
       onBack?.();
@@ -717,277 +716,6 @@ export default function BandPage({
             </div>
           </div>
 
-          <div className="band-tools" role="toolbar" aria-label="Alati benda">
-            <button
-              type="button"
-              className={`band-tool-btn ${addOpen ? "is-active" : ""}`}
-              aria-label="Pozovi člana"
-              title={isAllBands ? "Izaberi bend" : canInvite ? "Pošalji pozivnicu" : "Nemaš dozvolu za pozivnice"}
-              disabled={!canInvite}
-              onClick={() => {
-                if (addOpen) {
-                  closeToolPanels();
-                  return;
-                }
-                closeToolPanels();
-                setAddOpen(true);
-              }}
-            >
-              <PlusIcon />
-            </button>
-            <button
-              type="button"
-              className={`band-tool-btn ${kickOpen ? "is-active" : ""}`}
-              aria-label="Ukloni člana"
-              title={canKick ? "Ukloni člana" : isAllBands ? "Izaberi bend" : "Samo vlasnik / lead"}
-              disabled={!canKick}
-              onClick={() => {
-                if (kickOpen) {
-                  closeToolPanels();
-                  return;
-                }
-                closeToolPanels();
-                setKickOpen(true);
-              }}
-            >
-              <MinusIcon />
-            </button>
-            <button
-              type="button"
-              className={`band-tool-btn ${roleOpen ? "is-active" : ""}`}
-              aria-label="Uloge i pozivnice"
-              title={
-                canAssignRoles
-                  ? "Uloge i dozvola za pozivnice"
-                  : isAllBands
-                    ? "Izaberi bend"
-                    : "Samo vlasnik / lead"
-              }
-              disabled={!canAssignRoles}
-              onClick={() => {
-                if (roleOpen) {
-                  closeToolPanels();
-                  return;
-                }
-                closeToolPanels();
-                setRoleOpen(true);
-              }}
-            >
-              <RoleIcon />
-            </button>
-            <button
-              type="button"
-              className={`band-tool-btn ${ownerOpen ? "is-active" : ""}`}
-              aria-label="Vlasništvo benda"
-              title={canTransfer || canDelete ? "Prenos vlasništva / brisanje" : "Samo vlasnik"}
-              disabled={!canTransfer && !canDelete}
-              onClick={() => {
-                if (ownerOpen) {
-                  closeToolPanels();
-                  return;
-                }
-                closeToolPanels();
-                setOwnerOpen(true);
-              }}
-            >
-              <CrownIcon />
-            </button>
-          </div>
-
-          {addOpen && canInvite ? (
-            <form className="band-add-form" onSubmit={handleAddMember}>
-              <label className="band-add-label" htmlFor="band-add-search">
-                Traži člana
-              </label>
-              <div className="band-add-row">
-                <input
-                  id="band-add-search"
-                  type="search"
-                  autoComplete="off"
-                  autoFocus
-                  placeholder="Ime ili email…"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-                <button type="submit" className="band-add-submit" disabled={busy || !query.trim()}>
-                  {busy ? "…" : "Pozovi"}
-                </button>
-              </div>
-              <FadeScroll className="fade-scroll-inset band-user-results-scroll">
-                <ul className="band-user-results" role="listbox" aria-label="Registrovani korisnici">
-                  {searching && searchResults.length === 0 ? <li className="band-user-empty">Učitavam…</li> : null}
-                  {!searching && searchResults.length === 0 ? (
-                    <li className="band-user-empty">
-                      Nema drugih registrovanih. Unesi email i pritisni Pozovi.
-                    </li>
-                  ) : null}
-                  {searchResults.map((user) => (
-                    <li key={user.id}>
-                      <button
-                        type="button"
-                        className="band-user-result"
-                        role="option"
-                        disabled={busy}
-                        onClick={() => handlePickUser(user)}
-                      >
-                        <span className="band-user-result-name">{user.displayName}</span>
-                        <span className="band-user-result-email">{user.email}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </FadeScroll>
-              <p className="band-add-hint">Šalje se pozivnica — ulaze tek kad potvrde.</p>
-            </form>
-          ) : null}
-
-          {kickOpen && canKick ? (
-            <div className="band-role-panel" aria-label="Ukloni člana">
-              <p className="band-add-hint">
-                {isOwner ? "Ukloni lead ili člana." : "Lead može ukloniti samo obične članove."}
-              </p>
-              <ul className="band-member-list">
-                {members
-                  .filter((member) => {
-                    if (member.memberRole === "owner") return false;
-                    if (isLead && member.memberRole !== "member" && member.memberRole !== "saradnik") return false;
-                    return true;
-                  })
-                  .map((member) => (
-                    <li key={member.id} className="band-member-row band-role-row">
-                      <span className="band-member-name">{member.name}</span>
-                      <button
-                        type="button"
-                        className="band-kick-btn"
-                        disabled={busy}
-                        onClick={() => handleKick(member)}
-                      >
-                        Ukloni
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-              {!members.some((member) => {
-                if (member.memberRole === "owner") return false;
-                if (isLead && member.memberRole !== "member" && member.memberRole !== "saradnik") return false;
-                return true;
-              }) ? (
-                <p className="band-home-note">Nema članova za uklanjanje.</p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {roleOpen && canAssignRoles ? (
-            <div className="band-role-panel" aria-label="Uloge članova">
-              <p className="band-add-hint">
-                {isOwner
-                  ? "Postavi lead / člana / saradnika. Saradnik vidi samo datume na koje ga dodaš."
-                  : "Lead može unaprediti člana u lead ili postaviti saradnika. Saradnik vidi samo dodele datume."}
-              </p>
-              <ul className="band-member-list">
-                {members
-                  .filter((member) => member.memberRole !== "owner")
-                  .map((member) => {
-                    const leadCanTouch =
-                      isOwner || (isLead && (member.memberRole === "member" || member.memberRole === "saradnik"));
-                    const canDemote = isOwner || (isLead && member.memberRole === "saradnik");
-                    const canSetSaradnik = isOwner || (isLead && member.memberRole !== "lead");
-                    const canToggleInvite =
-                      (isOwner || (isLead && member.memberRole === "member")) && member.memberRole !== "saradnik";
-                    return (
-                      <li key={member.id} className="band-member-row band-role-row band-role-row-stack">
-                        <div className="band-role-row-top">
-                          <span className="band-member-name">{member.name}</span>
-                          <span className="band-member-role">{bandRoleLabel(member.memberRole)}</span>
-                        </div>
-                        <div className="band-role-actions">
-                          <button
-                            type="button"
-                            className={member.memberRole === "lead" ? "is-active" : ""}
-                            disabled={busy || member.memberRole === "lead" || !leadCanTouch}
-                            onClick={() => handleSetRole(member, "lead")}
-                          >
-                            lead
-                          </button>
-                          <button
-                            type="button"
-                            className={member.memberRole === "member" ? "is-active" : ""}
-                            disabled={
-                              busy ||
-                              member.memberRole === "member" ||
-                              !(isOwner || (isLead && member.memberRole === "saradnik"))
-                            }
-                            onClick={() => handleSetRole(member, "member")}
-                          >
-                            član
-                          </button>
-                          <button
-                            type="button"
-                            className={member.memberRole === "saradnik" ? "is-active" : ""}
-                            disabled={busy || member.memberRole === "saradnik" || !canSetSaradnik}
-                            onClick={() => handleSetRole(member, "saradnik")}
-                            title="Vidi samo datume na koje je dodeljen"
-                          >
-                            saradnik
-                          </button>
-                          <button
-                            type="button"
-                            className={member.canInvite ? "is-active" : ""}
-                            disabled={busy || !canToggleInvite}
-                            title="Dozvola za slanje pozivnica"
-                            onClick={() => handleToggleInvite(member)}
-                          >
-                            poziv
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-              </ul>
-              {!members.some((member) => member.memberRole !== "owner") ? (
-                <p className="band-home-note">Nema drugih članova.</p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {ownerOpen && (canTransfer || canDelete) ? (
-            <div className="band-role-panel" aria-label="Vlasništvo benda">
-              {canTransfer ? (
-                <>
-                  <p className="band-add-hint">Prenesi vlasništvo na postojećeg člana. Ti postaješ lead.</p>
-                  <ul className="band-member-list">
-                    {members
-                      .filter((member) => member.memberRole !== "owner")
-                      .map((member) => (
-                        <li key={member.id} className="band-member-row band-role-row">
-                          <span className="band-member-name">{member.name}</span>
-                          <button
-                            type="button"
-                            className="band-transfer-btn"
-                            disabled={busy}
-                            onClick={() => handleTransfer(member)}
-                          >
-                            Prenesi
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                  {!members.some((member) => member.memberRole !== "owner") ? (
-                    <p className="band-home-note">Nema člana za prenos — prvo pozovi nekoga.</p>
-                  ) : null}
-                </>
-              ) : null}
-              {canDelete ? (
-                <div className="band-danger-zone">
-                  <p className="band-add-hint">Brisanje je trajno (termini + članstva).</p>
-                  <button type="button" className="band-delete-btn" disabled={busy} onClick={handleDeleteBand}>
-                    Obriši bend
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
           {isAllBands ? <p className="band-home-note">Izaberi bend za članove i alate.</p> : null}
           {!isAllBands ? (
             <p className="band-home-swipe-hint" aria-hidden="true">
@@ -1062,6 +790,269 @@ export default function BandPage({
                       <li className="band-home-side-empty">Nema učitanih članova.</li>
                     ) : null}
                   </ul>
+                )}
+              </BandAccordionSection>
+
+              <BandAccordionSection
+                id="manage"
+                title="Upravljanje"
+                open={sideSection === "manage"}
+                onToggle={toggleSideSection}
+              >
+                {isAllBands ? (
+                  <p className="band-home-note">Izaberi bend za upravljanje članovima.</p>
+                ) : band?.kind === "personal" ? (
+                  <p className="band-home-note">Lični prostor — nema upravljanja članovima.</p>
+                ) : (
+                  <>
+                    <div className="band-share-actions band-manage-actions">
+                      <button
+                        type="button"
+                        className={`band-home-side-action ${managePanel === "invite" ? "is-active" : ""}`}
+                        disabled={!canInvite}
+                        onClick={() => toggleManagePanel("invite")}
+                      >
+                        Pozovi člana
+                        <small>{canInvite ? "Pošalji pozivnicu" : "Nemaš dozvolu"}</small>
+                      </button>
+                      <button
+                        type="button"
+                        className={`band-home-side-action ${managePanel === "kick" ? "is-active" : ""}`}
+                        disabled={!canKick}
+                        onClick={() => toggleManagePanel("kick")}
+                      >
+                        Ukloni člana
+                        <small>{canKick ? "Iz benda" : "Samo vlasnik / lead"}</small>
+                      </button>
+                      <button
+                        type="button"
+                        className={`band-home-side-action ${managePanel === "roles" ? "is-active" : ""}`}
+                        disabled={!canAssignRoles}
+                        onClick={() => toggleManagePanel("roles")}
+                      >
+                        Uloge i pozivnice
+                        <small>{canAssignRoles ? "Lead, član, saradnik" : "Samo vlasnik / lead"}</small>
+                      </button>
+                      {canTransfer ? (
+                        <button
+                          type="button"
+                          className={`band-home-side-action ${managePanel === "transfer" ? "is-active" : ""}`}
+                          onClick={() => toggleManagePanel("transfer")}
+                        >
+                          Prenesi vlasništvo
+                          <small>Ti postaješ lead</small>
+                        </button>
+                      ) : null}
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          className={`band-home-side-action band-home-side-action-danger ${managePanel === "delete" ? "is-active" : ""}`}
+                          onClick={() => toggleManagePanel("delete")}
+                        >
+                          Obriši bend
+                          <small>Trajno — termini nestaju</small>
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {managePanel === "invite" && canInvite ? (
+                      <form className="band-add-form band-manage-panel" onSubmit={handleAddMember}>
+                        <label className="band-add-label" htmlFor="band-add-search">
+                          Traži člana
+                        </label>
+                        <div className="band-add-row">
+                          <input
+                            id="band-add-search"
+                            type="search"
+                            autoComplete="off"
+                            autoFocus
+                            placeholder="Ime ili email…"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                          />
+                          <button type="submit" className="band-add-submit" disabled={busy || !query.trim()}>
+                            {busy ? "…" : "Pozovi"}
+                          </button>
+                        </div>
+                        <FadeScroll className="fade-scroll-inset band-user-results-scroll">
+                          <ul className="band-user-results" role="listbox" aria-label="Registrovani korisnici">
+                            {searching && searchResults.length === 0 ? (
+                              <li className="band-user-empty">Učitavam…</li>
+                            ) : null}
+                            {!searching && searchResults.length === 0 ? (
+                              <li className="band-user-empty">
+                                Nema drugih registrovanih. Unesi email i pritisni Pozovi.
+                              </li>
+                            ) : null}
+                            {searchResults.map((user) => (
+                              <li key={user.id}>
+                                <button
+                                  type="button"
+                                  className="band-user-result"
+                                  role="option"
+                                  disabled={busy}
+                                  onClick={() => handlePickUser(user)}
+                                >
+                                  <span className="band-user-result-name">{user.displayName}</span>
+                                  <span className="band-user-result-email">{user.email}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </FadeScroll>
+                        <p className="band-add-hint">Šalje se pozivnica — ulaze tek kad potvrde.</p>
+                      </form>
+                    ) : null}
+
+                    {managePanel === "kick" && canKick ? (
+                      <div className="band-role-panel band-manage-panel" aria-label="Ukloni člana">
+                        <p className="band-add-hint">
+                          {isOwner ? "Ukloni lead ili člana." : "Lead može ukloniti samo obične članove."}
+                        </p>
+                        <ul className="band-member-list">
+                          {members
+                            .filter((member) => {
+                              if (member.memberRole === "owner") return false;
+                              if (isLead && member.memberRole !== "member" && member.memberRole !== "saradnik")
+                                return false;
+                              return true;
+                            })
+                            .map((member) => (
+                              <li key={member.id} className="band-member-row band-role-row">
+                                <span className="band-member-name">{member.name}</span>
+                                <button
+                                  type="button"
+                                  className="band-kick-btn"
+                                  disabled={busy}
+                                  onClick={() => handleKick(member)}
+                                >
+                                  Ukloni
+                                </button>
+                              </li>
+                            ))}
+                        </ul>
+                        {!members.some((member) => {
+                          if (member.memberRole === "owner") return false;
+                          if (isLead && member.memberRole !== "member" && member.memberRole !== "saradnik")
+                            return false;
+                          return true;
+                        }) ? (
+                          <p className="band-home-note">Nema članova za uklanjanje.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {managePanel === "roles" && canAssignRoles ? (
+                      <div className="band-role-panel band-manage-panel" aria-label="Uloge članova">
+                        <p className="band-add-hint">
+                          {isOwner
+                            ? "Postavi lead / člana / saradnika. Saradnik vidi samo datume na koje ga dodaš."
+                            : "Lead može unaprediti člana u lead ili postaviti saradnika. Saradnik vidi samo dodele datume."}
+                        </p>
+                        <ul className="band-member-list">
+                          {members
+                            .filter((member) => member.memberRole !== "owner")
+                            .map((member) => {
+                              const leadCanTouch =
+                                isOwner ||
+                                (isLead && (member.memberRole === "member" || member.memberRole === "saradnik"));
+                              const canSetSaradnik = isOwner || (isLead && member.memberRole !== "lead");
+                              const canToggleInvite =
+                                (isOwner || (isLead && member.memberRole === "member")) &&
+                                member.memberRole !== "saradnik";
+                              return (
+                                <li key={member.id} className="band-member-row band-role-row band-role-row-stack">
+                                  <div className="band-role-row-top">
+                                    <span className="band-member-name">{member.name}</span>
+                                    <span className="band-member-role">{bandRoleLabel(member.memberRole)}</span>
+                                  </div>
+                                  <div className="band-role-actions">
+                                    <button
+                                      type="button"
+                                      className={member.memberRole === "lead" ? "is-active" : ""}
+                                      disabled={busy || member.memberRole === "lead" || !leadCanTouch}
+                                      onClick={() => handleSetRole(member, "lead")}
+                                    >
+                                      lead
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={member.memberRole === "member" ? "is-active" : ""}
+                                      disabled={
+                                        busy ||
+                                        member.memberRole === "member" ||
+                                        !(isOwner || (isLead && member.memberRole === "saradnik"))
+                                      }
+                                      onClick={() => handleSetRole(member, "member")}
+                                    >
+                                      član
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={member.memberRole === "saradnik" ? "is-active" : ""}
+                                      disabled={busy || member.memberRole === "saradnik" || !canSetSaradnik}
+                                      onClick={() => handleSetRole(member, "saradnik")}
+                                      title="Vidi samo datume na koje je dodeljen"
+                                    >
+                                      saradnik
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={member.canInvite ? "is-active" : ""}
+                                      disabled={busy || !canToggleInvite}
+                                      title="Dozvola za slanje pozivnica"
+                                      onClick={() => handleToggleInvite(member)}
+                                    >
+                                      poziv
+                                    </button>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                        </ul>
+                        {!members.some((member) => member.memberRole !== "owner") ? (
+                          <p className="band-home-note">Nema drugih članova.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {managePanel === "transfer" && canTransfer ? (
+                      <div className="band-role-panel band-manage-panel" aria-label="Prenos vlasništva">
+                        <p className="band-add-hint">
+                          Prenesi vlasništvo na postojećeg člana. Ti postaješ lead.
+                        </p>
+                        <ul className="band-member-list">
+                          {members
+                            .filter((member) => member.memberRole !== "owner")
+                            .map((member) => (
+                              <li key={member.id} className="band-member-row band-role-row">
+                                <span className="band-member-name">{member.name}</span>
+                                <button
+                                  type="button"
+                                  className="band-transfer-btn"
+                                  disabled={busy}
+                                  onClick={() => handleTransfer(member)}
+                                >
+                                  Prenesi
+                                </button>
+                              </li>
+                            ))}
+                        </ul>
+                        {!members.some((member) => member.memberRole !== "owner") ? (
+                          <p className="band-home-note">Nema člana za prenos — prvo pozovi nekoga.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {managePanel === "delete" && canDelete ? (
+                      <div className="band-role-panel band-manage-panel band-danger-zone" aria-label="Brisanje benda">
+                        <p className="band-add-hint">Brisanje je trajno (termini + članstva).</p>
+                        <button type="button" className="band-delete-btn" disabled={busy} onClick={handleDeleteBand}>
+                          Obriši bend
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </BandAccordionSection>
 
@@ -1244,52 +1235,6 @@ function InfoIcon() {
       <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
       <path d="M12 10.5v5.25" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <circle cx="12" cy="7.75" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MinusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function RoleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M12 3 4.5 6.5V12c0 4.5 3.2 7.8 7.5 9 4.3-1.2 7.5-4.5 7.5-9V6.5L12 3Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M9 12h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CrownIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M4 16.5 6.5 8l3.5 4L12 6.5 14 12l3.5-4L20 16.5H4Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, setApiAuth } from "./api.js";
 import BandPage from "./BandPage.jsx";
-import ChatPage from "./ChatPage.jsx";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText } from "./calculations.js";
 import LegalPage, { isLegalPage } from "./LegalPage.jsx";
@@ -14,6 +13,7 @@ import { log } from "./logger.js";
 import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase.js";
 import { takePendingJoinToken } from "./joinLink.js";
 import { isBandLead } from "../shared/roles.js";
+import { ownerBandLimit } from "../shared/bandLimits.js";
 
 function ScheduleNavIcon() {
   return (
@@ -50,20 +50,6 @@ function FinanceNavIcon() {
   );
 }
 
-function ChatNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M5 6.5h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2H10l-4.5 3.2V17H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function SettingsNavIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -79,15 +65,49 @@ function SettingsNavIcon() {
   );
 }
 
+function AddNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CalendarPlusNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 3.5V7M16 3.5V7M3.5 10h17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 13v5M9.5 15.5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function NewBandNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M3.5 19c.5-3 2.6-4.8 5.5-4.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path d="M17 8v6M14 11h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS = [
   { id: "schedule", label: "Raspored", icon: ScheduleNavIcon },
   { id: "band", label: "Bendovi", icon: BandsNavIcon },
+  { id: "add", label: "Dodaj", icon: AddNavIcon, isAction: true },
   { id: "report", label: "Finansije", icon: FinanceNavIcon },
-  { id: "chat", label: "Chat", icon: ChatNavIcon },
   { id: "settings", label: "Podešavanja", icon: SettingsNavIcon },
 ];
 
-const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "chat", "settings"]);
+const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings"]);
 const DEFAULT_PAGE = "schedule";
 
 function normalizePage(page) {
@@ -129,6 +149,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [activeBandId, setActiveBandId] = useState(() => localStorage.getItem(ACTIVE_BAND_KEY) || ALL_BANDS_ID);
   const [page, setPageState] = useState(DEFAULT_PAGE);
+  const [scheduleFocusEventId, setScheduleFocusEventId] = useState(null);
   /** Bumped when user chooses Raspored — closes open event detail (with dirty save prompt). */
   const [scheduleLeaveNonce, setScheduleLeaveNonce] = useState(0);
 
@@ -150,7 +171,10 @@ export default function App() {
   const [bandsSheetOpen, setBandsSheetOpen] = useState(false);
   const [bandsAnchor, setBandsAnchor] = useState(null);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addActionRequest, setAddActionRequest] = useState(null);
   const bandsNavRef = useRef(null);
+  const addNavRef = useRef(null);
   const eventsRef = useRef(events);
   const financeEventsRef = useRef(financeEvents);
   const scheduleCacheRef = useRef(readStoredScheduleCache());
@@ -196,7 +220,8 @@ export default function App() {
     const gcalError = params.get("gcal_error");
     const pageParam = params.get("page");
     const bandParam = params.get("band");
-    if (!gcal && !gcalError && !pageParam) return;
+    const noticePage = params.get("n");
+    if (!gcal && !gcalError && !pageParam && !noticePage) return;
 
     if (gcalError) {
       showToast(gcalError, "error");
@@ -208,9 +233,18 @@ export default function App() {
       setPage("band");
     } else if (pageParam === "settings") {
       setPage("settings");
+    } else if (noticePage === "band" && bandParam) {
+      setActiveBandId(bandParam);
+      setPage("band");
+    } else if (noticePage === "report") {
+      if (bandParam) setActiveBandId(bandParam);
+      setPage("report");
+    } else if (noticePage === "schedule") {
+      if (bandParam) setActiveBandId(bandParam);
+      setPage("schedule");
     }
     const url = new URL(window.location.href);
-    ["gcal", "gcal_error", "page", "band"].forEach((key) => url.searchParams.delete(key));
+    ["gcal", "gcal_error", "page", "band", "n", "event"].forEach((key) => url.searchParams.delete(key));
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot OAuth return
   }, [authReady, session?.access_token]);
@@ -240,6 +274,12 @@ export default function App() {
   }
 
   function handleNav(id, event) {
+    if (id === "add") {
+      setBandsSheetOpen(false);
+      setAddMenuOpen((open) => !open);
+      return;
+    }
+    setAddMenuOpen(false);
     if (id === "schedule") {
       setBandsSheetOpen(false);
       goToSchedule();
@@ -257,6 +297,29 @@ export default function App() {
     setBandsSheetOpen(false);
     setPage(id);
   }
+
+  function requestAddAction(type) {
+    setAddMenuOpen(false);
+    setBandsSheetOpen(false);
+    goToSchedule();
+    setAddActionRequest({ type, nonce: Date.now() });
+  }
+
+  useEffect(() => {
+    if (!addMenuOpen) return undefined;
+    function onPointerDown(event) {
+      if (!addNavRef.current?.contains(event.target)) setAddMenuOpen(false);
+    }
+    function onKeyDown(event) {
+      if (event.key === "Escape") setAddMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [addMenuOpen]);
 
   useEffect(() => {
     if (!bandsSheetOpen) return undefined;
@@ -631,6 +694,40 @@ export default function App() {
     }
   }
 
+  async function handleOpenNotification(notice) {
+    if (!notice) return;
+    try {
+      await handleMarkNotificationRead(notice.id);
+    } catch {
+      // still try to navigate
+    }
+
+    const payload = notice.payload || {};
+    const bandId = payload.bandId || notice.bandId || "";
+    const eventId = payload.eventId ? Number(payload.eventId) || payload.eventId : null;
+    const targetPage = payload.page || "schedule";
+
+    if (bandId) setActiveBandId(bandId);
+
+    if (targetPage === "report") {
+      setPage("report");
+      return;
+    }
+    if (targetPage === "band") {
+      setPage("band");
+      return;
+    }
+    if (targetPage === "settings") {
+      setPage("settings");
+      return;
+    }
+
+    setPage("schedule");
+    if (eventId != null && eventId !== "") {
+      setScheduleFocusEventId(eventId);
+    }
+  }
+
   async function saveInvitePreference(value) {
     const next = value || "accept";
     setProfile((current) => (current ? { ...current, invitePreference: next } : current));
@@ -913,9 +1010,11 @@ export default function App() {
   const showSchedule = activePage === "schedule";
   const showBand = activePage === "band";
   const showReport = activePage === "report";
-  const showChat = activePage === "chat";
   const showSettings = activePage === "settings";
-  const forceSchedule = !showSchedule && !showBand && !showReport && !showChat && !showSettings;
+  const forceSchedule = !showSchedule && !showBand && !showReport && !showSettings;
+  const ownedGroupBands = profile?.ownedGroupBands ?? 0;
+  const ownerLimit = profile?.ownerLimit ?? ownerBandLimit(0);
+  const canCreateBand = ownedGroupBands < ownerLimit;
 
   return (
     <div className="app-shell" data-theme={theme}>
@@ -969,6 +1068,7 @@ export default function App() {
             onOpenNotifications={refreshNotifications}
             onMarkNotificationRead={handleMarkNotificationRead}
             onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+            onOpenNotification={handleOpenNotification}
             onOpenSettings={() => setPage("settings")}
             onSignOut={handleSignOut}
           />
@@ -1002,6 +1102,10 @@ export default function App() {
           onRemove={removeEvent}
           onRefreshSchedule={() => loadScheduleAndFinance({ scheduleOnly: true })}
           leaveEventSignal={scheduleLeaveNonce}
+          focusEventId={scheduleFocusEventId}
+          onFocusEventConsumed={() => setScheduleFocusEventId(null)}
+          addActionRequest={addActionRequest}
+          onAddActionConsumed={() => setAddActionRequest(null)}
           loading={loading}
         />
       </div>
@@ -1059,10 +1163,6 @@ export default function App() {
         />
       </div>
 
-      <div className={`app-page ${showChat ? "is-active" : ""}`} hidden={!showChat}>
-        <ChatPage />
-      </div>
-
       {bandsSheetOpen ? (
         <div
           className="bands-sheet-backdrop"
@@ -1118,6 +1218,70 @@ export default function App() {
       <nav className="app-tabbar" aria-label="Glavna navigacija">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
+          if (item.isAction) {
+            return (
+              <div
+                key={item.id}
+                className={`app-tabbar-add-wrap ${addMenuOpen ? "is-open" : ""}`}
+                ref={addNavRef}
+              >
+                <button
+                  type="button"
+                  className={`app-tabbar-add ${addMenuOpen ? "is-open" : ""}`}
+                  aria-label="Dodaj termin ili bend"
+                  aria-haspopup="menu"
+                  aria-expanded={addMenuOpen}
+                  title="Dodaj"
+                  onClick={(event) => handleNav("add", event)}
+                >
+                  <Icon />
+                  <span className="sr-only">Dodaj</span>
+                </button>
+                {addMenuOpen ? (
+                  <ul className="app-tabbar-add-menu" role="menu" aria-label="Dodaj">
+                    <li role="none">
+                      <button
+                        type="button"
+                        className="app-tabbar-add-item"
+                        role="menuitem"
+                        onClick={() => requestAddAction("termin")}
+                      >
+                        <CalendarPlusNavIcon />
+                        <span>Dodaj termin</span>
+                      </button>
+                    </li>
+                    <li role="none">
+                      <button
+                        type="button"
+                        className="app-tabbar-add-item"
+                        role="menuitem"
+                        disabled={!canCreateBand}
+                        title={
+                          canCreateBand
+                            ? "Kreiraj grupni bend"
+                            : `Limit ${ownedGroupBands}/${ownerLimit} grupnih bendova`
+                        }
+                        onClick={() => {
+                          if (!canCreateBand) {
+                            showToast(
+                              `Limit: najviše ${ownerLimit} grupnih bendova. Zatraži grant za više.`,
+                              "error",
+                            );
+                            return;
+                          }
+                          requestAddAction("band");
+                        }}
+                      >
+                        <NewBandNavIcon />
+                        <span>{canCreateBand ? "Novi bend" : `Limit ${ownedGroupBands}/${ownerLimit}`}</span>
+                      </button>
+                    </li>
+                  </ul>
+                ) : null}
+              </div>
+            );
+          }
+
           const isActive =
             item.id === "band"
               ? showBand || bandsSheetOpen

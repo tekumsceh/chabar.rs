@@ -41,6 +41,7 @@ export default defineConfig({
       workbox: {
         navigateFallback: "/index.html",
         globPatterns: ["**/*.{js,css,html,ico,svg,png,woff2}"],
+        importScripts: ["sw-push.js"],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
