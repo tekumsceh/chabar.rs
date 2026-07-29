@@ -8,6 +8,7 @@ import LoginPage from "./LoginPage.jsx";
 import ReportPage from "./ReportPage.jsx";
 import SchedulePage from "./SchedulePage.jsx";
 import SettingsPage from "./SettingsPage.jsx";
+import GlobalSearch from "./GlobalSearch.jsx";
 import UserMenu from "./UserMenu.jsx";
 import { log } from "./logger.js";
 import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase.js";
@@ -150,6 +151,7 @@ export default function App() {
   const [activeBandId, setActiveBandId] = useState(() => localStorage.getItem(ACTIVE_BAND_KEY) || ALL_BANDS_ID);
   const [page, setPageState] = useState(DEFAULT_PAGE);
   const [scheduleFocusEventId, setScheduleFocusEventId] = useState(null);
+  const [reportFocusEventId, setReportFocusEventId] = useState(null);
   /** Bumped when user chooses Raspored — closes open event detail (with dirty save prompt). */
   const [scheduleLeaveNonce, setScheduleLeaveNonce] = useState(0);
 
@@ -163,7 +165,11 @@ export default function App() {
   const [events, setEvents] = useState([]);
   const [financeEvents, setFinanceEvents] = useState([]);
   const [payments, setPayments] = useState([]);
-  const [settings, setSettings] = useState({ exchangeRate: DEFAULT_RATE, asOfDate: todayText() });
+  const [settings, setSettings] = useState({
+    exchangeRate: DEFAULT_RATE,
+    asOfDate: todayText(),
+    autoExchangeRate: "1",
+  });
   const [planner, setPlanner] = useState({ eur: 0, rsd: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -260,6 +266,31 @@ export default function App() {
   function goToSchedule() {
     setPage("schedule");
     setScheduleLeaveNonce((value) => value + 1);
+  }
+
+  function handleGlobalSearchSelect(result) {
+    if (!result) return;
+
+    if (result.kind === "event") {
+      if (result.bandId) setActiveBandId(result.bandId);
+      if (activePage === "report") {
+        setPage("report");
+        setReportFocusEventId(result.id);
+      } else {
+        setPage("schedule");
+        setScheduleFocusEventId(result.id);
+      }
+      setGlobalSearch(result.filterText || result.label || "");
+      return;
+    }
+
+    if (result.kind === "band") {
+      if (result.bandId) setActiveBandId(result.bandId);
+      setGlobalSearch("");
+      return;
+    }
+
+    setGlobalSearch(result.filterText || result.label || "");
   }
 
   function openBandPage(bandId) {
@@ -562,6 +593,10 @@ export default function App() {
       setSettings({
         exchangeRate: finance.settings.exchangeRate || schedule.settings.exchangeRate || DEFAULT_RATE,
         asOfDate: finance.settings.asOfDate || schedule.settings.asOfDate || todayText(),
+        autoExchangeRate:
+          finance.settings.autoExchangeRate ??
+          schedule.settings.autoExchangeRate ??
+          "1",
       });
       queuePrefetchSchedules();
     } catch (requestError) {
@@ -599,6 +634,7 @@ export default function App() {
         setSettings((current) => ({
           exchangeRate: finance.settings.exchangeRate || current.exchangeRate || DEFAULT_RATE,
           asOfDate: finance.settings.asOfDate || current.asOfDate || todayText(),
+          autoExchangeRate: finance.settings.autoExchangeRate ?? current.autoExchangeRate ?? "1",
         }));
       }
     } catch (requestError) {
@@ -1031,22 +1067,12 @@ export default function App() {
         >
           Chabar
         </button>
-        <label className="app-topbar-search">
-          <span className="sr-only">Pretraga</span>
-          <span className="app-topbar-search-icon" aria-hidden="true">
-            <TopSearchIcon />
-          </span>
-          <input
-            type="search"
-            name="globalSearch"
-            enterKeyHint="search"
-            autoComplete="off"
-            placeholder="Pretraga…"
-            className="app-topbar-search-field"
-            value={globalSearch}
-            onChange={(event) => setGlobalSearch(event.target.value)}
-          />
-        </label>
+        <GlobalSearch
+          value={globalSearch}
+          onChange={setGlobalSearch}
+          onSelectResult={handleGlobalSearchSelect}
+          authReady={Boolean(session?.access_token)}
+        />
         <div className="app-topbar-user">
           <UserMenu
             email={profile?.email || session.user?.email || ""}
@@ -1107,6 +1133,7 @@ export default function App() {
           addActionRequest={addActionRequest}
           onAddActionConsumed={() => setAddActionRequest(null)}
           loading={loading}
+          searchQuery={globalSearch}
         />
       </div>
 
@@ -1144,6 +1171,10 @@ export default function App() {
           settings={settings}
           loading={loading}
           showToast={showToast}
+          userId={profile?.id || ""}
+          searchQuery={globalSearch}
+          focusEventId={reportFocusEventId}
+          onFocusEventConsumed={() => setReportFocusEventId(null)}
         />
       </div>
 
@@ -1157,8 +1188,6 @@ export default function App() {
           onOpenLegal={setPage}
           invitePreference={profile?.invitePreference || "accept"}
           onInvitePreferenceChange={saveInvitePreference}
-          ownedGroupBands={profile?.ownedGroupBands || 0}
-          ownerLimit={profile?.ownerLimit || 5}
           showToast={showToast}
         />
       </div>
@@ -1336,15 +1365,6 @@ function SheetCloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function TopSearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="10.5" cy="10.5" r="5.75" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M15.2 15.2 19.5 19.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

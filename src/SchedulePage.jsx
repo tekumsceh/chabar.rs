@@ -54,10 +54,10 @@ export default function SchedulePage({
   addActionRequest = null,
   onAddActionConsumed,
   loading = false,
+  searchQuery = "",
 }) {
   const { confirm } = useConfirm();
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const search = searchQuery;
   const [filter, setFilter] = useState("upcoming");
   /** desc = present → past (default); asc = past → present */
   const [dateSort, setDateSort] = useState("desc");
@@ -315,9 +315,8 @@ export default function SchedulePage({
           leaveSignal={leaveEventSignal}
           showToast={showToast}
         />
-      ) : null}
-
-      <div className="raspored-list-view" hidden={eventOpen} aria-hidden={eventOpen}>
+      ) : (
+      <div className="raspored-list-view">
       <header className="raspored-bar">
         <div className="raspored-tools raspored-tools-start" aria-label="Filteri rasporeda">
           <BandFilterSelect
@@ -347,38 +346,9 @@ export default function SchedulePage({
             <SortArrowIcon />
           </button>
         </div>
-
-        <div className="raspored-tools">
-          <div className={`raspored-search ${searchOpen || search ? "is-open" : ""}`}>
-            <button
-              type="button"
-              className="raspored-icon-btn"
-              aria-label="Pretraga"
-              title="Pretraga"
-              onClick={() => setSearchOpen((open) => !open)}
-            >
-              <SearchIcon />
-            </button>
-            {searchOpen || search ? (
-              <input
-                id="scheduleSearch"
-                name="scheduleSearch"
-                type="search"
-                placeholder="mesto, lokal, napomena..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onBlur={() => {
-                  if (!search.trim()) setSearchOpen(false);
-                }}
-                autoComplete="off"
-                autoFocus={searchOpen && !search}
-              />
-            ) : null}
-          </div>
-        </div>
       </header>
 
-      <section className="raspored-panel" aria-label="Termini">
+      <FadeScroll viewportClassName="raspored-panel" viewportAriaLabel="Termini">
         {loading && events.length === 0 ? (
           <RasporedSkeleton variant="schedule" />
         ) : visibleRows.length === 0 ? (
@@ -436,7 +406,7 @@ export default function SchedulePage({
             })}
           </ul>
         )}
-      </section>
+      </FadeScroll>
 
       {filter === "all" && filteredRows.length > ALL_PAGE_SIZE ? (
         <div className="raspored-pagination" aria-label="Stranice">
@@ -469,6 +439,7 @@ export default function SchedulePage({
       ) : null}
 
       </div>
+      )}
 
       {formOpen ? (
         <div className="modal-backdrop" role="presentation">
@@ -797,7 +768,7 @@ function enrichScheduleRows(events, asOfDateText) {
 
 function matchesScheduleFilter(row, search, filter, asOfDate) {
   const query = search.trim().toLowerCase();
-  const haystack = [row.date, row.city, row.venue, row.note].join(" ").toLowerCase();
+  const haystack = [row.date, row.city, row.venue, row.note, row.bandName].join(" ").toLowerCase();
 
   if (query && !haystack.includes(query)) return false;
   if (filter === "upcoming") return row.hasDate && !row.done;
@@ -832,15 +803,6 @@ function PageChevronRightIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M16.5 16.5 21 21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

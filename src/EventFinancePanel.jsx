@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import { formatEur, numberValue } from "./calculations.js";
 
+function hasValidDraft(raw) {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return false;
+  const priceEur = numberValue(trimmed.replace(",", "."));
+  return Number.isFinite(priceEur) && priceEur >= 0;
+}
+
 /**
  * Owner/lead: set per-member honorar for one date.
  * Default button fills draft from member.defaultPriceEur (storage/UI TBD).
@@ -106,6 +113,8 @@ export default function EventFinancePanel({ eventId, bandId, readOnly = false, s
     <ul className="event-finance-list" aria-label="Honorari po članu">
       {members.map((member) => {
         const busy = busyId === member.id;
+        const amountReady = hasValidDraft(drafts[member.id]);
+        const rowBusy = busy || Boolean(busyId);
         return (
           <li key={member.id} className="event-finance-row">
             <strong className="event-finance-name" title={member.name}>
@@ -120,11 +129,11 @@ export default function EventFinancePanel({ eventId, bandId, readOnly = false, s
                 maxLength={6}
                 placeholder="€"
                 value={drafts[member.id] ?? ""}
-                disabled={readOnly || busy || Boolean(busyId)}
+                disabled={readOnly || rowBusy}
                 readOnly={readOnly}
                 onChange={(event) => updateDraft(member.id, event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                  if (event.key === "Enter" && amountReady) {
                     event.preventDefault();
                     setFee(member);
                   }
@@ -135,20 +144,23 @@ export default function EventFinancePanel({ eventId, bandId, readOnly = false, s
               <>
                 <button
                   type="button"
-                  className="event-finance-btn event-finance-btn-set"
-                  disabled={busy || Boolean(busyId)}
+                  className="event-finance-icon-btn event-finance-icon-btn-accent"
+                  aria-label={`Postavi honorar za ${member.name}`}
+                  title="Postavi"
+                  disabled={rowBusy || !amountReady}
                   onClick={() => setFee(member)}
                 >
-                  {busy ? "…" : "Postavi"}
+                  {busy ? "…" : <CheckIcon />}
                 </button>
                 <button
                   type="button"
-                  className="event-finance-btn event-finance-btn-default"
-                  disabled={busy || Boolean(busyId)}
-                  title="Unesi podrazumevani honorar"
+                  className="event-finance-icon-btn"
+                  aria-label={`Podrazumevani honorar za ${member.name}`}
+                  title="Podrazumevano"
+                  disabled={rowBusy}
                   onClick={() => applyDefault(member)}
                 >
-                  Podrazumevano
+                  <DefaultIcon />
                 </button>
               </>
             )}
@@ -156,5 +168,35 @@ export default function EventFinancePanel({ eventId, bandId, readOnly = false, s
         );
       })}
     </ul>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M5 12.5 10 17.5 19 7.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DefaultIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 3v4M8 7h8M7 11h10v10l-5-2.5L7 21V11Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

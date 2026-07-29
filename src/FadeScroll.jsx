@@ -6,7 +6,12 @@ const FADE_OUT_MS = 1000;
  * React-owned fade scrollbar (same look as initFadeScrollbars).
  * Safe for mount/unmount — does not reparent DOM under React.
  */
-export default function FadeScroll({ children, className = "", viewportClassName = "" }) {
+export default function FadeScroll({
+  children,
+  className = "",
+  viewportClassName = "",
+  viewportAriaLabel = "",
+}) {
   const viewportRef = useRef(null);
   const thumbRef = useRef(null);
   const wrapRef = useRef(null);
@@ -123,7 +128,11 @@ export default function FadeScroll({ children, className = "", viewportClassName
       ref={wrapRef}
       className={`fade-scroll-wrap ${canScroll ? "can-scroll" : ""} ${scrolling ? "is-scrolling" : ""} ${className}`.trim()}
     >
-      <div ref={viewportRef} className={`fade-scroll-viewport ${viewportClassName}`.trim()}>
+      <div
+        ref={viewportRef}
+        className={`fade-scroll-viewport ${viewportClassName}`.trim()}
+        {...(viewportAriaLabel ? { role: "region", "aria-label": viewportAriaLabel } : {})}
+      >
         {children}
       </div>
       <div ref={thumbRef} className="fade-scroll-thumb" aria-hidden="true" />

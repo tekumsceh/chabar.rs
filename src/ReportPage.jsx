@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import {
   calculate,
   expectedFutureEur,
+  financeExpenseItems,
   formatEur,
   formatRsd,
   formatScheduleDateParts,
+  memberPayeeExpenseEur,
   waterfallClaimEur,
   parseDate,
 } from "./calculations.js";
@@ -13,7 +15,6 @@ import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
-import EventComments from "./EventComments.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 
 const statusOptions = [
@@ -37,9 +38,12 @@ export default function ReportPage({
   settings,
   loading = false,
   showToast,
+  userId = "",
+  searchQuery = "",
+  focusEventId = null,
+  onFocusEventConsumed,
 }) {
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const search = searchQuery;
   const [statusFilter, setStatusFilter] = useState("all");
   /** desc = novo → staro (default); asc = staro → novo */
   const [dateSort, setDateSort] = useState("desc");
@@ -47,6 +51,12 @@ export default function ReportPage({
   const [activeTab, setActiveTab] = useState("dates");
   const [selectedId, setSelectedId] = useState(null);
   const [listPage, setListPage] = useState(0);
+
+  useEffect(() => {
+    if (focusEventId == null || focusEventId === "") return;
+    setSelectedId(focusEventId);
+    onFocusEventConsumed?.();
+  }, [focusEventId, onFocusEventConsumed]);
 
   const DATES_PAGE_SIZE = 20;
 
@@ -249,34 +259,6 @@ export default function ReportPage({
           </label>
         </div>
 
-        <div className="raspored-tools" aria-label="Alati finansija">
-          <div className={`raspored-search ${searchOpen || search ? "is-open" : ""}`}>
-            <button
-              type="button"
-              className="raspored-icon-btn"
-              aria-label="Pretraga"
-              title="Pretraga"
-              onClick={() => setSearchOpen((open) => !open)}
-            >
-              <SearchIcon />
-            </button>
-            {searchOpen || search ? (
-              <input
-                id="financeSearch"
-                name="financeSearch"
-                type="search"
-                placeholder="mesto, lokal..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onBlur={() => {
-                  if (!search.trim()) setSearchOpen(false);
-                }}
-                autoComplete="off"
-                autoFocus={searchOpen && !search}
-              />
-            ) : null}
-          </div>
-        </div>
       </header>
 
       <div className="finansije-year-meta-bar">
@@ -330,40 +312,35 @@ export default function ReportPage({
             <ul className="raspored-list">
               {visibleRows.map((row) => {
                 const band = bandsById.get(row.bandId);
-                const name = band?.name || row.bandName || "";
-                const color = resolveBandColor(band, row.bandId || name);
+                const bandLabel = financeBandLabel(band, row);
+                const color = resolveBandColor(band, row.bandId || bandLabel);
                 const dateParts = formatScheduleDateParts(row.date);
+                const amountTone = feeAmountTone(row);
+                const isSettled = row.done && row.paymentClass === "paid";
                 return (
-                  <li key={row.id}>
+                  <li
+                    key={row.id}
+                    className={`raspored-row raspored-row-finance ${isSettled ? "is-settled" : ""}`}
+                    style={color ? { "--band-accent": color } : undefined}
+                  >
                     <button
                       type="button"
-                      className={`raspored-row raspored-row-finance raspored-row-button ${row.done ? "is-past" : ""}`}
-                      style={color ? { "--band-accent": color } : undefined}
+                      className="raspored-row-button raspored-row-open"
                       onClick={() => setSelectedId(row.id)}
+                      aria-label={`Detalj ${row.date || ""} ${row.city || ""} ${bandLabel}`.trim()}
                     >
                       <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
                         <span className="raspored-date-day">{dateParts.day}</span>
                         <span className="raspored-date-month">{dateParts.month}</span>
                       </time>
                       <div className="raspored-main">
-                        <strong>{row.city || "—"}</strong>
-                        <span
-                          className={`finansije-date-phase ${row.done ? "is-held" : "is-upcoming"}`}
-                          title={row.done ? "Termin je održan" : "Termin tek predstoji"}
-                        >
-                          {row.done ? "održano" : "buduće"}
-                        </span>
+                        <strong className="raspored-city">{row.city || "—"}</strong>
+                        {bandLabel ? <span className="raspored-band">{bandLabel}</span> : null}
                       </div>
+                    </button>
+                    <div className="finansije-row-trail">
                       <span
-                        className="band-chip"
-                        style={{ backgroundColor: color }}
-                        title={name || "Bend"}
-                        aria-label={name || "Bend"}
-                      >
-                        {bandInitials(name)}
-                      </span>
-                      <span
-                        className={`raspored-fee raspored-fee-${feeAmountTone(row)}`}
+                        className={`finansije-row-amount raspored-fee raspored-fee-${amountTone}`}
                         title={
                           row.hasDate
                             ? `${payStatusLabel(row)} · ${formatEur(row.totalEur)}`
@@ -372,7 +349,10 @@ export default function ReportPage({
                       >
                         {row.hasDate ? formatEurCeil(row.totalEur) : "—"}
                       </span>
-                    </button>
+                      <div className="raspored-actions">
+                        <FinanceRowMenu row={row} onOpenDetail={() => setSelectedId(row.id)} />
+                      </div>
+                    </div>
                   </li>
                 );
               })}
@@ -441,7 +421,8 @@ export default function ReportPage({
           row={selectedRow}
           band={bandsById.get(selectedRow.bandId)}
           rate={selectedRow.rate || calculations.rate}
-          showToast={showToast}
+          financeMode={financeMode}
+          userId={userId}
           onClose={() => setSelectedId(null)}
         />
       ) : null}
@@ -449,18 +430,21 @@ export default function ReportPage({
   );
 }
 
-function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
+function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = "", onClose }) {
+  const isBandMode = financeMode === "band";
   const name = band?.name || row.bandName || "";
   const color = resolveBandColor(band, row.bandId || name);
   const memberWages = Array.isArray(row.memberWages) ? row.memberWages.filter(Boolean) : [];
-  const expenseItems = (Array.isArray(row.expenseItems) ? row.expenseItems : []).filter(
-    (item) => String(item?.payeeKind || "").toLowerCase() === "member",
-  );
-  const honorarTotal = memberWages.length
+  const allExpenses = financeExpenseItems(row);
+  const expenseItems = isBandMode
+    ? allExpenses
+    : filterMyExpenseItems(allExpenses, userId);
+  const honorarTotal = isBandMode
     ? memberWages.reduce((sum, member) => sum + numberish(member.priceEur), 0)
     : numberish(row.priceEur);
-  const honorarLabel = memberWages.length > 1 ? "Honorari" : "Honorar";
-  const detailTotalEur = numberish(row.totalEur);
+  const detailTotalEur = isBandMode
+    ? honorarTotal + sumExpensesEur(expenseItems, rate)
+    : numberish(row.totalEur);
   const remaining =
     row.paymentClass === "partial" || row.paymentClass === "unpaid"
       ? numberish(row.paymentStatus)
@@ -468,6 +452,7 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
         ? 0
         : detailTotalEur;
   const bandPay = bandPaymentNote(row, detailTotalEur, remaining);
+  const dateLabel = String(row.date || "").replace(/\.$/, "") || "Bez datuma";
 
   return (
     <div
@@ -485,11 +470,19 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
       >
         <header className="finance-detail-head">
           <div>
-            <p className="finance-detail-kicker">Detalj termina</p>
+            <p className="finance-detail-kicker">Finansije</p>
             <h2 id="financeDetailTitle">
-              {String(row.date || "").replace(/\.$/, "") || "Bez datuma"}
+              {dateLabel}
               {row.city ? ` — ${row.city}` : ""}
             </h2>
+            {name ? (
+              <p className="finance-detail-bandline">
+                <span className="band-chip" style={{ backgroundColor: color }} title={name} aria-hidden="true">
+                  {bandInitials(name)}
+                </span>
+                <span>{name}</span>
+              </p>
+            ) : null}
           </div>
           <button type="button" className="raspored-icon-btn" onClick={onClose} aria-label="Zatvori" title="Zatvori">
             <CloseIcon />
@@ -498,100 +491,60 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
 
         <FadeScroll viewportClassName="finance-detail-body">
           <section className="finance-detail-section">
-            <h3>Osnovno</h3>
-            <dl className="finance-detail-grid">
-              <div>
-                <dt>Bend</dt>
-                <dd className="finance-detail-band">
-                  <span className="band-chip" style={{ backgroundColor: color }} title={name}>
-                    {bandInitials(name)}
-                  </span>
-                  <span>{name || "—"}</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Mesto</dt>
-                <dd>{row.city || "—"}</dd>
-              </div>
-              <div>
-                <dt>Lokal</dt>
-                <dd>{row.venue || "—"}</dd>
-              </div>
-              <div>
-                <dt>Napomena</dt>
-                <dd>{row.note || "—"}</dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd className="finance-detail-status">
-                  {payStatusLabel(row)}
-                  {row.done && remaining > 0 ? ` · ostaje ${formatEur(remaining)}` : null}
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className="finance-detail-section">
-            <h3>Obračun</h3>
-            <ul className="finance-detail-lines">
-              <li className={memberWages.length > 1 ? "has-hover-tip" : ""}>
-                <span
-                  className={memberWages.length > 1 ? "finance-tip-trigger" : undefined}
-                  tabIndex={memberWages.length > 1 ? 0 : undefined}
-                >
-                  {honorarLabel}
-                  {memberWages.length > 1 ? (
-                    <span className="finance-tip" role="tooltip">
-                      {memberWages.map((member) => (
-                        <span key={member.id || member.name} className="finance-tip-row">
-                          <span>{member.name || "Član"}</span>
-                          <strong>{formatEur(numberish(member.priceEur))}</strong>
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-                </span>
-                <strong>{formatEur(honorarTotal)}</strong>
-              </li>
-              {expenseItems.map((item) => (
-                <li key={item.id || `${item.description}-${item.amount}`}>
-                  <span>
-                    {item.description || "Trošak"}
-                    {item.payeeName ? (
-                      <small className="finance-detail-payee"> · kome: {item.payeeName}</small>
-                    ) : null}
-                  </span>
-                  <strong>
-                    {item.currency === "RSD"
-                      ? formatRsd(numberish(item.amount))
-                      : item.currency && item.currency !== "EUR"
-                        ? `${formatNumberish(item.amount)} ${item.currency}`
-                        : formatEur(numberish(item.amount))}
-                    {item.currency === "RSD" ? (
-                      <small> ({formatEur(numberish(item.amount) / (rate || 1))})</small>
-                    ) : null}
-                  </strong>
-                </li>
-              ))}
-            </ul>
-            {memberWages.length > 1 ? (
-              <ul className="finance-detail-members" aria-label="Honorari po članu">
-                {memberWages.map((member) => (
-                  <li key={member.id || member.name}>
-                    <span>{member.name || "Član"}</span>
-                    <strong>{formatEur(numberish(member.priceEur))}</strong>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
-
-          <section className="finance-detail-section">
-            <h3>Uplata bendu</h3>
-            <p className={`finance-detail-paynote finance-detail-paynote-${bandPay.kind}`}>
-              {bandPay.text}
+            <p className={`finance-detail-status finance-detail-status-${row.paymentClass || "future"}`}>
+              {payStatusLabel(row)}
+              {row.done && remaining > 0 ? ` · ostaje ${formatEur(remaining)}` : null}
             </p>
           </section>
+
+          <section className="finance-detail-section">
+            <h3>{isBandMode ? "Obračun benda" : "Tvoj obračun"}</h3>
+            <ul className="finance-detail-lines">
+              {isBandMode ? (
+                memberWages.length ? (
+                  memberWages.map((member) => (
+                    <li key={member.id || member.name}>
+                      <span>{member.name || "Član"}</span>
+                      <strong>{formatEur(numberish(member.priceEur))}</strong>
+                    </li>
+                  ))
+                ) : (
+                  <li>
+                    <span>Honorari</span>
+                    <strong>{formatEur(honorarTotal)}</strong>
+                  </li>
+                )
+              ) : (
+                <li>
+                  <span>Honorar</span>
+                  <strong>{formatEur(honorarTotal)}</strong>
+                </li>
+              )}
+              {expenseItems.map((item) => (
+                <li key={item.id || `${item.description}-${item.amount}-${item.payeeUserId || ""}`}>
+                  <span>
+                    {item.description || "Trošak"}
+                    {isBandMode && item.payeeName ? (
+                      <small className="finance-detail-payee"> · {item.payeeName}</small>
+                    ) : null}
+                  </span>
+                  <strong>{formatExpenseAmount(item, rate)}</strong>
+                </li>
+              ))}
+              {!expenseItems.length && honorarTotal <= 0 ? (
+                <li className="finance-detail-empty">Nema postavljenih iznosa.</li>
+              ) : null}
+            </ul>
+          </section>
+
+          {row.done ? (
+            <section className="finance-detail-section">
+              <h3>Uplata</h3>
+              <p className={`finance-detail-paynote finance-detail-paynote-${bandPay.kind}`}>
+                {bandPay.text}
+              </p>
+            </section>
+          ) : null}
 
           <section className="finance-detail-section">
             <ul className="finance-detail-lines">
@@ -601,20 +554,48 @@ function FinanceDetailModal({ row, band, rate, showToast, onClose }) {
               </li>
             </ul>
           </section>
-
-          {row.done ? (
-            <p className="event-comments-locknote">
-              Termin je zaključan — finansijski detalji se ne menjaju. Možeš dodati komentar ispod.
-            </p>
-          ) : null}
-
-          <section className="finance-detail-section">
-            <EventComments eventId={row.id} bandId={row.bandId} showToast={showToast} compact />
-          </section>
         </FadeScroll>
       </div>
     </div>
   );
+}
+
+function filterMyExpenseItems(items, userId) {
+  return (items || []).filter((item) => {
+    if (String(item?.payeeKind || "").toLowerCase() !== "member") return false;
+    if (!item.payeeUserId) return true;
+    return userId && String(item.payeeUserId) === String(userId);
+  });
+}
+
+function sumExpensesEur(items, rate) {
+  return memberPayeeExpenseEur(items, rate) + sumNonMemberExpensesEur(items, rate);
+}
+
+function sumNonMemberExpensesEur(items, rate) {
+  const safeRate = rate > 0 ? rate : 116.5;
+  return (items || []).reduce((sum, item) => {
+    if (String(item?.payeeKind || "").toLowerCase() === "member") return sum;
+    const amount = numberish(item.amount);
+    if (amount <= 0) return sum;
+    return sum + (String(item.currency || "EUR").toUpperCase() === "RSD" ? amount / safeRate : amount);
+  }, 0);
+}
+
+function formatExpenseAmount(item, rate) {
+  const amount = numberish(item.amount);
+  if (String(item.currency || "EUR").toUpperCase() === "RSD") {
+    return (
+      <>
+        {formatRsd(amount)}
+        <small> ({formatEur(amount / (rate || 1))})</small>
+      </>
+    );
+  }
+  if (item.currency && item.currency !== "EUR") {
+    return `${formatNumberish(amount)} ${item.currency}`;
+  }
+  return formatEur(amount);
 }
 
 function numberish(value) {
@@ -687,19 +668,155 @@ function payStatusLabel(row) {
   return "Otvoreno";
 }
 
-/** Amount color: paid green, partial yellow, held unpaid white, future muted blue. */
+/** Amount color: paid green, partial yellow, held unpaid red, future/open brand. */
 function feeAmountTone(row) {
-  if (!row.done) return "future";
+  if (!row.done) return "open";
   if (row.paymentClass === "paid") return "paid";
   if (row.paymentClass === "partial") return "partial";
   return "unpaid";
 }
 
-function SearchIcon() {
+function financeBandLabel(band, row) {
+  const name = band?.name || row.bandName || "";
+  if (!name) return "";
+  if (band?.kind === "personal") return `${name} (lično)`;
+  return name;
+}
+
+function financeRemainingEur(row) {
+  if (!row?.done) return 0;
+  if (row.paymentClass === "paid") return 0;
+  if (row.paymentClass === "partial") return numberish(row.paymentStatus);
+  if (row.paymentClass === "unpaid") return numberish(row.totalEur);
+  return 0;
+}
+
+function FinanceRowMenu({ row, onOpenDetail }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const idleTimerRef = useRef(0);
+  const menuId = useId();
+  const owed = financeRemainingEur(row);
+  const needsPay = row.done && owed > 0;
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const IDLE_MS = 5000;
+
+    function clearIdle() {
+      window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = 0;
+    }
+
+    function armIdle() {
+      clearIdle();
+      idleTimerRef.current = window.setTimeout(() => setOpen(false), IDLE_MS);
+    }
+
+    function onPointerDown(event) {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+        return;
+      }
+      armIdle();
+    }
+
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (rootRef.current?.contains(event.target)) armIdle();
+    }
+
+    armIdle();
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      clearIdle();
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className={`date-row-menu ${open ? "is-open" : ""}`} ref={rootRef}>
+      <button
+        type="button"
+        className={`date-row-menu-trigger ${open ? "is-open" : ""}`}
+        aria-label="Finansijske radnje"
+        title="Više"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        <MoreDotsIcon />
+      </button>
+      {open ? (
+        <ul className="date-row-menu-list" id={menuId} role="menu" aria-label="Finansijske radnje">
+          {needsPay ? (
+            <li role="none">
+              <button
+                type="button"
+                className="date-row-menu-item is-pay"
+                role="menuitem"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOpen(false);
+                  onOpenDetail?.();
+                }}
+              >
+                Plati ovaj datum
+                <small>{formatEur(owed)}</small>
+              </button>
+            </li>
+          ) : null}
+          {!row.done ? (
+            <li role="none">
+              <div className="date-row-menu-item is-status" role="menuitem" aria-disabled="true">
+                Budući termin — nije dospelo
+              </div>
+            </li>
+          ) : null}
+          {row.done && row.paymentClass === "paid" ? (
+            <li role="none">
+              <div className="date-row-menu-item is-status is-fee-set" role="menuitem" aria-disabled="true">
+                Plaćeno
+              </div>
+            </li>
+          ) : null}
+          <li role="none">
+            <button
+              type="button"
+              className="date-row-menu-item"
+              role="menuitem"
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+                onOpenDetail?.();
+              }}
+            >
+              Detalj obračuna
+            </button>
+          </li>
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function MoreDotsIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M16.5 16.5 21 21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="6" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="18" r="1.6" fill="currentColor" />
     </svg>
   );
 }

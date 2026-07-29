@@ -11,7 +11,6 @@ import {
 import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
-import EventAssigneesPanel from "./EventAssigneesPanel.jsx";
 import EventDayDetails from "./EventDayDetails.jsx";
 import FieldSelect from "./FieldSelect.jsx";
 import FadeScroll from "./FadeScroll.jsx";
@@ -47,6 +46,11 @@ export default function EventPage({
   const formRef = useRef(form);
   const savingRef = useRef(saving);
   const eventRef = useRef(event);
+  const backRef = useRef(null);
+
+  useEffect(() => {
+    backRef.current?.focus({ preventScroll: true });
+  }, [event?.id]);
 
   const memberRole = band?.memberRole || "member";
   const canSeeFinance = memberRole === "owner" || memberRole === "lead";
@@ -255,7 +259,14 @@ export default function EventPage({
     return (
       <div className="event-page">
         <header className="event-page-head">
-          <button type="button" className="event-page-back" aria-label="Nazad" title="Nazad" onClick={onBack}>
+          <button
+            type="button"
+            ref={backRef}
+            className="event-page-back"
+            aria-label="Nazad"
+            title="Nazad"
+            onClick={onBack}
+          >
             <ChevronLeftIcon />
           </button>
           <div className="event-page-title-wrap">
@@ -272,6 +283,7 @@ export default function EventPage({
       <header className="event-page-head">
         <button
           type="button"
+          ref={backRef}
           className="event-page-back"
           aria-label="Nazad na raspored"
           title="Nazad na raspored"
@@ -481,10 +493,6 @@ export default function EventPage({
               await onRefreshSchedule?.();
             }}
           />
-          <h3 className="event-page-section-title event-page-section-title-spaced">
-            <ExpenseIcon />
-            <span>Troškovi</span>
-          </h3>
           <EventExpensesPanel
             eventId={event.id}
             bandId={event.bandId || band?.id}
@@ -493,15 +501,6 @@ export default function EventPage({
             onChanged={async () => {
               await onRefreshSchedule?.();
             }}
-          />
-          <h3 className="event-page-section-title event-page-section-title-spaced">
-            <AssignIcon />
-            <span>Saradnici na terminu</span>
-          </h3>
-          <EventAssigneesPanel
-            eventId={event.id}
-            bandId={event.bandId || band?.id}
-            showToast={showToast}
           />
           </FadeScroll>
         </section>
@@ -671,31 +670,6 @@ function HonorarIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
       />
-    </svg>
-  );
-}
-
-function ExpenseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M6 7h12v12H6zM9 7V5.8A3 3 0 0 1 15 5.8V7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M9 12h6M9 15h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function AssignIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M3.5 19c.6-3 2.6-4.7 5.5-4.7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M16 11v6M13 14h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

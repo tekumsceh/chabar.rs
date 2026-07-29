@@ -21,11 +21,98 @@ export function isPushSupported() {
 }
 
 export function getPushPrefEnabled() {
-  return localStorage.getItem(PUSH_PREF_KEY) === "1";
+  const v = localStorage.getItem(PUSH_PREF_KEY);
+  if (v === null) return true;
+  return v === "1";
 }
 
 export function setPushPrefEnabled(on) {
   localStorage.setItem(PUSH_PREF_KEY, on ? "1" : "0");
+}
+
+/** Register or reuse a service worker so push works in dev and prod. */
+export async function ensurePushServiceWorker() {
+  if (!isPushSupported()) {
+    throw new Error("Ovaj pregledač ne podržava push obaveštenja.");
+  }
+
+  let registration = await navigator.serviceWorker.getRegistration();
+  if (registration?.active || registration?.installing || registration?.waiting) {
+    await navigator.serviceWorker.ready;
+    return registration;
+  }
+
+  if (import.meta.env.DEV) {
+    registration = await navigator.serviceWorker.register("/sw-dev-push.js", { scope: "/" });
+    await navigator.serviceWorker.ready;
+    return registration;
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  registration = await navigator.serviceWorker.getRegistration();
+  if (registration) {
+    await navigator.serviceWorker.ready;
+    return registration;
+  }
+
+  registration = await navigator.serviceWorker.register("/sw-dev-push.js", { scope: "/" });
+  await navigator.serviceWorker.ready;
+  return registration;
+}
+
+export async function getPushStatus() {
+  if (!isPushSupported()) {
+    return {
+      supported: false,
+      prefEnabled: false,
+      permission: "unsupported",
+      subscribed: false,
+      ready: false,
+    };
+  }
+
+  const prefEnabled = getPushPrefEnabled();
+  const permission = Notification.permission;
+  let subscribed = false;
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (registration) {
+      const subscription = await registration.pushManager.getSubscription();
+      subscribed = Boolean(subscription);
+    }
+  } catch {
+    subscribed = false;
+  }
+
+  return {
+    supported: true,
+    prefEnabled,
+    permission,
+    subscribed,
+    ready: prefEnabled && permission === "granted" && subscribed,
+  };
+}
+
+/** If user wants notifications and browser already granted permission, subscribe silently. */
+export async function syncPushSubscription(api) {
+  if (!isPushSupported() || !getPushPrefEnabled()) return getPushStatus();
+  if (Notification.permission === "denied") return getPushStatus();
+
+  try {
+    await ensurePushServiceWorker();
+    if (Notification.permission === "granted") {
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      if (!existing) {
+        await enablePush(api);
+      }
+    }
+  } catch {
+    // User can retry via toggle; VAPID may be missing locally.
+  }
+
+  return getPushStatus();
 }
 
 export async function enablePush(api) {
@@ -33,14 +120,18 @@ export async function enablePush(api) {
     throw new Error("Ovaj pregledač ne podržava push obaveštenja.");
   }
 
+  await ensurePushServiceWorker();
+
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
+    setPushPrefEnabled(false);
     throw new Error("Dozvola za obaveštenja nije data.");
   }
 
   const { publicKey } = await api("/api/me/push/vapid-public-key");
   if (!publicKey) {
-    throw new Error("Push nije podešen na serveru.");
+    setPushPrefEnabled(false);
+    throw new Error("Push nije podešen na serveru (VAPID ključevi).");
   }
 
   const registration = await navigator.serviceWorker.ready;
@@ -61,12 +152,12 @@ export async function enablePush(api) {
 }
 
 export async function disablePush(api) {
-  if (!isPushSupported()) {
-    setPushPrefEnabled(false);
-    return;
-  }
+  setPushPrefEnabled(false);
+  if (!isPushSupported()) return;
+
   try {
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) return;
     const subscription = await registration.pushManager.getSubscription();
     if (subscription) {
       await api("/api/me/push/subscribe", {
@@ -75,7 +166,7 @@ export async function disablePush(api) {
       });
       await subscription.unsubscribe();
     }
-  } finally {
-    setPushPrefEnabled(false);
+  } catch {
+    // Preference already off.
   }
 }

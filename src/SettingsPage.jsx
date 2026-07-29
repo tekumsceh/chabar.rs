@@ -1,14 +1,17 @@
-import { DEFAULT_RATE, LEGACY_RATE_THROUGH_TEXT, positiveNumber } from "./calculations.js";
-import { INVITE_PREFERENCE_LABELS, INVITE_PREFERENCES } from "../shared/bandLimits.js";
+import { DEFAULT_RATE, positiveNumber } from "./calculations.js";
 import { useEffect, useState } from "react";
-import FieldSelect from "./FieldSelect.jsx";
 import {
   disablePush,
   enablePush,
-  getPushPrefEnabled,
+  getPushStatus,
   isPushSupported,
+  syncPushSubscription,
 } from "./pushNotifications.js";
 import { api } from "./api.js";
+
+function isAutoExchangeRate(settings) {
+  return settings?.autoExchangeRate !== "0";
+}
 
 export default function SettingsPage({
   theme,
@@ -19,32 +22,34 @@ export default function SettingsPage({
   onOpenLegal,
   invitePreference = "accept",
   onInvitePreferenceChange,
-  ownedGroupBands = 0,
-  ownerLimit = 5,
   showToast,
 }) {
-  const [rateBusy, setRateBusy] = useState(false);
-  const [rateMeta, setRateMeta] = useState(null);
-  const [pushOn, setPushOn] = useState(() => getPushPrefEnabled());
+  const [pushOn, setPushOn] = useState(false);
+  const [pushReady, setPushReady] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
-  const [testBusy, setTestBusy] = useState(false);
+  const [rateBusy, setRateBusy] = useState(false);
   const pushSupported = isPushSupported();
+  const autoRate = isAutoExchangeRate(settings);
+  const invitesAllowed = invitePreference !== "block";
 
   useEffect(() => {
-    setPushOn(getPushPrefEnabled());
+    let cancelled = false;
+    (async () => {
+      const status = await syncPushSubscription(api);
+      if (cancelled) return;
+      setPushOn(status.prefEnabled);
+      setPushReady(status.ready);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function handleFetchRate() {
-    if (rateBusy || !onFetchExchangeRate) return;
-    setRateBusy(true);
-    try {
-      const result = await onFetchExchangeRate();
-      setRateMeta(result);
-    } catch {
-      // toast handled in App
-    } finally {
-      setRateBusy(false);
-    }
+  async function refreshPushState() {
+    const status = await getPushStatus();
+    setPushOn(status.prefEnabled);
+    setPushReady(status.ready);
+    return status;
   }
 
   async function handlePushToggle() {
@@ -53,34 +58,43 @@ export default function SettingsPage({
     try {
       if (pushOn) {
         await disablePush(api);
-        setPushOn(false);
-        showToast?.("Push obaveštenja isključena");
-      } else {
-        await enablePush(api);
-        setPushOn(true);
-        showToast?.("Push obaveštenja uključena");
+        await refreshPushState();
+        showToast?.("Obaveštenja isključena");
+        return;
       }
+
+      await enablePush(api);
+      await refreshPushState();
+      showToast?.("Obaveštenja dozvoljena");
     } catch (error) {
-      showToast?.(error.message || "Push nije uspeo", "error");
+      await refreshPushState();
+      showToast?.(error.message || "Obaveštenja nisu uspela", "error");
     } finally {
       setPushBusy(false);
     }
   }
 
-  async function handleTestNotification() {
-    if (testBusy) return;
-    setTestBusy(true);
-    try {
-      const result = await api("/api/me/notifications/test", { method: "POST" });
-      const pushHint =
-        result.pushSubscriptions > 0
-          ? " · push poslat (ako je dozvola data)"
-          : " · samo u aplikaciji (uključi Push iznad)";
-      showToast?.(`Test poslat${pushHint}`);
-    } catch (error) {
-      showToast?.(error.message || "Test nije uspeo", "error");
-    } finally {
-      setTestBusy(false);
+  function pushStatusLabel() {
+    if (pushBusy) return "…";
+    if (pushReady) return "Dozvoljeno";
+    if (pushOn && Notification.permission === "denied") return "Blokirano";
+    if (pushOn) return "Dozvoljeno";
+    return "Isključeno";
+  }
+
+  async function handleAutoRateToggle() {
+    if (rateBusy) return;
+    const next = !autoRate;
+    await onSaveSetting?.("autoExchangeRate", next ? "1" : "0", true);
+    if (next && onFetchExchangeRate) {
+      setRateBusy(true);
+      try {
+        await onFetchExchangeRate();
+      } catch {
+        // toast in App
+      } finally {
+        setRateBusy(false);
+      }
     }
   }
 
@@ -88,95 +102,90 @@ export default function SettingsPage({
     <div className="settings-page">
       <header className="settings-header">
         <h1>Podešavanja</h1>
-        <p>Izgled aplikacije i parametri obračuna.</p>
       </header>
 
       <section className="settings-card" aria-label="Izgled">
         <h2>Izgled</h2>
-
-        <label className="settings-row">
+        <div className="settings-row">
           <span>
             <strong>Tema</strong>
-            <small>Svetla ili tamna</small>
+            <small className="settings-row-status">{theme === "light" ? "Svetla" : "Tamna"}</small>
           </span>
-          <button
-            type="button"
-            className="settings-toggle"
-            onClick={() => onThemeChange(theme === "light" ? "dark" : "light")}
-            aria-pressed={theme === "dark"}
-          >
-            {theme === "light" ? "Svetla" : "Tamna"}
-          </button>
-        </label>
+          <div className="settings-theme-picker" role="group" aria-label="Tema">
+            <button
+              type="button"
+              className={`settings-theme-option ${theme === "light" ? "is-active" : ""}`}
+              aria-label="Svetla tema"
+              aria-pressed={theme === "light"}
+              title="Svetla"
+              onClick={() => onThemeChange("light")}
+            >
+              <SunIcon />
+            </button>
+            <button
+              type="button"
+              className={`settings-theme-option ${theme === "dark" ? "is-active" : ""}`}
+              aria-label="Tamna tema"
+              aria-pressed={theme === "dark"}
+              title="Tamna"
+              onClick={() => onThemeChange("dark")}
+            >
+              <MoonIcon />
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="settings-card" aria-label="Obaveštenja">
         <h2>Obaveštenja</h2>
-        <label className="settings-row">
+        <div className="settings-row">
           <span>
-            <strong>Push obaveštenja</strong>
-            <small>
-              {pushSupported
-                ? "Na telefonu: dodaj Chabar na Home Screen za pouzdan push (iOS)."
-                : "Ovaj pregledač ne podržava push."}
-            </small>
+            <strong>Obaveštenja</strong>
+            <small className="settings-row-status">{pushStatusLabel()}</small>
           </span>
-          <button
-            type="button"
-            className="settings-toggle"
-            disabled={!pushSupported || pushBusy}
-            onClick={handlePushToggle}
-            aria-pressed={pushOn}
-          >
-            {pushBusy ? "…" : pushOn ? "Uključeno" : "Isključeno"}
-          </button>
-        </label>
-        <p className="settings-note">
-          Uključivanje traži dozvolu pregledača. Lični bend ne šalje obaveštenja.
-        </p>
-        <button
-          type="button"
-          className="settings-rate-fetch"
-          disabled={testBusy}
-          onClick={handleTestNotification}
-          style={{ marginTop: "0.65rem" }}
-        >
-          {testBusy ? "…" : "Pošalji test obaveštenje"}
-        </button>
+          <SettingsSwitch
+            checked={pushOn}
+            disabled={!pushSupported || Notification.permission === "denied"}
+            busy={pushBusy}
+            label="Obaveštenja"
+            onChange={handlePushToggle}
+          />
+        </div>
       </section>
 
-      <section className="settings-card" aria-label="Bendovi">
+      <section className="settings-card" aria-label="Pozivnice">
         <h2>Bendovi</h2>
-        <p className="settings-note">
-          Vlasništvo grupnih bendova: {ownedGroupBands}/{ownerLimit}
-          {ownedGroupBands >= ownerLimit ? " · za više treba grant" : ""}
-        </p>
-
-        <label className="settings-field" htmlFor="settingsInvitePreference">
-          <span>Pozivnice u bend</span>
-          <FieldSelect
-            id="settingsInvitePreference"
+        <div className="settings-row">
+          <span>
+            <strong>Pozivnice</strong>
+            <small className="settings-row-status">{invitesAllowed ? "Dozvoljeno" : "Zabrani"}</small>
+          </span>
+          <SettingsSwitch
+            checked={invitesAllowed}
             label="Pozivnice u bend"
-            value={invitePreference}
-            options={INVITE_PREFERENCES.map((id) => ({
-              id,
-              label: INVITE_PREFERENCE_LABELS[id],
-              disabled: id === "digest",
-            }))}
-            onChange={(id) => onInvitePreferenceChange?.(id)}
+            onChange={() => onInvitePreferenceChange?.(invitesAllowed ? "block" : "accept")}
           />
-        </label>
-        <p className="settings-note">
-          Pozivnice uvek čekaju tvoju potvrdu. Blokiraj ako ne želiš da te iko pozove.
-        </p>
+        </div>
       </section>
 
       <section className="settings-card" aria-label="Obračun">
         <h2>Obračun</h2>
-
-        <label className="settings-field" htmlFor="settingsExchangeRate">
-          <span>Kurs EUR/RSD (od 21.07.2026.)</span>
-          <div className="settings-rate-row">
+        <div className="settings-row">
+          <span>
+            <strong>Kurs EUR/RSD</strong>
+            <small className="settings-row-status">{rateBusy ? "…" : autoRate ? "Automatski" : "Ručno"}</small>
+            <small className="settings-row-hint">NBS srednji kurs; Google Finance kao rezerva</small>
+          </span>
+          <SettingsSwitch
+            checked={autoRate}
+            busy={rateBusy}
+            label="Automatski kurs EUR/RSD"
+            onChange={handleAutoRateToggle}
+          />
+        </div>
+        {!autoRate ? (
+          <label className="settings-field settings-field-compact" htmlFor="settingsExchangeRate">
+            <span>Ručni kurs</span>
             <input
               id="settingsExchangeRate"
               name="exchangeRate"
@@ -185,43 +194,20 @@ export default function SettingsPage({
               step="0.01"
               value={settings.exchangeRate}
               onChange={(event) => onSaveSetting("exchangeRate", event.target.value, false)}
-              onBlur={(event) => onSaveSetting("exchangeRate", positiveNumber(event.target.value, DEFAULT_RATE), true)}
+              onBlur={(event) =>
+                onSaveSetting("exchangeRate", positiveNumber(event.target.value, DEFAULT_RATE), true)
+              }
               autoComplete="off"
             />
-            <button
-              type="button"
-              className="settings-rate-fetch"
-              disabled={rateBusy || !onFetchExchangeRate}
-              onClick={handleFetchRate}
-            >
-              {rateBusy ? "…" : "Uzmi kurs"}
-            </button>
-          </div>
-        </label>
+          </label>
+        ) : null}
         <p className="settings-note">
-          Do {LEGACY_RATE_THROUGH_TEXT.replace(/\.$/, "")} svi termini i uplate idu po fiksnom kursu {DEFAULT_RATE}.
-          Posle toga: NBS srednji kurs (Google Finance kao rezervna).
-          {rateMeta
-            ? ` Trenutno: ${rateMeta.rate} · ${rateMeta.sourceLabel}${rateMeta.asOf ? ` · ${rateMeta.asOf}` : ""}${
-                rateMeta.source === "google" ? " (backup)" : ""
-              }.`
-            : ""}
+          Kada je automatski uključen, pri unosu uplate koristi se trenutni zvanični kurs. Inače unosiš
+          svoj kurs ručno.
         </p>
-
-        <label className="settings-field" htmlFor="settingsAsOfDate">
-          <span>Obračun do datuma</span>
-          <input
-            id="settingsAsOfDate"
-            name="asOfDate"
-            type="text"
-            inputMode="numeric"
-            placeholder="dd.mm.yyyy."
-            value={settings.asOfDate}
-            onChange={(event) => onSaveSetting("asOfDate", event.target.value, false)}
-            onBlur={(event) => onSaveSetting("asOfDate", event.target.value, true)}
-            autoComplete="off"
-          />
-        </label>
+        <p className="settings-note settings-note-muted">
+          Napomena: vezivanje kursa po uplati i istorija kursa — još razmatramo.
+        </p>
       </section>
 
       <section className="settings-card" aria-label="Pravno">
@@ -246,6 +232,53 @@ export default function SettingsPage({
         </div>
       </section>
     </div>
+  );
+}
+
+function SettingsSwitch({ checked, disabled = false, busy = false, label, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      className={`settings-switch ${checked ? "is-on" : ""} ${busy ? "is-busy" : ""}`}
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled || busy}
+      onClick={onChange}
+    >
+      <span className="settings-switch-track" aria-hidden="true">
+        <span className="settings-switch-thumb" />
+      </span>
+    </button>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 2.5v2.2M12 19.3v2.2M4.2 12H2M22 12h-2.2M5.8 5.8 4.3 4.3M19.7 19.7l-1.5-1.5M18.2 5.8l1.5-1.5M5.8 18.2l-1.5 1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M20 14.5A7.5 7.5 0 0 1 9.5 4 6.5 6.5 0 1 0 20 14.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

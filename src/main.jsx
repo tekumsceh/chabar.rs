@@ -12,17 +12,6 @@ if (typeof window !== "undefined" && window.location.hostname === "www.chabar.rs
   next.hostname = "chabar.rs";
   window.location.replace(next.toString());
 } else {
-  if (import.meta.env.DEV && "serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations().then((regs) => {
-      for (const reg of regs) reg.unregister();
-    });
-    if (typeof caches !== "undefined") {
-      caches.keys().then((keys) => {
-        for (const key of keys) caches.delete(key);
-      });
-    }
-  }
-
   createRoot(document.getElementById("root")).render(
     <React.StrictMode>
       <ErrorBoundary>

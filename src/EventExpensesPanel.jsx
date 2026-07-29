@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 import { numberValue } from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
@@ -11,6 +11,17 @@ const emptyForm = {
   description: "",
   payee: "",
 };
+
+function parseAmount(raw) {
+  return numberValue(String(raw || "").replace(",", "."));
+}
+
+function hasValidAmount(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return false;
+  const amount = parseAmount(trimmed);
+  return Number.isFinite(amount) && amount >= 0;
+}
 
 /**
  * Owner/lead: event expenses (troškovi) — amount, currency, opis, kome.
@@ -25,6 +36,10 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [descOpen, setDescOpen] = useState(false);
+  const descWrapRef = useRef(null);
+  const descInputRef = useRef(null);
 
   const payeeOptions = useMemo(() => {
     const options = [
@@ -39,6 +54,24 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
     () => (currencies.length ? currencies : FALLBACK_CURRENCIES).map((code) => ({ id: code, label: code })),
     [currencies],
   );
+
+  const amountReady = hasValidAmount(form.amount);
+  const descriptionReady = Boolean(String(form.description || "").trim());
+
+  useEffect(() => {
+    if (!descOpen) return undefined;
+
+    function onPointerDown(event) {
+      if (!descWrapRef.current?.contains(event.target)) setDescOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [descOpen]);
+
+  useEffect(() => {
+    if (descOpen) descInputRef.current?.focus();
+  }, [descOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,17 +116,14 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
 
   async function addExpense(event) {
     event?.preventDefault?.();
-    if (readOnly || saving || !eventId || !bandId) return;
+    if (readOnly || saving || !eventId || !bandId || !amountReady) return;
 
-    const amount = numberValue(String(form.amount || "").replace(",", "."));
+    const amount = parseAmount(form.amount);
     const description = String(form.description || "").trim();
     const payee = parsePayee(form.payee);
 
-    if (!Number.isFinite(amount) || amount < 0) {
-      showToast?.("Unesi ispravan iznos", "error");
-      return;
-    }
     if (!description) {
+      setDescOpen(true);
       showToast?.("Unesi opis", "error");
       return;
     }
@@ -117,6 +147,8 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
       });
       setExpenses((current) => [...current, created]);
       setForm(emptyForm);
+      setDescOpen(false);
+      setFormOpen(false);
       showToast?.("Trošak dodat");
       await onChanged?.();
     } catch (requestError) {
@@ -124,6 +156,12 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
     } finally {
       setSaving(false);
     }
+  }
+
+  function closeForm() {
+    setForm(emptyForm);
+    setDescOpen(false);
+    setFormOpen(false);
   }
 
   async function removeExpense(item) {
@@ -145,72 +183,141 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
   }
 
   if (loading) {
-    return <p className="event-finance-status">Učitavam troškove…</p>;
+    return (
+      <>
+        <h3 className="event-page-section-title event-page-section-title-spaced">
+          <ExpenseIcon />
+          <span>Troškovi</span>
+        </h3>
+        <p className="event-finance-status">Učitavam troškove…</p>
+      </>
+    );
   }
 
   if (error) {
-    return <p className="event-finance-status is-error">{error}</p>;
+    return (
+      <>
+        <h3 className="event-page-section-title event-page-section-title-spaced">
+          <ExpenseIcon />
+          <span>Troškovi</span>
+        </h3>
+        <p className="event-finance-status is-error">{error}</p>
+      </>
+    );
+  }
+
+  if (readOnly && !expenses.length) {
+    return null;
   }
 
   return (
+    <>
+      <h3 className="event-page-section-title event-page-section-title-spaced">
+        <ExpenseIcon />
+        <span>Troškovi</span>
+      </h3>
     <div className={`event-expenses ${readOnly ? "is-readonly" : ""}`}>
       {readOnly ? (
         <p className="event-finance-status event-expenses-locknote">
           Prošli termin — troškovi su zaključani (samo pregled).
         </p>
-      ) : (
+      ) : formOpen ? (
         <form className="event-expenses-form" onSubmit={addExpense}>
-          <div className="event-expenses-row-main">
-            <label className="event-expenses-amount">
-              <span className="sr-only">Iznos</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                placeholder="Iznos"
-                value={form.amount}
-                disabled={saving}
-                onChange={(e) => updateForm("amount", e.target.value)}
-              />
-            </label>
-            <FieldSelect
-              id="expenseCurrency"
-              label="Valuta"
-              className="event-expenses-currency"
-              value={form.currency}
-              options={currencyOptions}
+          <label className="event-expenses-amount">
+            <span className="sr-only">Iznos</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="Iznos"
+              value={form.amount}
               disabled={saving}
-              onChange={(id) => updateForm("currency", id)}
+              onChange={(e) => updateForm("amount", e.target.value)}
             />
-            <FieldSelect
-              id="expensePayee"
-              label="Kome"
-              className="event-expenses-payee"
-              value={form.payee}
-              placeholder="Kome"
-              options={payeeOptions}
+          </label>
+          <FieldSelect
+            id="expenseCurrency"
+            label="Valuta"
+            className="event-expenses-currency"
+            value={form.currency}
+            options={currencyOptions}
+            disabled={saving}
+            onChange={(id) => updateForm("currency", id)}
+          />
+          <FieldSelect
+            id="expensePayee"
+            label="Kome"
+            className="event-expenses-payee"
+            value={form.payee}
+            placeholder="Kome"
+            options={payeeOptions}
+            disabled={saving}
+            onChange={(id) => updateForm("payee", id)}
+          />
+          <div className="event-expenses-desc-wrap" ref={descWrapRef}>
+            <button
+              type="button"
+              className={`event-finance-icon-btn event-expenses-desc-btn ${descriptionReady ? "is-filled" : ""}`}
+              aria-label={descriptionReady ? `Opis: ${form.description}` : "Dodaj opis"}
+              aria-expanded={descOpen}
+              title={descriptionReady ? form.description : "Opis"}
               disabled={saving}
-              onChange={(id) => updateForm("payee", id)}
-            />
-          </div>
-          <div className="event-expenses-row-opis">
-            <label className="event-expenses-opis">
-              <span className="sr-only">Opis</span>
-              <input
-                type="text"
-                autoComplete="off"
-                placeholder="Opis"
-                maxLength={200}
-                value={form.description}
-                disabled={saving}
-                onChange={(e) => updateForm("description", e.target.value)}
-              />
-            </label>
-            <button type="submit" className="event-finance-btn event-finance-btn-set" disabled={saving}>
-              {saving ? "…" : "Dodaj"}
+              onClick={() => setDescOpen((open) => !open)}
+            >
+              <NoteIcon />
             </button>
+            {descOpen ? (
+              <div className="event-expenses-desc-popover" role="dialog" aria-label="Opis troška">
+                <input
+                  ref={descInputRef}
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Opis"
+                  maxLength={200}
+                  value={form.description}
+                  disabled={saving}
+                  onChange={(e) => updateForm("description", e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      setDescOpen(false);
+                    }
+                    if (e.key === "Escape") setDescOpen(false);
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
+          <button
+            type="submit"
+            className="event-finance-icon-btn event-finance-icon-btn-accent event-expenses-submit"
+            aria-label="Dodaj trošak"
+            title="Dodaj"
+            disabled={saving || !amountReady}
+          >
+            {saving ? "…" : <CheckIcon />}
+          </button>
+          <button
+            type="button"
+            className="event-finance-icon-btn event-expenses-cancel"
+            aria-label="Otkaži"
+            title="Otkaži"
+            disabled={saving}
+            onClick={closeForm}
+          >
+            <CloseIcon />
+          </button>
         </form>
+      ) : (
+        <button
+          type="button"
+          className="event-expenses-add-trigger"
+          aria-label="Dodaj trošak"
+          onClick={() => setFormOpen(true)}
+        >
+          <PlusIcon />
+          <span>Dodaj trošak</span>
+        </button>
       )}
 
       {expenses.length ? (
@@ -221,10 +328,18 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
                 <strong className="event-expenses-item-amount">
                   {formatAmount(item.amount)} {item.currency}
                 </strong>
-                <span className="event-expenses-item-desc">{item.description || "—"}</span>
-                <span className="event-expenses-item-payee">
-                  {item.payeeName ? `Kome: ${item.payeeName}` : "—"}
+                <span className="event-expenses-item-sep" aria-hidden="true">
+                  ·
                 </span>
+                <span className="event-expenses-item-desc">{item.description || "—"}</span>
+                {item.payeeName ? (
+                  <>
+                    <span className="event-expenses-item-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="event-expenses-item-payee">{item.payeeName}</span>
+                  </>
+                ) : null}
               </div>
               {readOnly ? null : (
                 <button
@@ -241,10 +356,9 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="event-finance-status event-expenses-empty">Nema troškova za ovaj termin.</p>
-      )}
+      ) : null}
     </div>
+    </>
   );
 }
 
@@ -252,6 +366,59 @@ function formatAmount(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "0";
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+function ExpenseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M6 7h12v12H6zM9 7V5.8A3 3 0 0 1 15 5.8V7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M9 12h6M9 15h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M5 12.5 10 17.5 19 7.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M7 4h10a1 1 0 0 1 1 1v14l-4-2.2L10 19V5a1 1 0 0 1 1-1Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M10 8h6M10 11.5h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function CloseIcon() {

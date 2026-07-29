@@ -34,6 +34,7 @@ import {
 } from "./bands.js";
 import { normalizeInvitePreference, ownerBandLimit } from "../shared/bandLimits.js";
 import { searchUsers } from "./users.js";
+import { globalSearch } from "./search.js";
 import { getEurRsdRate } from "./exchangeRate.js";
 import { query, startPoolWarmer, withTransaction } from "./db.js";
 import { logger } from "./logger.js";
@@ -265,6 +266,7 @@ app.patch("/api/me/preferences", requireAuth, async (req, res, next) => {
 });
 
 app.get("/api/users/search", requireAuth, searchUsers);
+app.get("/api/search", requireAuth, globalSearch);
 
 app.get("/api/google/calendar/status", requireAuth, async (req, res, next) => {
   try {

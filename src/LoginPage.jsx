@@ -100,7 +100,8 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
         <div className="panel-heading compact">
           <div>
             <h2>{mode === "signin" ? "Prijava" : "Registracija"}</h2>
-            <p>Pristup rasporedu i finansijama je vezan za tvoj nalog i bendove.</p>
+            <p className="login-welcome">Dobrodošli</p>
+            <p className="login-subtitle">Prijavite se ili se registrujete.</p>
             {joinHint ? <p className="login-join-hint">{joinHint}</p> : null}
           </div>
         </div>
