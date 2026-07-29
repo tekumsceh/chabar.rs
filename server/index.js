@@ -939,17 +939,56 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
     next(error);
   }
 });
-app.get("/api/events/:id/member-finance", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
-  try {
-    const event = await query(
-      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
-      { id: req.params.id, bandId: req.bandId },
-    );
-    if (!event.rows[0]) {
-      return res.status(404).json({ error: "Not found" });
-    }
+function mapMemberFinanceRow(row) {
+  return {
+    id: row.user_id,
+    name: row.display_name || row.email?.split("@")[0] || "Član",
+    memberRole: row.member_role,
+    priceEur: Number(row.price_eur) || 0,
+    transportRsd: Number(row.transport_rsd) || 0,
+    // TBD: per-member default fee storage + settings UI
+    defaultPriceEur: null,
+  };
+}
 
-    const result = await query(
+const EXPENSE_CURRENCIES = new Set([
+  "EUR",
+  "USD",
+  "GBP",
+  "RSD",
+  "CHF",
+  "JPY",
+  "CAD",
+  "AUD",
+  "SEK",
+  "PLN",
+]);
+
+function mapExpenseRow(row) {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    bandId: row.band_id,
+    amount: Number(row.amount) || 0,
+    currency: row.currency || "EUR",
+    description: row.description || "",
+    payeeKind: row.payee_kind,
+    payeeUserId: row.payee_user_id || null,
+    payeeName: row.payee_name || null,
+    createdAt: row.created_at,
+  };
+}
+
+async function loadEventFinanceBundle(eventId, bandId, { viewerUserId = "" } = {}) {
+  const event = await query(`SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`, {
+    id: eventId,
+    bandId,
+  });
+  if (!event.rows[0]) return null;
+
+  const band = await getBandMeta(bandId);
+  const [membersResult, expensesResult] = await Promise.all([
+    query(
       `SELECT bm.user_id, bm.member_role, p.email, p.display_name,
               COALESCE(f.price_eur, 0) AS price_eur,
               COALESCE(f.transport_rsd, 0) AS transport_rsd
@@ -961,22 +1000,69 @@ app.get("/api/events/:id/member-finance", requireAuth, requireBandMember, requir
        ORDER BY
          CASE bm.member_role WHEN 'owner' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END,
          p.display_name, p.email`,
-      { eventId: req.params.id, bandId: req.bandId },
-    );
+      { eventId, bandId },
+    ),
+    query(
+      `SELECT x.id, x.event_id, x.band_id, x.amount, x.currency, x.description,
+              x.payee_kind, x.payee_user_id, x.created_at,
+              CASE
+                WHEN x.payee_kind = 'band' THEN 'Bend'
+                WHEN x.payee_kind = 'external' THEN 'Spoljnji'
+                ELSE COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Član')
+              END AS payee_name
+       FROM event_expenses x
+       LEFT JOIN profiles p ON p.id = x.payee_user_id
+       WHERE x.event_id = :eventId AND x.band_id = :bandId
+       ORDER BY x.created_at ASC, x.id ASC`,
+      { eventId, bandId },
+    ),
+  ]);
 
-    res.json({
-      eventId: Number(req.params.id),
-      bandId: req.bandId,
-      members: result.rows.map((row) => ({
-        id: row.user_id,
-        name: row.display_name || row.email?.split("@")[0] || "Član",
-        memberRole: row.member_role,
-        priceEur: Number(row.price_eur) || 0,
-        transportRsd: Number(row.transport_rsd) || 0,
-        // TBD: per-member default fee storage + settings UI
-        defaultPriceEur: null,
-      })),
+  let members = membersResult.rows.map(mapMemberFinanceRow);
+  // Personal band = solo ledger; never expose a multi-member roster.
+  if (band?.kind === "personal" && viewerUserId) {
+    members = members.filter((member) => member.id === viewerUserId);
+  }
+
+  return {
+    eventId: Number(eventId),
+    bandId,
+    bandKind: band?.kind || "group",
+    members,
+    currencies: [...EXPENSE_CURRENCIES],
+    expenses: expensesResult.rows.map(mapExpenseRow),
+  };
+}
+
+app.get("/api/events/:id/member-finance", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
+  try {
+    const bundle = await loadEventFinanceBundle(req.params.id, req.bandId, {
+      viewerUserId: req.user.id,
     });
+    if (!bundle) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.json({
+      eventId: bundle.eventId,
+      bandId: bundle.bandId,
+      bandKind: bundle.bandKind,
+      members: bundle.members,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Honorari + troškovi in one round-trip (event Finansije tab). */
+app.get("/api/events/:id/finance", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
+  try {
+    const bundle = await loadEventFinanceBundle(req.params.id, req.bandId, {
+      viewerUserId: req.user.id,
+    });
+    if (!bundle) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.json(bundle);
   } catch (error) {
     next(error);
   }
@@ -1006,6 +1092,15 @@ app.put(
         return res.status(403).json({
           error: "Forbidden",
           detail: "Prošli termini su zaključani — honorari se ne menjaju.",
+        });
+      }
+
+      const band = await getBandMeta(req.bandId);
+      // Personal = solo; owner may only set their own fee (no “other members”).
+      if (band?.kind === "personal" && userId !== req.user.id) {
+        return res.status(403).json({
+          error: "Forbidden",
+          detail: "Na ličnom prostoru možeš postaviti samo svoj honorar.",
         });
       }
 
@@ -1055,78 +1150,20 @@ app.put(
   },
 );
 
-const EXPENSE_CURRENCIES = new Set([
-  "EUR",
-  "USD",
-  "GBP",
-  "RSD",
-  "CHF",
-  "JPY",
-  "CAD",
-  "AUD",
-  "SEK",
-  "PLN",
-]);
-
-function mapExpenseRow(row) {
-  return {
-    id: row.id,
-    eventId: row.event_id,
-    bandId: row.band_id,
-    amount: Number(row.amount) || 0,
-    currency: row.currency || "EUR",
-    description: row.description || "",
-    payeeKind: row.payee_kind,
-    payeeUserId: row.payee_user_id || null,
-    payeeName: row.payee_name || null,
-    createdAt: row.created_at,
-  };
-}
-
 app.get("/api/events/:id/expenses", requireAuth, requireBandMember, requireBandAdmin, async (req, res, next) => {
   try {
-    const event = await query(
-      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
-      { id: req.params.id, bandId: req.bandId },
-    );
-    if (!event.rows[0]) {
+    const bundle = await loadEventFinanceBundle(req.params.id, req.bandId, {
+      viewerUserId: req.user.id,
+    });
+    if (!bundle) {
       return res.status(404).json({ error: "Not found" });
     }
-
-    const [expensesResult, membersResult] = await Promise.all([
-      query(
-        `SELECT x.id, x.event_id, x.band_id, x.amount, x.currency, x.description,
-                x.payee_kind, x.payee_user_id, x.created_at,
-                CASE
-                  WHEN x.payee_kind = 'band' THEN 'Bend'
-                  WHEN x.payee_kind = 'external' THEN 'Spoljnji'
-                  ELSE COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Član')
-                END AS payee_name
-         FROM event_expenses x
-         LEFT JOIN profiles p ON p.id = x.payee_user_id
-         WHERE x.event_id = :eventId AND x.band_id = :bandId
-         ORDER BY x.created_at ASC, x.id ASC`,
-        { eventId: req.params.id, bandId: req.bandId },
-      ),
-      query(
-        `SELECT bm.user_id, p.email, p.display_name
-         FROM band_members bm
-         JOIN profiles p ON p.id = bm.user_id
-         WHERE bm.band_id = :bandId
-         ORDER BY p.display_name, p.email`,
-        { bandId: req.bandId },
-      ),
-    ]);
-
     res.json({
-      eventId: Number(req.params.id),
-      bandId: req.bandId,
-      currencies: [...EXPENSE_CURRENCIES],
-      members: membersResult.rows.map((row) => ({
-        id: row.user_id,
-        name: row.display_name || row.email?.split("@")[0] || "Član",
-      })),
-      expenses: expensesResult.rows.map(mapExpenseRow),
+      eventId: bundle.eventId,
+      bandId: bundle.bandId,
+      currencies: bundle.currencies,
+      members: bundle.members.map((member) => ({ id: member.id, name: member.name })),
+      expenses: bundle.expenses,
     });
   } catch (error) {
     next(error);

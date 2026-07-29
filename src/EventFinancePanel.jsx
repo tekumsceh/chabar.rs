@@ -9,48 +9,39 @@ function hasValidDraft(raw) {
   return Number.isFinite(priceEur) && priceEur >= 0;
 }
 
+function draftsFromMembers(list) {
+  const nextDrafts = {};
+  for (const member of list) {
+    nextDrafts[member.id] =
+      numberValue(member.priceEur) > 0 ? String(numberValue(member.priceEur)) : "";
+  }
+  return nextDrafts;
+}
+
 /**
  * Owner/lead: set per-member honorar for one date.
- * Default button fills draft from member.defaultPriceEur (storage/UI TBD).
+ * Data comes from EventPage finance prefetch (no self-fetch).
  */
-export default function EventFinancePanel({ eventId, bandId, readOnly = false, showToast, onChanged }) {
-  const [members, setMembers] = useState([]);
-  const [drafts, setDrafts] = useState({});
+export default function EventFinancePanel({
+  eventId,
+  bandId,
+  readOnly = false,
+  showToast,
+  onChanged,
+  solo = false,
+  members = [],
+  loading = false,
+  error = "",
+}) {
+  const [drafts, setDrafts] = useState(() => draftsFromMembers(members));
   const [busyId, setBusyId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const membersKey = (members || [])
+    .map((member) => `${member.id}:${numberValue(member.priceEur)}`)
+    .join("|");
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (!eventId || !bandId) return;
-      setLoading(true);
-      setError("");
-      try {
-        const data = await api(`/api/events/${eventId}/member-finance`, { bandId });
-        if (cancelled) return;
-        const list = Array.isArray(data.members) ? data.members : [];
-        setMembers(list);
-        const nextDrafts = {};
-        for (const member of list) {
-          nextDrafts[member.id] =
-            numberValue(member.priceEur) > 0 ? String(numberValue(member.priceEur)) : "";
-        }
-        setDrafts(nextDrafts);
-      } catch (requestError) {
-        if (!cancelled) {
-          setError(requestError.message || "Finansije nisu učitane.");
-          setMembers([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, bandId]);
+    setDrafts(draftsFromMembers(members || []));
+  }, [membersKey]);
 
   function updateDraft(userId, value) {
     setDrafts((current) => ({ ...current, [userId]: value }));
@@ -84,9 +75,6 @@ export default function EventFinancePanel({ eventId, bandId, readOnly = false, s
         bandId,
         body: { priceEur },
       });
-      setMembers((current) =>
-        current.map((item) => (item.id === member.id ? { ...item, priceEur } : item)),
-      );
       updateDraft(member.id, priceEur > 0 ? String(priceEur) : "");
       showToast?.(`Honorar: ${member.name} · ${formatEur(priceEur)}`);
       await onChanged?.(member.id, priceEur);
@@ -110,18 +98,23 @@ export default function EventFinancePanel({ eventId, bandId, readOnly = false, s
   }
 
   return (
-    <ul className="event-finance-list" aria-label="Honorari po članu">
+    <ul
+      className={`event-finance-list ${solo ? "is-solo" : ""}`.trim()}
+      aria-label={solo ? "Moj honorar" : "Honorari po članu"}
+    >
       {members.map((member) => {
         const busy = busyId === member.id;
         const amountReady = hasValidDraft(drafts[member.id]);
         const rowBusy = busy || Boolean(busyId);
         return (
           <li key={member.id} className="event-finance-row">
-            <strong className="event-finance-name" title={member.name}>
-              {member.name}
-            </strong>
+            {solo ? null : (
+              <strong className="event-finance-name" title={member.name}>
+                {member.name}
+              </strong>
+            )}
             <label className="event-finance-amount">
-              <span className="sr-only">Iznos EUR za {member.name}</span>
+              <span className="sr-only">Iznos EUR{solo ? "" : ` za ${member.name}`}</span>
               <input
                 type="text"
                 inputMode="decimal"
@@ -145,23 +138,25 @@ export default function EventFinancePanel({ eventId, bandId, readOnly = false, s
                 <button
                   type="button"
                   className="event-finance-icon-btn event-finance-icon-btn-accent"
-                  aria-label={`Postavi honorar za ${member.name}`}
+                  aria-label={solo ? "Postavi honorar" : `Postavi honorar za ${member.name}`}
                   title="Postavi"
                   disabled={rowBusy || !amountReady}
                   onClick={() => setFee(member)}
                 >
                   {busy ? "…" : <CheckIcon />}
                 </button>
-                <button
-                  type="button"
-                  className="event-finance-icon-btn"
-                  aria-label={`Podrazumevani honorar za ${member.name}`}
-                  title="Podrazumevano"
-                  disabled={rowBusy}
-                  onClick={() => applyDefault(member)}
-                >
-                  <DefaultIcon />
-                </button>
+                {solo ? null : (
+                  <button
+                    type="button"
+                    className="event-finance-icon-btn"
+                    aria-label={`Podrazumevani honorar za ${member.name}`}
+                    title="Podrazumevano"
+                    disabled={rowBusy}
+                    onClick={() => applyDefault(member)}
+                  >
+                    <DefaultIcon />
+                  </button>
+                )}
               </>
             )}
           </li>
@@ -190,7 +185,14 @@ function DefaultIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path
-        d="M12 3v4M8 7h8M7 11h10v10l-5-2.5L7 21V11Z"
+        d="M4 12a8 8 0 0 1 14.2-5M20 12a8 8 0 0 1-14.2 5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M18 3.5v4h-4M6 20.5v-4h4"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.8"

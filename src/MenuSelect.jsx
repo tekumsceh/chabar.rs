@@ -11,11 +11,14 @@ export default function MenuSelect({
   options,
   onChange,
   className = "",
+  variant = "icon",
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const menuId = useId();
   const selected = options.find((option) => option.id === value);
+  const isBar = variant === "bar";
+  const isFiltered = Boolean(value && value !== options[0]?.id);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -37,18 +40,33 @@ export default function MenuSelect({
   }, [open]);
 
   return (
-    <div className={`menu-select ${open ? "is-open" : ""} ${className}`.trim()} ref={rootRef}>
+    <div className={`menu-select ${open ? "is-open" : ""} ${isBar ? "menu-select-bar" : ""} ${className}`.trim()} ref={rootRef}>
       <button
         type="button"
-        className={`raspored-icon-btn ${open || (value && value !== options[0]?.id) ? "is-active-filter" : ""}`}
+        className={
+          isBar
+            ? `menu-select-bar-trigger ${open || isFiltered ? "is-active" : ""}`.trim()
+            : `raspored-icon-btn ${open || isFiltered ? "is-active-filter" : ""}`.trim()
+        }
         aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={menuId}
-        title={`${label}: ${selected?.label || ""}`}
+        title={isBar ? undefined : `${label}: ${selected?.label || ""}`}
         onClick={() => setOpen((current) => !current)}
       >
-        {icon}
+        {isBar ? (
+          <>
+            <span className="menu-select-bar-leading">{icon}</span>
+            <span className="menu-select-bar-body">
+              <span className="menu-select-bar-kicker">{label}</span>
+              <span className="menu-select-bar-value">{selected?.label || "—"}</span>
+            </span>
+            <ChevronDownIcon />
+          </>
+        ) : (
+          icon
+        )}
       </button>
 
       {open ? (
@@ -74,6 +92,14 @@ export default function MenuSelect({
         </ul>
       ) : null}
     </div>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg className="menu-select-bar-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

@@ -14,6 +14,7 @@ import EventExpensesPanel from "./EventExpensesPanel.jsx";
 import EventDayDetails from "./EventDayDetails.jsx";
 import FieldSelect from "./FieldSelect.jsx";
 import FadeScroll from "./FadeScroll.jsx";
+import { api } from "./api.js";
 
 const TABS = [
   { id: "osnovno", label: "Osnovno" },
@@ -22,10 +23,14 @@ const TABS = [
   { id: "finansije", label: "Finansije", leadOnly: true },
 ];
 
+const EMPTY_FINANCE_MEMBERS = [];
+const EMPTY_FINANCE_EXPENSES = [];
+
 export default function EventPage({
   event,
   band = null,
   bands = [],
+  profile = null,
   onBack,
   onUpdate,
   onRefreshSchedule,
@@ -40,6 +45,9 @@ export default function EventPage({
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState(() => formFromEvent(event));
   const [initialForm, setInitialForm] = useState(() => formFromEvent(event));
+  const [financeBundle, setFinanceBundle] = useState(null);
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [financeError, setFinanceError] = useState("");
   const lastLeaveSignalRef = useRef(leaveSignal);
   const editingRef = useRef(editing);
   const dirtyRef = useRef(false);
@@ -53,11 +61,24 @@ export default function EventPage({
   }, [event?.id]);
 
   const memberRole = band?.memberRole || "member";
+  const isGroupBand = band?.kind === "group";
+  /** Owner/lead may open Finansije (personal = own fee + expenses; group = member roster). */
   const canSeeFinance = memberRole === "owner" || memberRole === "lead";
+  /** Multi-member honorari only on group bands (band admin tools). */
+  const canManageMemberFees = canSeeFinance && isGroupBand;
+  const financeBandId = event?.bandId || band?.id || "";
+  const viewerUserId = profile?.id || "";
   const visibleTabs = useMemo(
     () => TABS.filter((item) => !item.leadOnly || canSeeFinance),
     [canSeeFinance],
   );
+
+  const financeMembers = useMemo(() => {
+    const list = financeBundle?.members ?? EMPTY_FINANCE_MEMBERS;
+    if (canManageMemberFees) return list;
+    if (!viewerUserId) return list.slice(0, 1);
+    return list.filter((member) => member.id === viewerUserId);
+  }, [financeBundle?.members, canManageMemberFees, viewerUserId]);
 
   // Edit lock matches server: calendar today (not finance asOfDate).
   const parsedDate = parseDate(event?.date);
@@ -108,6 +129,39 @@ export default function EventPage({
   useEffect(() => {
     if (tab === "finansije" && !canSeeFinance) setTab("osnovno");
   }, [tab, canSeeFinance]);
+
+  // Prefetch honorari + troškovi as soon as the date opens (owner/lead).
+  useEffect(() => {
+    if (!canSeeFinance || !event?.id || !financeBandId) {
+      setFinanceBundle(null);
+      setFinanceError("");
+      setFinanceLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setFinanceLoading(true);
+    setFinanceError("");
+    setFinanceBundle(null);
+
+    api(`/api/events/${event.id}/finance`, { bandId: financeBandId })
+      .then((data) => {
+        if (cancelled) return;
+        setFinanceBundle(data);
+      })
+      .catch((requestError) => {
+        if (cancelled) return;
+        setFinanceError(requestError.message || "Finansije nisu učitane.");
+        setFinanceBundle(null);
+      })
+      .finally(() => {
+        if (!cancelled) setFinanceLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canSeeFinance, event?.id, financeBandId]);
 
   useEffect(() => {
     if (locked && editing) {
@@ -319,24 +373,32 @@ export default function EventPage({
       </header>
 
       {!detailsOpen ? (
-        <div className="finansije-tabs" role="tablist" aria-label="Sekcije termina">
-          {visibleTabs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              className={`finansije-tab ${tab === item.id ? "is-active" : ""}`}
-              aria-selected={tab === item.id}
-              onClick={() => setTab(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+        <div className="event-page-tabs-shell">
+          <div className="event-page-tabs" role="tablist" aria-label="Sekcije termina">
+            {visibleTabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`event-tab-${item.id}`}
+                className={`event-page-tab ${tab === item.id ? "is-active" : ""}`}
+                aria-selected={tab === item.id}
+                aria-controls={`event-tabpanel-${item.id}`}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
 
-      {tab === "osnovno" && !detailsOpen ? (
-        <section className="event-page-panel" role="tabpanel" aria-label="Osnovno">
+      {tab === "osnovno" ? (
+        <>
+        <section
+          id="event-tabpanel-osnovno"
+          className="event-page-panel"
+          role="tabpanel"
+          aria-labelledby="event-tab-osnovno"
+        >
           <FadeScroll viewportClassName="event-page-panel-scroll">
           {editing ? (
             <form className="event-page-form termin-form" onSubmit={saveEdit}>
@@ -447,66 +509,6 @@ export default function EventPage({
           )}
           </FadeScroll>
         </section>
-      ) : null}
-
-      {tab === "tehnicki" && !detailsOpen ? (
-        <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Tehnički">
-          <FadeScroll viewportClassName="event-page-panel-scroll">
-          <div className="event-page-empty">
-            <span className="event-page-empty-icon" aria-hidden="true">
-              <TechIcon />
-            </span>
-            <h3 className="event-page-stub-title">Tehnički</h3>
-            <p className="event-page-stub-copy">Rider, stage i tehnika — uskoro.</p>
-          </div>
-          </FadeScroll>
-        </section>
-      ) : null}
-
-      {tab === "show" && !detailsOpen ? (
-        <section className="event-page-panel event-page-stub" role="tabpanel" aria-label="Show">
-          <FadeScroll viewportClassName="event-page-panel-scroll">
-          <div className="event-page-empty">
-            <span className="event-page-empty-icon" aria-hidden="true">
-              <ShowIcon />
-            </span>
-            <h3 className="event-page-stub-title">Show</h3>
-            <p className="event-page-stub-copy">Setlista i show materijal — uskoro.</p>
-          </div>
-          </FadeScroll>
-        </section>
-      ) : null}
-
-      {tab === "finansije" && canSeeFinance && !detailsOpen ? (
-        <section className="event-page-panel event-page-finance" role="tabpanel" aria-label="Finansije">
-          <FadeScroll viewportClassName="event-page-panel-scroll">
-          <h3 className="event-page-section-title">
-            <HonorarIcon />
-            <span>Honorari</span>
-          </h3>
-          <EventFinancePanel
-            eventId={event.id}
-            bandId={event.bandId || band?.id}
-            readOnly={locked}
-            showToast={showToast}
-            onChanged={async () => {
-              await onRefreshSchedule?.();
-            }}
-          />
-          <EventExpensesPanel
-            eventId={event.id}
-            bandId={event.bandId || band?.id}
-            readOnly={locked}
-            showToast={showToast}
-            onChanged={async () => {
-              await onRefreshSchedule?.();
-            }}
-          />
-          </FadeScroll>
-        </section>
-      ) : null}
-
-      {tab === "osnovno" && !detailsOpen ? (
         <div className="event-page-footer">
           <button
             type="button"
@@ -525,6 +527,108 @@ export default function EventPage({
               ▾
             </em>
           </button>
+        </div>
+        </>
+      ) : null}
+
+      {tab === "tehnicki" ? (
+        <section
+          id="event-tabpanel-tehnicki"
+          className="event-page-panel event-page-stub"
+          role="tabpanel"
+          aria-labelledby="event-tab-tehnicki"
+        >
+          <FadeScroll viewportClassName="event-page-panel-scroll">
+          <div className="event-page-empty">
+            <span className="event-page-empty-icon" aria-hidden="true">
+              <TechIcon />
+            </span>
+            <h3 className="event-page-stub-title">Tehnički</h3>
+            <p className="event-page-stub-copy">Rider, stage i tehnika — uskoro.</p>
+          </div>
+          </FadeScroll>
+        </section>
+      ) : null}
+
+      {tab === "show" ? (
+        <section
+          id="event-tabpanel-show"
+          className="event-page-panel event-page-stub"
+          role="tabpanel"
+          aria-labelledby="event-tab-show"
+        >
+          <FadeScroll viewportClassName="event-page-panel-scroll">
+          <div className="event-page-empty">
+            <span className="event-page-empty-icon" aria-hidden="true">
+              <ShowIcon />
+            </span>
+            <h3 className="event-page-stub-title">Show</h3>
+            <p className="event-page-stub-copy">Setlista i show materijal — uskoro.</p>
+          </div>
+          </FadeScroll>
+        </section>
+      ) : null}
+
+      {canSeeFinance ? (
+        <section
+          id="event-tabpanel-finansije"
+          className="event-page-panel event-page-finance"
+          role="tabpanel"
+          aria-labelledby="event-tab-finansije"
+          hidden={tab !== "finansije"}
+        >
+          <FadeScroll viewportClassName="event-page-panel-scroll">
+          <h3 className="event-page-section-title">
+            <HonorarIcon />
+            <span>{canManageMemberFees ? "Honorari" : "Moj honorar"}</span>
+          </h3>
+          <EventFinancePanel
+            eventId={event.id}
+            bandId={financeBandId}
+            readOnly={locked}
+            showToast={showToast}
+            solo={!canManageMemberFees}
+            members={financeMembers}
+            loading={financeLoading}
+            error={financeError}
+            onChanged={async (memberId, priceEur) => {
+              if (memberId != null && priceEur != null) {
+                setFinanceBundle((current) =>
+                  current
+                    ? {
+                        ...current,
+                        members: current.members.map((member) =>
+                          member.id === memberId ? { ...member, priceEur } : member,
+                        ),
+                      }
+                    : current,
+                );
+              }
+              await onRefreshSchedule?.();
+            }}
+          />
+          <EventExpensesPanel
+            eventId={event.id}
+            bandId={financeBandId}
+            readOnly={locked}
+            showToast={showToast}
+            members={financeMembers}
+            expenses={financeBundle?.expenses ?? EMPTY_FINANCE_EXPENSES}
+            currencies={financeBundle?.currencies ?? null}
+            loading={financeLoading}
+            error={financeError}
+            onExpensesChange={(next) => {
+              setFinanceBundle((current) =>
+                current ? { ...current, expenses: next } : current,
+              );
+            }}
+            onChanged={async () => {
+              await onRefreshSchedule?.();
+            }}
+          />
+          </FadeScroll>
+        </section>
+      ) : null}
         </div>
       ) : null}
 

@@ -26,20 +26,30 @@ function hasValidAmount(raw) {
 /**
  * Owner/lead: event expenses (troškovi) — amount, currency, opis, kome.
  * Past dates: read-only list (no add/delete).
+ * Data comes from EventPage finance prefetch (no self-fetch).
  */
-export default function EventExpensesPanel({ eventId, bandId, readOnly = false, showToast, onChanged }) {
-  const [members, setMembers] = useState([]);
-  const [currencies, setCurrencies] = useState(FALLBACK_CURRENCIES);
-  const [expenses, setExpenses] = useState([]);
+export default function EventExpensesPanel({
+  eventId,
+  bandId,
+  readOnly = false,
+  showToast,
+  onChanged,
+  members = [],
+  expenses = [],
+  currencies = null,
+  loading = false,
+  error = "",
+  onExpensesChange,
+}) {
   const [form, setForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const [busyId, setBusyId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
   const descWrapRef = useRef(null);
   const descInputRef = useRef(null);
+
+  const currencyList = currencies?.length ? currencies : FALLBACK_CURRENCIES;
 
   const payeeOptions = useMemo(() => {
     const options = [
@@ -51,8 +61,8 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
   }, [members]);
 
   const currencyOptions = useMemo(
-    () => (currencies.length ? currencies : FALLBACK_CURRENCIES).map((code) => ({ id: code, label: code })),
-    [currencies],
+    () => currencyList.map((code) => ({ id: code, label: code })),
+    [currencyList],
   );
 
   const amountReady = hasValidAmount(form.amount);
@@ -72,33 +82,6 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
   useEffect(() => {
     if (descOpen) descInputRef.current?.focus();
   }, [descOpen]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (!eventId || !bandId) return;
-      setLoading(true);
-      setError("");
-      try {
-        const data = await api(`/api/events/${eventId}/expenses`, { bandId });
-        if (cancelled) return;
-        setMembers(Array.isArray(data.members) ? data.members : []);
-        setCurrencies(Array.isArray(data.currencies) && data.currencies.length ? data.currencies : FALLBACK_CURRENCIES);
-        setExpenses(Array.isArray(data.expenses) ? data.expenses : []);
-      } catch (requestError) {
-        if (!cancelled) {
-          setError(requestError.message || "Troškovi nisu učitani.");
-          setExpenses([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, bandId]);
 
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -145,7 +128,7 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
           payeeUserId: payee.payeeUserId,
         },
       });
-      setExpenses((current) => [...current, created]);
+      onExpensesChange?.([...(expenses || []), created]);
       setForm(emptyForm);
       setDescOpen(false);
       setFormOpen(false);
@@ -172,7 +155,7 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
         method: "DELETE",
         bandId,
       });
-      setExpenses((current) => current.filter((row) => row.id !== item.id));
+      onExpensesChange?.((expenses || []).filter((row) => row.id !== item.id));
       showToast?.("Trošak obrisan");
       await onChanged?.();
     } catch (requestError) {
@@ -216,148 +199,148 @@ export default function EventExpensesPanel({ eventId, bandId, readOnly = false, 
         <ExpenseIcon />
         <span>Troškovi</span>
       </h3>
-    <div className={`event-expenses ${readOnly ? "is-readonly" : ""}`}>
-      {readOnly ? (
-        <p className="event-finance-status event-expenses-locknote">
-          Prošli termin — troškovi su zaključani (samo pregled).
-        </p>
-      ) : formOpen ? (
-        <form className="event-expenses-form" onSubmit={addExpense}>
-          <label className="event-expenses-amount">
-            <span className="sr-only">Iznos</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              placeholder="Iznos"
-              value={form.amount}
+      <div className={`event-expenses ${readOnly ? "is-readonly" : ""}`}>
+        {readOnly ? (
+          <p className="event-finance-status event-expenses-locknote">
+            Prošli termin — troškovi su zaključani (samo pregled).
+          </p>
+        ) : formOpen ? (
+          <form className="event-expenses-form" onSubmit={addExpense}>
+            <label className="event-expenses-amount">
+              <span className="sr-only">Iznos</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="Iznos"
+                value={form.amount}
+                disabled={saving}
+                onChange={(e) => updateForm("amount", e.target.value)}
+              />
+            </label>
+            <FieldSelect
+              id="expenseCurrency"
+              label="Valuta"
+              className="event-expenses-currency"
+              value={form.currency}
+              options={currencyOptions}
               disabled={saving}
-              onChange={(e) => updateForm("amount", e.target.value)}
+              onChange={(id) => updateForm("currency", id)}
             />
-          </label>
-          <FieldSelect
-            id="expenseCurrency"
-            label="Valuta"
-            className="event-expenses-currency"
-            value={form.currency}
-            options={currencyOptions}
-            disabled={saving}
-            onChange={(id) => updateForm("currency", id)}
-          />
-          <FieldSelect
-            id="expensePayee"
-            label="Kome"
-            className="event-expenses-payee"
-            value={form.payee}
-            placeholder="Kome"
-            options={payeeOptions}
-            disabled={saving}
-            onChange={(id) => updateForm("payee", id)}
-          />
-          <div className="event-expenses-desc-wrap" ref={descWrapRef}>
+            <FieldSelect
+              id="expensePayee"
+              label="Kome"
+              className="event-expenses-payee"
+              value={form.payee}
+              placeholder="Kome"
+              options={payeeOptions}
+              disabled={saving}
+              onChange={(id) => updateForm("payee", id)}
+            />
+            <div className="event-expenses-desc-wrap" ref={descWrapRef}>
+              <button
+                type="button"
+                className={`event-finance-icon-btn event-expenses-desc-btn ${descriptionReady ? "is-filled" : ""}`}
+                aria-label={descriptionReady ? `Opis: ${form.description}` : "Dodaj opis"}
+                aria-expanded={descOpen}
+                title={descriptionReady ? form.description : "Opis"}
+                disabled={saving}
+                onClick={() => setDescOpen((open) => !open)}
+              >
+                <NoteIcon />
+              </button>
+              {descOpen ? (
+                <div className="event-expenses-desc-popover" role="dialog" aria-label="Opis troška">
+                  <input
+                    ref={descInputRef}
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Opis"
+                    maxLength={200}
+                    value={form.description}
+                    disabled={saving}
+                    onChange={(e) => updateForm("description", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setDescOpen(false);
+                      }
+                      if (e.key === "Escape") setDescOpen(false);
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="submit"
+              className="event-finance-icon-btn event-finance-icon-btn-accent event-expenses-submit"
+              aria-label="Dodaj trošak"
+              title="Dodaj"
+              disabled={saving || !amountReady}
+            >
+              {saving ? "…" : <CheckIcon />}
+            </button>
             <button
               type="button"
-              className={`event-finance-icon-btn event-expenses-desc-btn ${descriptionReady ? "is-filled" : ""}`}
-              aria-label={descriptionReady ? `Opis: ${form.description}` : "Dodaj opis"}
-              aria-expanded={descOpen}
-              title={descriptionReady ? form.description : "Opis"}
+              className="event-finance-icon-btn event-expenses-cancel"
+              aria-label="Otkaži"
+              title="Otkaži"
               disabled={saving}
-              onClick={() => setDescOpen((open) => !open)}
+              onClick={closeForm}
             >
-              <NoteIcon />
+              <CloseIcon />
             </button>
-            {descOpen ? (
-              <div className="event-expenses-desc-popover" role="dialog" aria-label="Opis troška">
-                <input
-                  ref={descInputRef}
-                  type="text"
-                  autoComplete="off"
-                  placeholder="Opis"
-                  maxLength={200}
-                  value={form.description}
-                  disabled={saving}
-                  onChange={(e) => updateForm("description", e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      setDescOpen(false);
-                    }
-                    if (e.key === "Escape") setDescOpen(false);
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="submit"
-            className="event-finance-icon-btn event-finance-icon-btn-accent event-expenses-submit"
-            aria-label="Dodaj trošak"
-            title="Dodaj"
-            disabled={saving || !amountReady}
-          >
-            {saving ? "…" : <CheckIcon />}
-          </button>
+          </form>
+        ) : (
           <button
             type="button"
-            className="event-finance-icon-btn event-expenses-cancel"
-            aria-label="Otkaži"
-            title="Otkaži"
-            disabled={saving}
-            onClick={closeForm}
+            className="event-expenses-add-trigger"
+            aria-label="Dodaj trošak"
+            onClick={() => setFormOpen(true)}
           >
-            <CloseIcon />
+            <PlusIcon />
+            <span>Dodaj trošak</span>
           </button>
-        </form>
-      ) : (
-        <button
-          type="button"
-          className="event-expenses-add-trigger"
-          aria-label="Dodaj trošak"
-          onClick={() => setFormOpen(true)}
-        >
-          <PlusIcon />
-          <span>Dodaj trošak</span>
-        </button>
-      )}
+        )}
 
-      {expenses.length ? (
-        <ul className="event-expenses-list" aria-label="Lista troškova">
-          {expenses.map((item) => (
-            <li key={item.id} className="event-expenses-item">
-              <div className="event-expenses-item-main">
-                <strong className="event-expenses-item-amount">
-                  {formatAmount(item.amount)} {item.currency}
-                </strong>
-                <span className="event-expenses-item-sep" aria-hidden="true">
-                  ·
-                </span>
-                <span className="event-expenses-item-desc">{item.description || "—"}</span>
-                {item.payeeName ? (
-                  <>
-                    <span className="event-expenses-item-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="event-expenses-item-payee">{item.payeeName}</span>
-                  </>
-                ) : null}
-              </div>
-              {readOnly ? null : (
-                <button
-                  type="button"
-                  className="raspored-icon-btn raspored-icon-btn-danger"
-                  aria-label="Obriši trošak"
-                  title="Obriši"
-                  disabled={Boolean(busyId) || saving}
-                  onClick={() => removeExpense(item)}
-                >
-                  {busyId === item.id ? "…" : <CloseIcon />}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+        {expenses.length ? (
+          <ul className="event-expenses-list" aria-label="Lista troškova">
+            {expenses.map((item) => (
+              <li key={item.id} className="event-expenses-item">
+                <div className="event-expenses-item-main">
+                  <strong className="event-expenses-item-amount">
+                    {formatAmount(item.amount)} {item.currency}
+                  </strong>
+                  <span className="event-expenses-item-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="event-expenses-item-desc">{item.description || "—"}</span>
+                  {item.payeeName ? (
+                    <>
+                      <span className="event-expenses-item-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span className="event-expenses-item-payee">{item.payeeName}</span>
+                    </>
+                  ) : null}
+                </div>
+                {readOnly ? null : (
+                  <button
+                    type="button"
+                    className="raspored-icon-btn raspored-icon-btn-danger"
+                    aria-label="Obriši trošak"
+                    title="Obriši"
+                    disabled={Boolean(busyId) || saving}
+                    onClick={() => removeExpense(item)}
+                  >
+                    {busyId === item.id ? "…" : <CloseIcon />}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
     </>
   );
 }

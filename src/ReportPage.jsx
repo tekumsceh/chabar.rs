@@ -16,6 +16,7 @@ import MenuSelect from "./MenuSelect.jsx";
 import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import FadeScroll from "./FadeScroll.jsx";
+import PageHeader from "./PageHeader.jsx";
 
 const statusOptions = [
   { id: "all", label: "Sve stavke" },
@@ -42,6 +43,7 @@ export default function ReportPage({
   searchQuery = "",
   focusEventId = null,
   onFocusEventConsumed,
+  onBack,
 }) {
   const search = searchQuery;
   const [statusFilter, setStatusFilter] = useState("all");
@@ -197,7 +199,9 @@ export default function ReportPage({
 
   return (
     <div className="raspored finansije">
-      <header className="raspored-bar">
+      <PageHeader title="Novac" onBack={onBack} />
+
+      <header className="raspored-bar finansije-toolbar">
         <div className="raspored-tools raspored-tools-start" aria-label="Filteri finansija">
           <BandFilterSelect
             bands={bands}

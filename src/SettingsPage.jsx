@@ -1,5 +1,6 @@
 import { DEFAULT_RATE, positiveNumber } from "./calculations.js";
 import { useEffect, useState } from "react";
+import PageHeader from "./PageHeader.jsx";
 import {
   disablePush,
   enablePush,
@@ -23,6 +24,8 @@ export default function SettingsPage({
   invitePreference = "accept",
   onInvitePreferenceChange,
   showToast,
+  onBack,
+  onOpenButtonShowcase,
 }) {
   const [pushOn, setPushOn] = useState(false);
   const [pushReady, setPushReady] = useState(false);
@@ -100,9 +103,7 @@ export default function SettingsPage({
 
   return (
     <div className="settings-page">
-      <header className="settings-header">
-        <h1>Podešavanja</h1>
-      </header>
+      <PageHeader title="Podešavanja" onBack={onBack} />
 
       <section className="settings-card" aria-label="Izgled">
         <h2>Izgled</h2>
@@ -210,6 +211,21 @@ export default function SettingsPage({
         </p>
       </section>
 
+      <section className="settings-card" aria-label="UI laboratorija">
+        <h2>UI laboratorija</h2>
+        <div className="settings-row">
+          <span>
+            <strong>Dugmad</strong>
+            <small className="settings-row-status">10 dizajna za pregled</small>
+          </span>
+          <button type="button" className="settings-lab-link" onClick={() => onOpenButtonShowcase?.()}>
+            <PaletteIcon />
+            <span>Otvori</span>
+            <ChevronSmallIcon />
+          </button>
+        </div>
+      </section>
+
       <section className="settings-card" aria-label="Pravno">
         <h2>Pravno</h2>
         <div className="settings-legal-links">
@@ -294,6 +310,31 @@ function DocIcon() {
       />
       <path d="M14.5 3.5V8H19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
       <path d="M9 12h6M9 15.5h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PaletteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 3.5c-4.2 0-7.5 2.8-7.5 6.5 0 2.4 1.4 4.2 3.5 5.2-.3.9-.9 2.5-1 2.8-.2.5.3.9.8.7.4-.2 2.4-1.4 3.2-1.9 1 .3 2 .5 3 .5 4.2 0 7.5-2.8 7.5-6.5S16.2 3.5 12 3.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.5" cy="10" r="0.85" fill="currentColor" />
+      <circle cx="12" cy="8" r="0.85" fill="currentColor" />
+      <circle cx="15.5" cy="10" r="0.85" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ChevronSmallIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

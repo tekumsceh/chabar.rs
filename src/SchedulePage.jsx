@@ -10,21 +10,14 @@ import {
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { api } from "./api.js";
 import { useConfirm } from "./confirmDialog.jsx";
-import MenuSelect from "./MenuSelect.jsx";
-import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import EventPage from "./EventPage.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import DateMonthPicker from "./DateMonthPicker.jsx";
+import ScheduleToolbar from "./ScheduleToolbar.jsx";
+import { MoneyIcon } from "./appIcons.jsx";
 import { QUICK_CREATE_CITIES } from "./quickCreateCities.js";
 import { ownerBandLimit } from "../shared/bandLimits.js";
-
-const scheduleFilters = [
-  { id: "upcoming", label: "Buduće" },
-  { id: "done", label: "Prošle" },
-  { id: "month", label: "Ovaj mesec" },
-  { id: "all", label: "Sve" },
-];
 
 const emptyForm = {
   bandId: "",
@@ -55,6 +48,10 @@ export default function SchedulePage({
   onAddActionConsumed,
   loading = false,
   searchQuery = "",
+  claimEur = 0,
+  onOpenMoney,
+  canManageBand = false,
+  onManageBand,
 }) {
   const { confirm } = useConfirm();
   const search = searchQuery;
@@ -309,6 +306,7 @@ export default function SchedulePage({
           event={selectedEvent}
           band={selectedBand}
           bands={bands}
+          profile={profile}
           onBack={() => setSelectedEventId(null)}
           onUpdate={onUpdate}
           onRefreshSchedule={onRefreshSchedule}
@@ -317,36 +315,20 @@ export default function SchedulePage({
         />
       ) : (
       <div className="raspored-list-view">
-      <header className="raspored-bar">
-        <div className="raspored-tools raspored-tools-start" aria-label="Filteri rasporeda">
-          <BandFilterSelect
-            bands={bands}
-            activeBandId={activeBandId}
-            allBandsId={allBandsId}
-            onSelectBand={onBandChange}
-          />
-          <MenuSelect
-            label="Prikaz datuma"
-            icon={<CalendarFilterIcon />}
-            value={filter}
-            options={scheduleFilters}
-            onChange={setFilter}
-          />
-          <button
-            type="button"
-            className={`raspored-icon-btn raspored-sort-btn ${dateSort === "asc" ? "is-asc" : "is-desc"}`}
-            aria-label={
-              dateSort === "desc"
-                ? "Sortiranje: od novijeg ka starijem — klik za obrnuto"
-                : "Sortiranje: od starijeg ka novijem — klik za obrnuto"
-            }
-            title={dateSort === "desc" ? "Novo → staro" : "Staro → novo"}
-            onClick={() => setDateSort((value) => (value === "desc" ? "asc" : "desc"))}
-          >
-            <SortArrowIcon />
-          </button>
-        </div>
-      </header>
+      <ScheduleToolbar
+        bands={bands}
+        activeBandId={activeBandId}
+        allBandsId={allBandsId}
+        onBandChange={onBandChange}
+        filter={filter}
+        onFilterChange={setFilter}
+        dateSort={dateSort}
+        onDateSortChange={setDateSort}
+        claimEur={claimEur}
+        onOpenMoney={onOpenMoney}
+        canManageBand={canManageBand}
+        onManageBand={onManageBand}
+      />
 
       <FadeScroll viewportClassName="raspored-panel" viewportAriaLabel="Termini">
         {loading && events.length === 0 ? (
@@ -395,6 +377,13 @@ export default function SchedulePage({
                   </div>
                 </button>
                 <div className="raspored-actions">
+                  <span
+                    className={`raspored-fee-mark ${feeMarked ? "is-set" : "is-unset"}`}
+                    aria-label={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
+                    title={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
+                  >
+                    <MoneyIcon />
+                  </span>
                   <DateRowMenu
                     feeMarked={feeMarked}
                     locked={Boolean(row.done)}
@@ -800,30 +789,6 @@ function PageChevronRightIcon() {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function CalendarFilterIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 3.5V7M16 3.5V7M3.5 10h17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SortArrowIcon() {
-  return (
-    <svg className="raspored-sort-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M12 5v14M12 5l-4 4M12 5l4 4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

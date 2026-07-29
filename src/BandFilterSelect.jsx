@@ -9,6 +9,7 @@ export default function BandFilterSelect({
   activeBandId = "",
   allBandsId = "__all__",
   onSelectBand,
+  layout = "icon",
 }) {
   if (!bands.length) return null;
 
@@ -32,7 +33,8 @@ export default function BandFilterSelect({
 
   return (
     <MenuSelect
-      className="band-filter-select"
+      className={`band-filter-select ${layout === "bar" ? "band-filter-select-bar" : ""}`.trim()}
+      variant={layout === "bar" ? "bar" : "icon"}
       label="Bend"
       icon={<BandFilterIcon bands={bands} activeBandId={value} allBandsId={allBandsId} />}
       value={value}

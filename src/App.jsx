@@ -1,114 +1,35 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, setApiAuth } from "./api.js";
 import BandPage from "./BandPage.jsx";
-import { bandInitials, resolveBandColor } from "./bandDisplay.js";
-import { DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText } from "./calculations.js";
+import { calculate, DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText, waterfallClaimEur } from "./calculations.js";
 import LegalPage, { isLegalPage } from "./LegalPage.jsx";
 import LoginPage from "./LoginPage.jsx";
 import ReportPage from "./ReportPage.jsx";
 import SchedulePage from "./SchedulePage.jsx";
 import SettingsPage from "./SettingsPage.jsx";
+import ButtonShowcasePage from "./ButtonShowcasePage.jsx";
 import GlobalSearch from "./GlobalSearch.jsx";
-import UserMenu from "./UserMenu.jsx";
+import ProfileHub from "./ProfileHub.jsx";
+import {
+  AddNavIcon,
+  CalendarPlusNavIcon,
+  NewBandNavIcon,
+  ProfileNavIcon,
+  ScheduleNavIcon,
+} from "./appIcons.jsx";
 import { log } from "./logger.js";
 import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase.js";
 import { takePendingJoinToken } from "./joinLink.js";
 import { isBandLead } from "../shared/roles.js";
 import { ownerBandLimit } from "../shared/bandLimits.js";
 
-function ScheduleNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 3.5V7M16 3.5V7M3.5 10h17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BandsNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <circle cx="17" cy="9" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M14.2 19c.4-2.2 1.9-3.5 3.8-3.5 1.2 0 2.2.5 2.9 1.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function FinanceNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M4 19V5M4 19h16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M8 15v-4M12 15V8M16 15v-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SettingsNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M10.2 3.2h3.6l.4 2.1c.55.2 1.06.48 1.52.83l2-.9 1.8 3.1-1.6 1.4c.08.37.12.75.12 1.14s-.04.77-.12 1.14l1.6 1.4-1.8 3.1-2-.9c-.46.35-.97.63-1.52.83l-.4 2.1h-3.6l-.4-2.1a6.4 6.4 0 0 1-1.52-.83l-2 .9-1.8-3.1 1.6-1.4A6.4 6.4 0 0 1 5.8 12c0-.39.04-.77.12-1.14l-1.6-1.4 1.8-3.1 2 .9c.46-.35.97-.63 1.52-.83l.4-2.1z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.7" />
-    </svg>
-  );
-}
-
-function AddNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CalendarPlusNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3.5" y="5" width="17" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 3.5V7M16 3.5V7M3.5 10h17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M12 13v5M9.5 15.5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function NewBandNavIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M3.5 19c.5-3 2.6-4.8 5.5-4.8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path d="M17 8v6M14 11h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 const NAV_ITEMS = [
   { id: "schedule", label: "Raspored", icon: ScheduleNavIcon },
-  { id: "band", label: "Bendovi", icon: BandsNavIcon },
   { id: "add", label: "Dodaj", icon: AddNavIcon, isAction: true },
-  { id: "report", label: "Finansije", icon: FinanceNavIcon },
-  { id: "settings", label: "Podešavanja", icon: SettingsNavIcon },
+  { id: "profile", label: "Profil", icon: ProfileNavIcon },
 ];
 
-const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings"]);
+const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings", "button-showcase"]);
 const DEFAULT_PAGE = "schedule";
 
 function normalizePage(page) {
@@ -174,33 +95,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
-  const [bandsSheetOpen, setBandsSheetOpen] = useState(false);
-  const [bandsAnchor, setBandsAnchor] = useState(null);
+  const [profileHubOpen, setProfileHubOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addActionRequest, setAddActionRequest] = useState(null);
-  const bandsNavRef = useRef(null);
   const addNavRef = useRef(null);
   const eventsRef = useRef(events);
   const financeEventsRef = useRef(financeEvents);
   const scheduleCacheRef = useRef(readStoredScheduleCache());
   const scheduleRequestIdRef = useRef(0);
   const prefetchStartedRef = useRef(false);
-
-  function placeBandsAnchor(anchorEl) {
-    const el = anchorEl || bandsNavRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const pad = 8;
-    const sheetW = Math.min(17.5 * 16, window.innerWidth - pad * 2);
-    let centerX = rect.left + rect.width / 2;
-    centerX = Math.min(Math.max(centerX, pad + sheetW / 2), window.innerWidth - pad - sheetW / 2);
-    setBandsAnchor({
-      left: Math.round(centerX),
-      bottom: Math.round(window.innerHeight - rect.top + 8),
-      width: Math.round(sheetW),
-    });
-  }
 
   useEffect(() => {
     eventsRef.current = events;
@@ -263,9 +167,31 @@ export default function App() {
   );
   const effectiveFinanceMode = canUseBandMode && financeMode === "band" ? "band" : "member";
 
+  const financeClaimEur = useMemo(() => {
+    const calc = calculate(financeEvents, payments, settings);
+    const pastRows = calc.rows.filter((row) => row.done && row.hasDate);
+    return waterfallClaimEur(pastRows);
+  }, [financeEvents, payments, settings]);
+
+  const canManageActiveBand = Boolean(
+    activeBand &&
+      activeBand.kind === "group" &&
+      isBandLead(activeBand.memberRole) &&
+      activeBandId !== ALL_BANDS_ID,
+  );
+
+  const profileBadgeCount =
+    pendingInvites.length + notifications.filter((item) => !item.readAt).length;
+
   function goToSchedule() {
+    setProfileHubOpen(false);
     setPage("schedule");
     setScheduleLeaveNonce((value) => value + 1);
+  }
+
+  function goToMoney() {
+    setProfileHubOpen(false);
+    setPage("report");
   }
 
   function handleGlobalSearchSelect(result) {
@@ -301,37 +227,29 @@ export default function App() {
     }
     setActiveBandId(id);
     setPage("band");
-    setBandsSheetOpen(false);
+    setProfileHubOpen(false);
   }
 
-  function handleNav(id, event) {
+  function handleNav(id) {
     if (id === "add") {
-      setBandsSheetOpen(false);
+      setProfileHubOpen(false);
       setAddMenuOpen((open) => !open);
       return;
     }
     setAddMenuOpen(false);
     if (id === "schedule") {
-      setBandsSheetOpen(false);
+      setProfileHubOpen(false);
       goToSchedule();
       return;
     }
-    if (id === "band") {
-      if (bandsSheetOpen) {
-        setBandsSheetOpen(false);
-        return;
-      }
-      placeBandsAnchor(event?.currentTarget);
-      setBandsSheetOpen(true);
-      return;
+    if (id === "profile") {
+      setProfileHubOpen((open) => !open);
     }
-    setBandsSheetOpen(false);
-    setPage(id);
   }
 
   function requestAddAction(type) {
     setAddMenuOpen(false);
-    setBandsSheetOpen(false);
+    setProfileHubOpen(false);
     goToSchedule();
     setAddActionRequest({ type, nonce: Date.now() });
   }
@@ -351,15 +269,6 @@ export default function App() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [addMenuOpen]);
-
-  useEffect(() => {
-    if (!bandsSheetOpen) return undefined;
-    function onReposition() {
-      placeBandsAnchor();
-    }
-    window.addEventListener("resize", onReposition);
-    return () => window.removeEventListener("resize", onReposition);
-  }, [bandsSheetOpen]);
 
   useEffect(() => {
     if (financeMode === "band" && !canUseBandMode) {
@@ -744,6 +653,7 @@ export default function App() {
     const targetPage = payload.page || "schedule";
 
     if (bandId) setActiveBandId(bandId);
+    setProfileHubOpen(false);
 
     if (targetPage === "report") {
       setPage("report");
@@ -1047,7 +957,9 @@ export default function App() {
   const showBand = activePage === "band";
   const showReport = activePage === "report";
   const showSettings = activePage === "settings";
-  const forceSchedule = !showSchedule && !showBand && !showReport && !showSettings;
+  const showButtonShowcase = activePage === "button-showcase";
+  const forceSchedule =
+    !showSchedule && !showBand && !showReport && !showSettings && !showButtonShowcase;
   const ownedGroupBands = profile?.ownedGroupBands ?? 0;
   const ownerLimit = profile?.ownerLimit ?? ownerBandLimit(0);
   const canCreateBand = ownedGroupBands < ownerLimit;
@@ -1061,7 +973,7 @@ export default function App() {
           aria-label="Chabar — Raspored"
           title="Raspored"
           onClick={() => {
-            setBandsSheetOpen(false);
+            setProfileHubOpen(false);
             goToSchedule();
           }}
         >
@@ -1073,32 +985,6 @@ export default function App() {
           onSelectResult={handleGlobalSearchSelect}
           authReady={Boolean(session?.access_token)}
         />
-        <div className="app-topbar-user">
-          <UserMenu
-            email={profile?.email || session.user?.email || ""}
-            displayName={
-              profile?.displayName ||
-              session.user?.user_metadata?.full_name ||
-              session.user?.user_metadata?.name ||
-              ""
-            }
-            avatarUrl={
-              session.user?.user_metadata?.avatar_url ||
-              session.user?.user_metadata?.picture ||
-              ""
-            }
-            pendingInvites={pendingInvites}
-            notifications={notifications}
-            onAcceptInvite={handleAcceptInvite}
-            onDeclineInvite={handleDeclineInvite}
-            onOpenNotifications={refreshNotifications}
-            onMarkNotificationRead={handleMarkNotificationRead}
-            onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-            onOpenNotification={handleOpenNotification}
-            onOpenSettings={() => setPage("settings")}
-            onSignOut={handleSignOut}
-          />
-        </div>
       </header>
 
       {error ? <div className="app-alert app-alert-global">{error}</div> : null}
@@ -1134,6 +1020,10 @@ export default function App() {
           onAddActionConsumed={() => setAddActionRequest(null)}
           loading={loading}
           searchQuery={globalSearch}
+          claimEur={financeClaimEur}
+          onOpenMoney={goToMoney}
+          canManageBand={canManageActiveBand}
+          onManageBand={() => openBandPage(activeBandId)}
         />
       </div>
 
@@ -1175,6 +1065,7 @@ export default function App() {
           searchQuery={globalSearch}
           focusEventId={reportFocusEventId}
           onFocusEventConsumed={() => setReportFocusEventId(null)}
+          onBack={goToSchedule}
         />
       </div>
 
@@ -1189,60 +1080,48 @@ export default function App() {
           invitePreference={profile?.invitePreference || "accept"}
           onInvitePreferenceChange={saveInvitePreference}
           showToast={showToast}
+          onBack={goToSchedule}
+          onOpenButtonShowcase={() => setPage("button-showcase")}
         />
       </div>
 
-      {bandsSheetOpen ? (
-        <div
-          className="bands-sheet-backdrop"
-          role="presentation"
-          onClick={() => setBandsSheetOpen(false)}
-        />
-      ) : null}
+      <div className={`app-page ${showButtonShowcase ? "is-active" : ""}`} hidden={!showButtonShowcase}>
+        <ButtonShowcasePage onBack={() => setPage("settings")} />
+      </div>
 
-      {bandsSheetOpen ? (
-        <div
-          className="bands-sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Bendovi"
-          style={
-            bandsAnchor
-              ? {
-                  left: `${bandsAnchor.left}px`,
-                  bottom: `${bandsAnchor.bottom}px`,
-                  width: `${bandsAnchor.width}px`,
-                }
-              : undefined
-          }
-        >
-          <ul className="bands-sheet-list">
-            {bands.map((band) => {
-              const color = resolveBandColor(band, band.id);
-              const manage = isBandLead(band.memberRole);
-              const label = band.kind === "personal" ? `${band.name} (lično)` : band.name;
-              return (
-                <li key={band.id}>
-                  <button
-                    type="button"
-                    className="bands-sheet-item"
-                    onClick={() => openBandPage(band.id)}
-                  >
-                    <span className="band-chip" style={{ backgroundColor: color }} aria-hidden="true">
-                      {bandInitials(band.name)}
-                    </span>
-                    <span className="bands-sheet-item-name">{label}</span>
-                    <span className={`bands-sheet-badge ${manage ? "is-manage" : ""}`}>
-                      {manage ? "Upravljaj" : "Otvori"}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          {!bands.length ? <p className="bands-sheet-empty">Nema benda.</p> : null}
-        </div>
-      ) : null}
+      <ProfileHub
+        open={profileHubOpen}
+        onClose={() => setProfileHubOpen(false)}
+        email={profile?.email || session.user?.email || ""}
+        displayName={
+          profile?.displayName ||
+          session.user?.user_metadata?.full_name ||
+          session.user?.user_metadata?.name ||
+          ""
+        }
+        avatarUrl={
+          session.user?.user_metadata?.avatar_url ||
+          session.user?.user_metadata?.picture ||
+          ""
+        }
+        pendingInvites={pendingInvites}
+        notifications={notifications}
+        bands={bands}
+        claimEur={financeClaimEur}
+        onAcceptInvite={handleAcceptInvite}
+        onDeclineInvite={handleDeclineInvite}
+        onOpenNotifications={refreshNotifications}
+        onMarkNotificationRead={handleMarkNotificationRead}
+        onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+        onOpenNotification={handleOpenNotification}
+        onOpenMoney={goToMoney}
+        onOpenBand={openBandPage}
+        onOpenSettings={() => {
+          setProfileHubOpen(false);
+          setPage("settings");
+        }}
+        onSignOut={handleSignOut}
+      />
 
       <nav className="app-tabbar" aria-label="Glavna navigacija">
         {NAV_ITEMS.map((item) => {
@@ -1261,7 +1140,7 @@ export default function App() {
                   aria-haspopup="menu"
                   aria-expanded={addMenuOpen}
                   title="Dodaj"
-                  onClick={(event) => handleNav("add", event)}
+                  onClick={() => handleNav("add")}
                 >
                   <Icon />
                   <span className="sr-only">Dodaj</span>
@@ -1312,23 +1191,27 @@ export default function App() {
           }
 
           const isActive =
-            item.id === "band"
-              ? showBand || bandsSheetOpen
+            item.id === "profile"
+              ? profileHubOpen || showSettings || showButtonShowcase
               : activePage === item.id || (item.id === "schedule" && forceSchedule);
           return (
             <button
               key={item.id}
-              ref={item.id === "band" ? bandsNavRef : undefined}
               type="button"
-              className={`app-tabbar-item ${isActive ? "is-active" : ""}`}
+              className={`app-tabbar-item ${isActive ? "is-active" : ""} ${item.id === "profile" && profileBadgeCount > 0 ? "has-badge" : ""}`.trim()}
               aria-current={isActive ? "page" : undefined}
-              aria-expanded={item.id === "band" ? bandsSheetOpen : undefined}
+              aria-expanded={item.id === "profile" ? profileHubOpen : undefined}
               aria-label={item.label}
               title={item.label}
-              onClick={(event) => handleNav(item.id, event)}
+              onClick={() => handleNav(item.id)}
             >
               <Icon />
-              <span>{item.label}</span>
+              <span className="sr-only">{item.label}</span>
+              {item.id === "profile" && profileBadgeCount > 0 ? (
+                <span className="app-tabbar-badge" aria-hidden="true">
+                  {profileBadgeCount > 9 ? "9+" : profileBadgeCount}
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -1358,13 +1241,5 @@ function AppBoot() {
         <span />
       </div>
     </main>
-  );
-}
-
-function SheetCloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
   );
 }
