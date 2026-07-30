@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "./api.js";
+import FieldSelect from "./FieldSelect.jsx";
 import { MIXING_CONSOLE_GROUPS } from "./mixingConsoles.js";
 import { reorderArray, useTechChannelDrag } from "./useTechChannelDrag.js";
 import {
@@ -10,6 +11,10 @@ import {
 } from "./techRiderPresets.js";
 
 const SAVE_DEBOUNCE_MS = 700;
+const TECH_RIDER_DESKTOP_MQ = "(min-width: 860px)";
+const HARDWARE_BASE_OPTIONS = HARDWARE_PRESETS.map((item) => ({ id: item, label: item }));
+/** Soft cache so remounting the panel does not blank-wait on the same event. */
+const techRiderBundleCache = new Map();
 
 function formatInputCh(index) {
   return String(index + 1).padStart(2, "0");
@@ -64,20 +69,37 @@ function emptyChannelPatch(nextEmpty) {
   };
 }
 
+function bundleFromCache(eventId, bandId) {
+  if (!eventId || !bandId) return null;
+  return techRiderBundleCache.get(`${eventId}:${bandId}`) || null;
+}
+
 export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false, showToast }) {
+  const cachedBundle = bundleFromCache(eventId, bandId);
   const [mode, setMode] = useState("input");
-  const [inputs, setInputs] = useState([]);
-  const [outputs, setOutputs] = useState([]);
-  const [stats, setStats] = useState({ inputCount: 0, outputCount: 0, phantom48vActive: 0 });
-  const [consoleIds, setConsoleIds] = useState([]);
-  const [limits, setLimits] = useState({ inputMax: 0, outputMax: 0 });
-  const [loading, setLoading] = useState(Boolean(eventId && bandId));
+  const [inputs, setInputs] = useState(() =>
+    Array.isArray(cachedBundle?.inputs) ? cachedBundle.inputs : [],
+  );
+  const [outputs, setOutputs] = useState(() =>
+    Array.isArray(cachedBundle?.outputs) ? cachedBundle.outputs : [],
+  );
+  const [stats, setStats] = useState(
+    () => cachedBundle?.stats || { inputCount: 0, outputCount: 0, phantom48vActive: 0 },
+  );
+  const [consoleIds, setConsoleIds] = useState(() =>
+    Array.isArray(cachedBundle?.consoleIds) ? cachedBundle.consoleIds : [],
+  );
+  const [limits, setLimits] = useState(() => cachedBundle?.limits || { inputMax: 0, outputMax: 0 });
+  const [loading, setLoading] = useState(() => Boolean(eventId && bandId) && !cachedBundle);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState("");
   const [drawerChannel, setDrawerChannel] = useState(null);
   const [drawerDraft, setDrawerDraft] = useState(null);
   const [mobileMenuChannelId, setMobileMenuChannelId] = useState(null);
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(TECH_RIDER_DESKTOP_MQ).matches : true,
+  );
 
   const inputsRef = useRef(inputs);
   const outputsRef = useRef(outputs);
@@ -102,6 +124,12 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         .includes(q),
     );
   }, [channels, search]);
+
+  const channelIndexById = useMemo(() => {
+    const map = new Map();
+    channels.forEach((row, index) => map.set(row.id, index));
+    return map;
+  }, [channels]);
 
   const searchActive = Boolean(search.trim());
 
@@ -174,6 +202,25 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   }
 
   useEffect(() => {
+    const mq = window.matchMedia(TECH_RIDER_DESKTOP_MQ);
+    const onChange = () => setIsDesktopLayout(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  function applyBundle(data) {
+    if (eventId && bandId) {
+      techRiderBundleCache.set(`${eventId}:${bandId}`, data);
+    }
+    setInputs(Array.isArray(data.inputs) ? data.inputs : []);
+    setOutputs(Array.isArray(data.outputs) ? data.outputs : []);
+    setStats(data.stats || { inputCount: 0, outputCount: 0, phantom48vActive: 0 });
+    setConsoleIds(Array.isArray(data.consoleIds) ? data.consoleIds : []);
+    setLimits(data.limits || { inputMax: 0, outputMax: 0 });
+  }
+
+  useEffect(() => {
     let cancelled = false;
     async function load() {
       if (!eventId || !bandId) {
@@ -183,20 +230,23 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         }
         return;
       }
-      setLoading(true);
-      setError("");
+      const cacheKey = `${eventId}:${bandId}`;
+      const cached = techRiderBundleCache.get(cacheKey);
+      if (cached) {
+        applyBundle(cached);
+        setLoading(false);
+        setError("");
+      } else {
+        setLoading(true);
+        setError("");
+      }
       try {
         const data = await api(`/api/events/${eventId}/tech-rider`, { bandId });
         if (cancelled) return;
-        const nextInputs = Array.isArray(data.inputs) ? data.inputs : [];
-        const nextOutputs = Array.isArray(data.outputs) ? data.outputs : [];
-        setInputs(nextInputs);
-        setOutputs(nextOutputs);
-        setStats(data.stats || { inputCount: 0, outputCount: 0, phantom48vActive: 0 });
-        setConsoleIds(Array.isArray(data.consoleIds) ? data.consoleIds : []);
-        setLimits(data.limits || { inputMax: 0, outputMax: 0 });
+        techRiderBundleCache.set(cacheKey, data);
+        applyBundle(data);
       } catch (requestError) {
-        if (!cancelled) {
+        if (!cancelled && !cached) {
           setError(requestError.message || "Rider nije učitan.");
         }
       } finally {
@@ -212,14 +262,6 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       saveTimersRef.current.clear();
     };
   }, [eventId, bandId]);
-
-  function applyBundle(data) {
-    setInputs(Array.isArray(data.inputs) ? data.inputs : []);
-    setOutputs(Array.isArray(data.outputs) ? data.outputs : []);
-    setStats(data.stats || { inputCount: 0, outputCount: 0, phantom48vActive: 0 });
-    setConsoleIds(Array.isArray(data.consoleIds) ? data.consoleIds : []);
-    setLimits(data.limits || { inputMax: 0, outputMax: 0 });
-  }
 
   function getChannel(id, kind) {
     const list = kind === "output" ? outputsRef.current : inputsRef.current;
@@ -521,7 +563,10 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       <label className="tech-rider-search">
         <span className="sr-only">Pretraga kanala</span>
         <input
+          id="tech-channel-search"
+          name="tech-channel-search"
           type="search"
+          autoComplete="off"
           placeholder="Search gear / source…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -532,6 +577,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         <p className="tech-rider-locknote">Prošli termin — rider je samo za pregled.</p>
       ) : null}
 
+      {isDesktopLayout ? (
       <div className="tech-rider-desktop">
         <table className="tech-rider-table">
           <thead>
@@ -558,7 +604,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           <tbody>
             {filteredChannels.length ? (
               filteredChannels.map((channel) => {
-                const index = channels.findIndex((row) => row.id === channel.id);
+                const index = channelIndexById.get(channel.id) ?? 0;
                 const chLabel = mode === "output" ? formatOutputCh(index) : formatInputCh(index);
                 const rowActionsBusy = busyId === String(channel.id);
                 const fieldsLocked = readOnly || channel.isEmpty;
@@ -585,6 +631,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                       ) : (
                         <input
                           className="tech-rider-cell-input"
+                          name={`tech-${channel.id}-label`}
+                          autoComplete="off"
                           value={channel.label}
                           readOnly={fieldsLocked}
                           placeholder={mode === "output" ? "Mon 1" : "Kick In"}
@@ -596,6 +644,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                     <td>
                       <input
                         className="tech-rider-cell-input"
+                        name={`tech-${channel.id}-gear`}
+                        autoComplete="off"
                         value={channel.isEmpty ? "" : channel.gear}
                         readOnly={fieldsLocked}
                         placeholder={channel.isEmpty ? "—" : "Mic / DI"}
@@ -648,8 +698,10 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                         <td>
                           <input
                             className="tech-rider-cell-input tech-rider-level-input"
+                            name={`tech-${channel.id}-level`}
                             type="text"
                             inputMode="decimal"
+                            autoComplete="off"
                             value={channel.isEmpty ? "" : (channel.levelDb ?? "")}
                             readOnly={fieldsLocked}
                             placeholder={channel.isEmpty ? "—" : "0 dB"}
@@ -705,11 +757,11 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           </tbody>
         </table>
       </div>
-
+      ) : (
       <ul className="tech-rider-mobile">
         {filteredChannels.length ? (
           filteredChannels.map((channel) => {
-            const index = channels.findIndex((row) => row.id === channel.id);
+            const index = channelIndexById.get(channel.id) ?? 0;
             const chLabel = mode === "output" ? formatOutputCh(index) : formatInputCh(index);
             const rowActionsBusy = busyId === String(channel.id);
             const fieldsLocked = readOnly || channel.isEmpty;
@@ -735,6 +787,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                   ) : (
                     <input
                       className="tech-rider-cell-input"
+                      name={`tech-${channel.id}-label`}
+                      autoComplete="off"
                       value={channel.label}
                       readOnly={fieldsLocked}
                       placeholder={mode === "output" ? "Mon 1" : "Kick"}
@@ -747,6 +801,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                   <span className="sr-only">{mode === "output" ? "Receiver / wedge" : "Mic / DI / gear"}</span>
                   <input
                     className="tech-rider-cell-input"
+                    name={`tech-${channel.id}-gear`}
+                    autoComplete="off"
                     value={channel.isEmpty ? "" : channel.gear}
                     readOnly={fieldsLocked}
                     placeholder={channel.isEmpty ? "—" : mode === "output" ? "IEM" : "SM57"}
@@ -790,6 +846,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           </li>
         )}
       </ul>
+      )}
 
       {readOnly ? null : (
         <button
@@ -989,27 +1046,33 @@ function ConsoleCheckIcon() {
 
 function HardwareSelect({ value, disabled = false, compact = false, onChange }) {
   const current = String(value || "");
-  const known = HARDWARE_PRESETS.includes(current);
+  const options = useMemo(() => {
+    if (!current) return HARDWARE_BASE_OPTIONS;
+    const items = [...HARDWARE_BASE_OPTIONS];
+    if (!HARDWARE_PRESETS.includes(current)) {
+      items.unshift({ id: current, label: current });
+    }
+    items.unshift({ id: "__clear__", label: "Clear", variant: "clear" });
+    return items;
+  }, [current]);
+
   return (
-    <select
-      className={`tech-rider-cell-input tech-rider-select ${compact ? "is-compact" : ""} ${current ? "" : "is-empty"}`}
+    <FieldSelect
+      label="Hardware"
       value={current}
+      options={options}
+      placeholder=""
       disabled={disabled}
-      aria-label="Hardware"
-      onChange={(e) => onChange(e.target.value)}
-    >
-      <option value="">{current ? "— Clear —" : ""}</option>
-      {HARDWARE_PRESETS.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-      {current && !known ? <option value={current}>{current}</option> : null}
-    </select>
+      portal
+      portalAlign="end"
+      className={`tech-rider-hardware-field ${compact ? "is-compact" : ""}`}
+      listClassName="tech-rider-hardware-menu"
+      onChange={(next) => onChange(next === "__clear__" ? "" : String(next ?? ""))}
+    />
   );
 }
 
-function GearPresetSelect({ mode, sourceLabel, value, disabled = false, onChange }) {
+function GearPresetSelect({ mode, sourceLabel, value, disabled = false, onChange, name }) {
   const suggestion = useMemo(
     () => suggestGearForSource(sourceLabel, mode === "output" ? "output" : "input"),
     [sourceLabel, mode],
@@ -1021,6 +1084,7 @@ function GearPresetSelect({ mode, sourceLabel, value, disabled = false, onChange
   return (
     <select
       className="tech-rider-cell-input tech-rider-select"
+      name={name || "tech-gear-preset"}
       value={current}
       disabled={disabled}
       aria-label="Gear"
@@ -1093,6 +1157,8 @@ function ChannelEditDrawer({
             </div>
             <input
               className="tech-rider-drawer-input"
+              name={`tech-drawer-${draft.id}-label`}
+              autoComplete="off"
               value={draft.isEmpty ? "" : draft.label}
               disabled={draft.isEmpty || readOnly}
               placeholder={mode === "output" ? "Mon 1" : "Kick"}
@@ -1150,8 +1216,10 @@ function ChannelEditDrawer({
                       />
                       <input
                         className="tech-rider-drawer-input tech-rider-level-input"
+                        name={`tech-drawer-${draft.id}-level`}
                         type="text"
                         inputMode="decimal"
+                        autoComplete="off"
                         value={draft.levelDb ?? ""}
                         disabled={readOnly}
                         placeholder="dB"
@@ -1172,10 +1240,13 @@ function ChannelEditDrawer({
                   sourceLabel={draft.label}
                   value={draft.gear}
                   disabled={readOnly}
+                  name={`tech-drawer-${draft.id}-gear-preset`}
                   onChange={(next) => onDraftChange((current) => ({ ...current, gear: next }))}
                 />
                 <input
                   className="tech-rider-drawer-input"
+                  name={`tech-drawer-${draft.id}-gear`}
+                  autoComplete="off"
                   value={draft.gear}
                   disabled={readOnly}
                   onChange={(e) => onDraftChange((current) => ({ ...current, gear: e.target.value }))}

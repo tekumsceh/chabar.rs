@@ -1094,7 +1094,14 @@ export default function BandPage({
                     </p>
                     <label className="band-share-field">
                       <span>Pozivni link</span>
-                      <input type="text" readOnly value={shareBusy && !shareUrl ? "Učitavam…" : shareUrl} />
+                      <input
+                        id="band-share-url"
+                        name="band-share-url"
+                        type="text"
+                        readOnly
+                        autoComplete="off"
+                        value={shareBusy && !shareUrl ? "Učitavam…" : shareUrl}
+                      />
                     </label>
                     <div className="band-share-actions">
                       <button type="button" className="band-home-side-action" disabled={!shareUrl || shareBusy} onClick={copyShareLink}>

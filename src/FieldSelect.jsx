@@ -1,9 +1,10 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import FadeScroll from "./FadeScroll.jsx";
 
 /**
- * Labeled / form-style single-choice dropdown (replaces native <select>).
- * options: [{ id, label, icon?, disabled? }]
+ * Labeled / form-style single-choice dropdown (replaces a native select).
+ * options: [{ id, label, icon?, disabled?, variant? }]
  */
 export default function FieldSelect({
   id,
@@ -16,10 +17,16 @@ export default function FieldSelect({
   disabled = false,
   required = false,
   autoFocus = false,
+  portal = false,
+  portalAlign = "start",
+  listClassName = "",
 }) {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
+  const portalAlignRef = useRef(portalAlign);
+  portalAlignRef.current = portalAlign;
   const listId = useId();
   const selected = options.find((option) => option.id === value || String(option.id) === String(value));
 
@@ -27,24 +34,143 @@ export default function FieldSelect({
     if (autoFocus) triggerRef.current?.focus();
   }, [autoFocus]);
 
+  useLayoutEffect(() => {
+    if (!open || !portal) {
+      setMenuPos(null);
+      return undefined;
+    }
+
+    function updatePosition() {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.max(rect.width, 8.5 * 16);
+      const align = portalAlignRef.current;
+      const preferredLeft = align === "end" ? rect.right - width : rect.left;
+      const left = Math.min(Math.max(8, preferredLeft), window.innerWidth - width - 8);
+      const gap = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const spaceAbove = rect.top - gap;
+      const openUp = spaceBelow < 12 * 16 && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(8 * 16, Math.min(14 * 16, openUp ? spaceAbove : spaceBelow));
+      const top = openUp ? rect.top - gap - maxHeight : rect.bottom + gap;
+      setMenuPos({
+        top,
+        left,
+        width,
+        maxHeight,
+        openUp,
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, portal]);
+
   useEffect(() => {
     if (!open) return undefined;
 
+    function menuEl() {
+      return document.querySelector(`[data-field-select-menu="${listId}"]`);
+    }
+
+    function isInsideSelect(target) {
+      if (!(target instanceof Node)) return false;
+      if (rootRef.current?.contains(target)) return true;
+      return Boolean(menuEl()?.contains(target));
+    }
+
+    function close() {
+      setOpen(false);
+    }
+
     function onPointerDown(event) {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
+      if (!isInsideSelect(event.target)) close();
     }
 
     function onKeyDown(event) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") close();
     }
 
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+    function onExternalScrollOrWheel(event) {
+      if (isInsideSelect(event.target)) return;
+      close();
+    }
+
+    const resetScroll = () => {
+      const viewport = menuEl()?.querySelector(".fade-scroll-viewport");
+      if (viewport) viewport.scrollTop = 0;
     };
-  }, [open]);
+    resetScroll();
+    const raf = window.requestAnimationFrame(resetScroll);
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("scroll", onExternalScrollOrWheel, true);
+    document.addEventListener("wheel", onExternalScrollOrWheel, { capture: true, passive: true });
+    document.addEventListener("touchmove", onExternalScrollOrWheel, { capture: true, passive: true });
+    return () => {
+      window.cancelAnimationFrame(raf);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("scroll", onExternalScrollOrWheel, true);
+      document.removeEventListener("wheel", onExternalScrollOrWheel, true);
+      document.removeEventListener("touchmove", onExternalScrollOrWheel, true);
+    };
+  }, [open, listId]);
+
+  const list = open ? (
+    <div
+      className={`field-select-list ${portal ? "is-portaled" : ""} ${menuPos?.openUp ? "is-up" : ""} ${listClassName}`.trim()}
+      id={listId}
+      data-field-select-menu={listId}
+      style={
+        portal && menuPos
+          ? {
+              top: `${menuPos.top}px`,
+              left: `${menuPos.left}px`,
+              width: `${menuPos.width}px`,
+              maxHeight: `${menuPos.maxHeight}px`,
+              right: "auto",
+              bottom: "auto",
+            }
+          : undefined
+      }
+    >
+      <FadeScroll className="fade-scroll-inset" viewportClassName="field-select-list-viewport">
+        <ul role="listbox" aria-label={label}>
+          {options.map((option) => (
+            <li key={String(option.id)} role="option" aria-selected={String(option.id) === String(value)}>
+              <button
+                type="button"
+                className={[
+                  "field-select-item",
+                  String(option.id) === String(value) ? "is-selected" : "",
+                  option.variant === "clear" ? "is-clear" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                disabled={option.disabled}
+                onClick={() => {
+                  if (option.disabled) return;
+                  onChange(option.id);
+                  setOpen(false);
+                }}
+              >
+                <span className="field-select-item-main">
+                  {option.icon ? <span className="field-select-item-icon">{option.icon}</span> : null}
+                  <span>{option.label}</span>
+                </span>
+                {String(option.id) === String(value) && option.variant !== "clear" ? <CheckIcon /> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </FadeScroll>
+    </div>
+  ) : null;
 
   return (
     <div
@@ -73,34 +199,9 @@ export default function FieldSelect({
         <ChevronIcon />
       </button>
 
-      {open ? (
-        <div className="field-select-list" id={listId}>
-          <FadeScroll className="fade-scroll-inset" viewportClassName="field-select-list-viewport">
-            <ul role="listbox" aria-label={label}>
-              {options.map((option) => (
-                <li key={String(option.id)} role="option" aria-selected={String(option.id) === String(value)}>
-                  <button
-                    type="button"
-                    className={`field-select-item ${String(option.id) === String(value) ? "is-selected" : ""}`}
-                    disabled={option.disabled}
-                    onClick={() => {
-                      if (option.disabled) return;
-                      onChange(option.id);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="field-select-item-main">
-                      {option.icon ? <span className="field-select-item-icon">{option.icon}</span> : null}
-                      <span>{option.label}</span>
-                    </span>
-                    {String(option.id) === String(value) ? <CheckIcon /> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </FadeScroll>
-        </div>
-      ) : null}
+      {portal && typeof document !== "undefined" && list
+        ? createPortal(list, document.body)
+        : list}
     </div>
   );
 }

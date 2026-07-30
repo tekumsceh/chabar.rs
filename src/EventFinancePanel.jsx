@@ -116,6 +116,8 @@ export default function EventFinancePanel({
             <label className="event-finance-amount">
               <span className="sr-only">Iznos EUR{solo ? "" : ` za ${member.name}`}</span>
               <input
+                id={`fee-${member.id}`}
+                name={`fee-${member.id}`}
                 type="text"
                 inputMode="decimal"
                 autoComplete="off"

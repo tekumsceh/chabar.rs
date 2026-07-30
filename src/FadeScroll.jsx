@@ -17,6 +17,9 @@ export default function FadeScroll({
   const wrapRef = useRef(null);
   const hideTimerRef = useRef(0);
   const touchingRef = useRef(false);
+  const canScrollRef = useRef(false);
+  const scrollingRef = useRef(false);
+  const rafRef = useRef(0);
   const [canScroll, setCanScroll] = useState(false);
   const [scrolling, setScrolling] = useState(false);
 
@@ -35,7 +38,10 @@ export default function FadeScroll({
       clearHideTimer();
       hideTimerRef.current = window.setTimeout(() => {
         if (touchingRef.current) return;
-        setScrolling(false);
+        if (scrollingRef.current) {
+          scrollingRef.current = false;
+          setScrolling(false);
+        }
       }, FADE_OUT_MS);
     }
 
@@ -43,18 +49,30 @@ export default function FadeScroll({
       return viewport.scrollHeight > viewport.clientHeight + 1;
     }
 
+    function setCanScrollSafe(next) {
+      if (canScrollRef.current === next) return;
+      canScrollRef.current = next;
+      setCanScroll(next);
+    }
+
+    function setScrollingSafe(next) {
+      if (scrollingRef.current === next) return;
+      scrollingRef.current = next;
+      setScrolling(next);
+    }
+
     function sync() {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
       if (!isScrollable()) {
         thumb.style.height = "0px";
         thumb.style.transform = "translateY(0)";
-        setCanScroll(false);
-        setScrolling(false);
+        setCanScrollSafe(false);
+        setScrollingSafe(false);
         clearHideTimer();
         return false;
       }
 
-      setCanScroll(true);
+      setCanScrollSafe(true);
       const ratio = clientHeight / scrollHeight;
       const thumbHeight = Math.max(18, Math.round(clientHeight * ratio));
       const maxTop = clientHeight - thumbHeight;
@@ -65,12 +83,20 @@ export default function FadeScroll({
       return true;
     }
 
+    function scheduleSync() {
+      if (rafRef.current) return;
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = 0;
+        sync();
+      });
+    }
+
     function show() {
       if (!isScrollable()) {
-        setScrolling(false);
+        setScrollingSafe(false);
         return;
       }
-      setScrolling(true);
+      setScrollingSafe(true);
       if (!touchingRef.current) scheduleHide();
       else clearHideTimer();
     }
@@ -89,12 +115,12 @@ export default function FadeScroll({
       if (!sync()) return;
       touchingRef.current = true;
       clearHideTimer();
-      setScrolling(true);
+      setScrollingSafe(true);
     };
     const onTouchEnd = () => {
       touchingRef.current = false;
       if (isScrollable()) scheduleHide();
-      else setScrolling(false);
+      else setScrollingSafe(false);
     };
 
     viewport.addEventListener("scroll", onScroll, { passive: true });
@@ -104,14 +130,16 @@ export default function FadeScroll({
     viewport.addEventListener("touchend", onTouchEnd, { passive: true });
     viewport.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
-    const ro = new ResizeObserver(sync);
+    const ro = new ResizeObserver(scheduleSync);
     ro.observe(viewport);
-    const mo = new MutationObserver(sync);
-    mo.observe(viewport, { childList: true, subtree: true, characterData: true });
+    // childList-only (no characterData/subtree attribute spam) + rAF coalesce
+    const mo = new MutationObserver(scheduleSync);
+    mo.observe(viewport, { childList: true, subtree: true });
     sync();
 
     return () => {
       clearHideTimer();
+      if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
       viewport.removeEventListener("scroll", onScroll);
       viewport.removeEventListener("wheel", onWheel);
       viewport.removeEventListener("touchstart", onTouchStart);

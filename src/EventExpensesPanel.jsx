@@ -209,6 +209,8 @@ export default function EventExpensesPanel({
             <label className="event-expenses-amount">
               <span className="sr-only">Iznos</span>
               <input
+                id="expense-amount"
+                name="expense-amount"
                 type="text"
                 inputMode="decimal"
                 autoComplete="off"
@@ -253,6 +255,8 @@ export default function EventExpensesPanel({
                 <div className="event-expenses-desc-popover" role="dialog" aria-label="Opis troška">
                   <input
                     ref={descInputRef}
+                    id="expense-description"
+                    name="expense-description"
                     type="text"
                     autoComplete="off"
                     placeholder="Opis"

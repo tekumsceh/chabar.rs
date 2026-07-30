@@ -616,7 +616,10 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             <label className="setlist-add-field setlist-add-field-grow">
               <span className="sr-only">Naslov pesme</span>
               <input
+                id="setlist-add-title"
+                name="setlist-add-title"
                 type="search"
+                autoComplete="off"
                 autoFocus
                 placeholder="Naslov pesme…"
                 value={addQuery}
@@ -638,7 +641,10 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             <label className="setlist-add-field">
               <span className="sr-only">Izvođač (opciono)</span>
               <input
+                id="setlist-add-artist"
+                name="setlist-add-artist"
                 type="text"
+                autoComplete="off"
                 placeholder="Izvođač"
                 value={addArtist}
                 onChange={(e) => setAddArtist(e.target.value)}
@@ -737,7 +743,10 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
       <label className="tech-rider-search">
         <span className="sr-only">Pretraga pesama</span>
         <input
+          id="setlist-search"
+          name="setlist-search"
           type="search"
+          autoComplete="off"
           placeholder="Search songs…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -929,6 +938,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             <label className="tech-rider-drawer-field">
               Naslov
               <input
+                id={`setlist-${drawerItem.id}-title`}
+                name={`setlist-${drawerItem.id}-title`}
+                autoComplete="off"
                 value={drawerDraft.title}
                 readOnly={!editable}
                 onChange={(e) => setDrawerDraft((current) => ({ ...current, title: e.target.value }))}
@@ -938,6 +950,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             <label className="tech-rider-drawer-field">
               Tonality (key)
               <input
+                id={`setlist-${drawerItem.id}-key`}
+                name={`setlist-${drawerItem.id}-key`}
+                autoComplete="off"
                 value={drawerDraft.songKey}
                 readOnly={!editable}
                 placeholder="Am, G, …"
@@ -948,8 +963,11 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             <label className="tech-rider-drawer-field">
               Trajanje (sekunde)
               <input
+                id={`setlist-${drawerItem.id}-duration`}
+                name={`setlist-${drawerItem.id}-duration`}
                 type="number"
                 min="0"
+                autoComplete="off"
                 value={drawerDraft.durationSec}
                 readOnly={!editable}
                 placeholder="240"
@@ -960,6 +978,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             <label className="tech-rider-drawer-field">
               Napomena za ovaj datum
               <input
+                id={`setlist-${drawerItem.id}-notes`}
+                name={`setlist-${drawerItem.id}-notes`}
+                autoComplete="off"
                 value={drawerDraft.notes}
                 readOnly={!editable}
                 placeholder="Intro skraćen, drugi refren…"
@@ -973,6 +994,8 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                 <div className="setlist-lyrics-tools">
                   <label className="setlist-capital-test">
                     <input
+                      id={`setlist-${drawerItem.id}-split-capitals`}
+                      name={`setlist-${drawerItem.id}-split-capitals`}
                       type="checkbox"
                       checked={splitByCapitalsTest}
                       onChange={(e) => setSplitByCapitalsTest(e.target.checked)}
@@ -991,8 +1014,11 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
               ) : null}
             </div>
             <textarea
+              id={`setlist-${drawerItem.id}-lyrics`}
+              name={`setlist-${drawerItem.id}-lyrics`}
               className="setlist-lyrics-input"
               rows={10}
+              autoComplete="off"
               value={drawerDraft.lyrics}
               readOnly={!editable}
               placeholder="Stihovi za ovaj termin…"
@@ -1003,6 +1029,8 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             {editable && drawerItem.songId ? (
               <label className="setlist-library-sync">
                 <input
+                  id={`setlist-${drawerItem.id}-update-library`}
+                  name={`setlist-${drawerItem.id}-update-library`}
                   type="checkbox"
                   checked={updateLibrary}
                   onChange={(e) => setUpdateLibrary(e.target.checked)}

@@ -98,6 +98,7 @@ export default function EventComments({ eventId, bandId, showToast, compact = fa
         </label>
         <textarea
           id={`event-comment-${eventId}`}
+          name={`event-comment-${eventId}`}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           maxLength={2000}

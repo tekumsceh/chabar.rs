@@ -1140,6 +1140,7 @@ button.status-icon-edit:hover {
   flex-shrink: 0;
   height: 0.55rem;
   opacity: 0.7;
+  transition: transform 180ms ease;
   width: 0.7rem;
 }
 
@@ -1148,18 +1149,70 @@ button.status-icon-edit:hover {
 }
 
 .field-select-list {
+  animation: field-select-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
   background: var(--panel);
   border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
   border-radius: var(--menu-radius);
   box-shadow: var(--menu-shadow);
+  display: flex;
+  flex-direction: column;
   left: 0;
   margin: 0.25rem 0 0;
   max-height: 14rem;
+  overflow: hidden;
   padding: 0.2rem;
   position: absolute;
   right: 0;
   top: 100%;
+  transform-origin: top center;
   z-index: 30;
+}
+
+.field-select-list.is-portaled {
+  margin: 0;
+  position: fixed;
+  right: auto;
+  z-index: 10060;
+}
+
+.field-select-list.is-portaled.is-up {
+  transform-origin: bottom center;
+}
+
+.field-select-list > .fade-scroll-wrap {
+  flex: 1 1 auto;
+  max-height: 100%;
+  min-height: 0;
+}
+
+.field-select-list > .fade-scroll-wrap > .fade-scroll-viewport {
+  max-height: 100%;
+}
+
+@keyframes field-select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.3rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.field-select-list.is-portaled.is-up {
+  animation-name: field-select-in-up;
+}
+
+@keyframes field-select-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.3rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .field-select-list-viewport {
@@ -1206,6 +1259,16 @@ button.status-icon-edit:hover {
 .field-select-item.is-selected {
   background: color-mix(in srgb, var(--ink) 8%, transparent) !important;
   font-weight: 600 !important;
+}
+
+.field-select-item.is-clear {
+  color: var(--muted) !important;
+  font-style: italic;
+  font-weight: 500 !important;
+}
+
+.field-select-item.is-clear:hover:not(:disabled) {
+  color: var(--ink) !important;
 }
 
 .field-select-item:disabled {
@@ -9646,8 +9709,96 @@ body.tech-rider-is-dragging .tech-rider-drag-handle.is-draggable {
   opacity: 0.72;
 }
 
-.tech-rider .tech-rider-select.is-empty {
-  color: transparent !important;
+.tech-rider .tech-rider-hardware-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.tech-rider .tech-rider-hardware-field .field-select-trigger {
+  background: color-mix(in srgb, var(--tech-bg) 58%, var(--tech-panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-line) 88%, var(--tech-muted) 12%) !important;
+  border-radius: 0.28rem !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28) !important;
+  color: var(--tech-ink) !important;
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+  gap: 0.25rem;
+  line-height: 1.15;
+  min-height: 0 !important;
+  padding: 0.18rem 0.32rem !important;
+}
+
+.tech-rider .tech-rider-hardware-field.is-compact .field-select-trigger {
+  font-size: 0.6rem !important;
+  padding: 0.12rem 0.22rem !important;
+}
+
+.tech-rider .tech-rider-hardware-field .field-select-value.is-placeholder span:empty::before {
+  content: "";
+}
+
+.tech-rider .tech-rider-hardware-field .field-select-value.is-placeholder {
+  color: transparent;
+  min-height: 1em;
+}
+
+.tech-rider .tech-rider-hardware-field .field-select-chevron {
+  color: var(--tech-muted);
+  height: 0.45rem;
+  width: 0.55rem;
+}
+
+.tech-rider .tech-rider-hardware-field.is-open .field-select-trigger {
+  border-color: color-mix(in srgb, var(--tech-input) 42%, var(--tech-line)) !important;
+  color: var(--tech-ink) !important;
+}
+
+.tech-rider-hardware-menu.field-select-list {
+  --tech-bg: #121214;
+  --tech-panel: #1e1e22;
+  --tech-line: #2c2c31;
+  --tech-ink: #ececef;
+  --tech-muted: #9898a0;
+  --tech-input: #64d2ff;
+  background: var(--tech-panel);
+  border-color: color-mix(in srgb, var(--tech-line) 82%, var(--tech-muted) 18%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  color: var(--tech-ink);
+  max-height: 12.5rem;
+  padding: 0.15rem 0.2rem 0.15rem 0.15rem;
+}
+
+.tech-rider-hardware-menu .field-select-list-viewport {
+  padding: 0.15rem 0.35rem 0.15rem 0.15rem;
+}
+
+.tech-rider-hardware-menu .field-select-item {
+  color: var(--tech-ink) !important;
+  font-size: 0.68rem !important;
+  min-height: 0 !important;
+  padding: 0.28rem 0.85rem 0.28rem 0.4rem !important;
+}
+
+.tech-rider-hardware-menu .field-select-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tech-input) 10%, var(--tech-panel)) !important;
+}
+
+.tech-rider-hardware-menu .field-select-item.is-selected {
+  background: color-mix(in srgb, var(--tech-input) 14%, var(--tech-panel)) !important;
+  color: var(--tech-input) !important;
+}
+
+.tech-rider-hardware-menu .field-select-item.is-clear {
+  border-bottom: 1px solid color-mix(in srgb, var(--tech-line) 72%, transparent);
+  border-radius: 0.28rem 0.28rem 0 0 !important;
+  color: var(--tech-muted) !important;
+  font-style: italic;
+  margin-bottom: 0.1rem;
+}
+
+.tech-rider-hardware-menu .field-select-item.is-clear:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tech-muted) 12%, var(--tech-panel)) !important;
+  color: var(--tech-ink) !important;
 }
 
 .tech-rider .tech-rider-cell-input::placeholder {

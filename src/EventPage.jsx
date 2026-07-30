@@ -61,6 +61,7 @@ export default function EventPage({
   const { confirm } = useConfirm();
   const [tab, setTab] = useState("osnovno");
   const [techSubTab, setTechSubTab] = useState(TECH_SUBTABS[0].id);
+  const [techRiderMounted, setTechRiderMounted] = useState(false);
   const [showSubTab, setShowSubTab] = useState(SHOW_SUBTABS[0].id);
   const [editing, setEditing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -83,8 +84,17 @@ export default function EventPage({
   useEffect(() => {
     backRef.current?.focus({ preventScroll: true });
     setTechSubTab(TECH_SUBTABS[0].id);
+    setTechRiderMounted(false);
     setShowSubTab(SHOW_SUBTABS[0].id);
   }, [event?.id]);
+
+  useEffect(() => {
+    if (techSubTab === "technical-rider") setTechRiderMounted(true);
+  }, [techSubTab]);
+
+  useEffect(() => {
+    if (tab !== "tehnicki") setTechRiderMounted(false);
+  }, [tab]);
 
   const memberRole = band?.memberRole || "member";
   const isGroupBand = band?.kind === "group";
@@ -651,13 +661,17 @@ export default function EventPage({
             ))}
           </div>
           <FadeScroll viewportClassName="event-page-panel-scroll">
-            {TECH_SUBTABS.map((item) =>
-              techSubTab === item.id ? (
+            {TECH_SUBTABS.map((item) => {
+              const isActive = techSubTab === item.id;
+              const keepRider = item.id === "technical-rider" && techRiderMounted;
+              if (!isActive && !keepRider) return null;
+              return (
                 <div
                   key={item.id}
                   id={`event-tech-panel-${item.id}`}
                   role="tabpanel"
                   aria-labelledby={`event-tech-tab-${item.id}`}
+                  hidden={!isActive}
                 >
                   {item.id === "technical-rider" ? (
                     <TechnicalRiderPanel
@@ -670,8 +684,8 @@ export default function EventPage({
                     <EventRackStubPanel panelId={item.id} readOnly={locked} showToast={showToast} />
                   )}
                 </div>
-              ) : null,
-            )}
+              );
+            })}
           </FadeScroll>
         </section>
       ) : null}
