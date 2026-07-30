@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
 
-const TIME_FIELDS = [
+export const DAY_TIME_FIELDS = [
   { key: "gatheringTime", label: "Okupljanje" },
   { key: "departureTime", label: "Polazak" },
   { key: "lodgingArrivalTime", label: "Planirani dolazak u smeštaj" },
@@ -14,7 +14,7 @@ const TIME_FIELDS = [
   { key: "leaveTime", label: "Odlazak" },
 ];
 
-const emptyDetails = {
+export const emptyDayDetails = {
   gatheringTime: "",
   departureTime: "",
   lodgingArrivalTime: "",
@@ -28,12 +28,47 @@ const emptyDetails = {
   leaveTime: "",
 };
 
+export function dayDetailsFromApi(data) {
+  return {
+    gatheringTime: data?.gatheringTime || "",
+    departureTime: data?.departureTime || "",
+    lodgingArrivalTime: data?.lodgingArrivalTime || "",
+    loadInTime: data?.loadInTime || "",
+    setUpTime: data?.setUpTime || "",
+    soundcheckTime: data?.soundcheckTime || "",
+    soundcheckDurationMin:
+      data?.soundcheckDurationMin == null || data?.soundcheckDurationMin === ""
+        ? ""
+        : String(data.soundcheckDurationMin),
+    showStartTime: data?.showStartTime || "",
+    showEndTime: data?.showEndTime || "",
+    curfewTime: data?.curfewTime || "",
+    leaveTime: data?.leaveTime || "",
+  };
+}
+
+export function formatDayDetailValue(details, field) {
+  const time = String(details?.[field.key] || "").trim();
+  if (!time) return "";
+  if (field.hasDuration) {
+    const mins = String(details?.soundcheckDurationMin ?? "").trim();
+    return mins ? `${time} (${mins} min)` : time;
+  }
+  return time;
+}
+
 /**
  * Kompletni detalji — day timeline (times + soundcheck duration).
  */
-export default function EventDayDetails({ eventId, bandId, readOnly = false, showToast }) {
-  const [form, setForm] = useState(emptyDetails);
-  const [initial, setInitial] = useState(emptyDetails);
+export default function EventDayDetails({
+  eventId,
+  bandId,
+  readOnly = false,
+  showToast,
+  onSaved,
+}) {
+  const [form, setForm] = useState(emptyDayDetails);
+  const [initial, setInitial] = useState(emptyDayDetails);
   const [loading, setLoading] = useState(Boolean(eventId && bandId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -53,7 +88,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
       try {
         const data = await api(`/api/events/${eventId}/day-details`, { bandId });
         if (cancelled) return;
-        const next = detailsFromApi(data);
+        const next = dayDetailsFromApi(data);
         setForm(next);
         setInitial(next);
       } catch (requestError) {
@@ -70,7 +105,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
     };
   }, [eventId, bandId]);
 
-  const dirty = TIME_FIELDS.some((field) => form[field.key] !== initial[field.key])
+  const dirty = DAY_TIME_FIELDS.some((field) => form[field.key] !== initial[field.key])
     || String(form.soundcheckDurationMin ?? "") !== String(initial.soundcheckDurationMin ?? "");
 
   function updateField(key, value) {
@@ -102,10 +137,11 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
         bandId,
         body,
       });
-      const next = detailsFromApi(saved);
+      const next = dayDetailsFromApi(saved);
       setForm(next);
       setInitial(next);
       setError("");
+      onSaved?.(next);
       showToast?.("Detalji sačuvani");
     } catch (requestError) {
       showToast?.(requestError.message || "Čuvanje nije uspelo", "error");
@@ -129,7 +165,7 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
       ) : null}
 
       <ul className="event-day-details-list" aria-label="Vremenski raspored dana">
-        {TIME_FIELDS.map((field) => (
+        {DAY_TIME_FIELDS.map((field) => (
           <li
             key={field.key}
             className={`event-day-details-row ${field.hasDuration ? "has-duration" : ""}`}
@@ -180,23 +216,4 @@ export default function EventDayDetails({ eventId, bandId, readOnly = false, sho
       ) : null}
     </form>
   );
-}
-
-function detailsFromApi(data) {
-  return {
-    gatheringTime: data?.gatheringTime || "",
-    departureTime: data?.departureTime || "",
-    lodgingArrivalTime: data?.lodgingArrivalTime || "",
-    loadInTime: data?.loadInTime || "",
-    setUpTime: data?.setUpTime || "",
-    soundcheckTime: data?.soundcheckTime || "",
-    soundcheckDurationMin:
-      data?.soundcheckDurationMin == null || data?.soundcheckDurationMin === ""
-        ? ""
-        : String(data.soundcheckDurationMin),
-    showStartTime: data?.showStartTime || "",
-    showEndTime: data?.showEndTime || "",
-    curfewTime: data?.curfewTime || "",
-    leaveTime: data?.leaveTime || "",
-  };
 }

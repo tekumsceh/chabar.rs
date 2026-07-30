@@ -106,40 +106,6 @@ const PANEL_SPECS = {
       chips: ["Drums", "Bass", "Gtr", "Keys", "Vox", "Mon"],
     },
   },
-  "set-lists": {
-    eyebrow: "Chabar show",
-    title: "Set lists",
-    accent: "lime",
-    stats: [
-      { label: "Songs", value: "—" },
-      { label: "Runtime", value: "—" },
-      { label: "Encore", value: "—" },
-    ],
-    modes: [
-      { id: "main", label: "Main set" },
-      { id: "encore", label: "Encore" },
-      { id: "alts", label: "Alternates" },
-    ],
-    columns: ["#", "Song", "Key", "Time"],
-    rows: {
-      main: [
-        ["01", "Opener", "—", "—"],
-        ["02", "Song title", "—", "—"],
-        ["03", "Song title", "—", "—"],
-        ["04", "Song title", "—", "—"],
-      ],
-      encore: [
-        ["E1", "Encore A", "—", "—"],
-        ["E2", "Encore B", "—", "—"],
-      ],
-      alts: [
-        ["A1", "Swap option", "—", "If short"],
-        ["A2", "Acoustic", "—", "Optional"],
-      ],
-    },
-    addLabel: "+ Add song",
-    canvas: null,
-  },
   visuals: {
     eyebrow: "Chabar visuals",
     title: "Visuals",

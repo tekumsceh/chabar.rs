@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS band_members (
   band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('owner', 'lead', 'member', 'saradnik')),
+  can_edit_setlist BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (band_id, user_id)
 );
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS event_tech_channels (
   phantom_48v BOOLEAN NOT NULL DEFAULT FALSE,
   pad BOOLEAN NOT NULL DEFAULT FALSE,
   stereo BOOLEAN NOT NULL DEFAULT FALSE,
+  is_empty BOOLEAN NOT NULL DEFAULT FALSE,
   level_db NUMERIC(6, 1) NULL,
   notes TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -109,6 +111,40 @@ CREATE TABLE IF NOT EXISTS event_tech_channels (
 
 CREATE INDEX IF NOT EXISTS event_tech_channels_event_kind_idx
   ON event_tech_channels (event_id, kind, sort_order);
+
+CREATE TABLE IF NOT EXISTS band_songs (
+  id SERIAL PRIMARY KEY,
+  band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  song_key TEXT NOT NULL DEFAULT '',
+  lyrics TEXT NOT NULL DEFAULT '',
+  duration_sec INTEGER NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS band_songs_band_sort_idx
+  ON band_songs (band_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS event_setlist_items (
+  id SERIAL PRIMARY KEY,
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
+  section TEXT NOT NULL CHECK (section IN ('main', 'encore', 'alts')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  song_id INTEGER NULL REFERENCES band_songs(id) ON DELETE SET NULL,
+  title TEXT NOT NULL DEFAULT '',
+  song_key TEXT NOT NULL DEFAULT '',
+  lyrics TEXT NOT NULL DEFAULT '',
+  duration_sec INTEGER NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS event_setlist_items_event_section_idx
+  ON event_setlist_items (event_id, section, sort_order);
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
@@ -136,4 +172,14 @@ FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
 DROP TRIGGER IF EXISTS bands_set_updated_at ON bands;
 CREATE TRIGGER bands_set_updated_at
 BEFORE UPDATE ON bands
+FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+
+DROP TRIGGER IF EXISTS band_songs_set_updated_at ON band_songs;
+CREATE TRIGGER band_songs_set_updated_at
+BEFORE UPDATE ON band_songs
+FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+
+DROP TRIGGER IF EXISTS event_setlist_items_set_updated_at ON event_setlist_items;
+CREATE TRIGGER event_setlist_items_set_updated_at
+BEFORE UPDATE ON event_setlist_items
 FOR EACH ROW EXECUTE PROCEDURE set_updated_at();

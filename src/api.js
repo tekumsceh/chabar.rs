@@ -27,11 +27,13 @@ export async function api(url, options = {}) {
       method: options.method || "GET",
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: options.signal,
     });
-  } catch {
-    const error = new Error("Veza sa serverom nije uspela. Sačekaj sekund i pokušaj ponovo.");
-    error.status = 0;
-    throw error;
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    const networkError = new Error("Veza sa serverom nije uspela. Sačekaj sekund i pokušaj ponovo.");
+    networkError.status = 0;
+    throw networkError;
   }
 
   if (!response.ok) {

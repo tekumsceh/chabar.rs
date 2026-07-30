@@ -11,8 +11,14 @@ import {
 import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
-import EventDayDetails from "./EventDayDetails.jsx";
+import EventDayDetails, {
+  DAY_TIME_FIELDS,
+  dayDetailsFromApi,
+  emptyDayDetails,
+  formatDayDetailValue,
+} from "./EventDayDetails.jsx";
 import TechnicalRiderPanel from "./TechnicalRiderPanel.jsx";
+import SetListPanel from "./SetListPanel.jsx";
 import EventRackStubPanel from "./EventRackStubPanel.jsx";
 import FieldSelect from "./FieldSelect.jsx";
 import FadeScroll from "./FadeScroll.jsx";
@@ -65,6 +71,7 @@ export default function EventPage({
   const [financeBundle, setFinanceBundle] = useState(null);
   const [financeLoading, setFinanceLoading] = useState(false);
   const [financeError, setFinanceError] = useState("");
+  const [dayDetails, setDayDetails] = useState(emptyDayDetails);
   const lastLeaveSignalRef = useRef(leaveSignal);
   const editingRef = useRef(editing);
   const dirtyRef = useRef(false);
@@ -114,6 +121,16 @@ export default function EventPage({
   const myFee = numberValue(event?.priceEur);
   const hasFee = myFee > 0;
   const bandName = band?.name || event?.bandName || "—";
+  const dayDetailsBandId = event?.bandId || band?.id || "";
+  const filledDayDetails = useMemo(
+    () =>
+      DAY_TIME_FIELDS.map((field) => ({
+        key: field.key,
+        label: field.label,
+        value: formatDayDetailValue(dayDetails, field),
+      })).filter((row) => row.value),
+    [dayDetails],
+  );
   const bandOptions = useMemo(
     () =>
       (bands || []).map((item) => ({
@@ -145,6 +162,26 @@ export default function EventPage({
     setDetailsOpen(false);
     setFormError("");
   }, [event?.id, event?.bandId, event?.date, event?.city, event?.venue, event?.mapsUrl, event?.note, event?.priceEur]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDayDetails() {
+      if (!event?.id || !dayDetailsBandId) {
+        setDayDetails(emptyDayDetails);
+        return;
+      }
+      try {
+        const data = await api(`/api/events/${event.id}/day-details`, { bandId: dayDetailsBandId });
+        if (!cancelled) setDayDetails(dayDetailsFromApi(data));
+      } catch {
+        if (!cancelled) setDayDetails(emptyDayDetails);
+      }
+    }
+    loadDayDetails();
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.id, dayDetailsBandId]);
 
   useEffect(() => {
     if (tab === "finansije" && !canSeeFinance) setTab("osnovno");
@@ -380,16 +417,12 @@ export default function EventPage({
             {dateParts.month ? ` ${dateParts.month}` : ""}
             {event.city ? ` · ${event.city}` : ""}
           </h2>
-          <p className="event-page-sub">
-            {event.venue || event.mapsUrl ? (
-              <>
-                <VenueWithMaps venue={event.venue} city={event.city} mapsUrl={event.mapsUrl} />
-                {bandName ? <span className="event-page-sub-sep"> · {bandName}</span> : null}
-              </>
-            ) : (
-              bandName || "—"
-            )}
-          </p>
+          <p className="event-page-band">{bandName}</p>
+          {event.venue || event.mapsUrl ? (
+            <p className="event-page-sub">
+              <VenueWithMaps venue={event.venue} city={event.city} mapsUrl={event.mapsUrl} />
+            </p>
+          ) : null}
         </div>
         {locked ? (
           <span className="event-page-lock" title="Prošli termin je zaključan" aria-label="Zaključan termin">
@@ -552,32 +585,18 @@ export default function EventPage({
             </form>
           ) : (
             <dl className="event-page-fields">
-              <div>
-                <dt>Datum</dt>
-                <dd>{event.date || "—"}</dd>
-              </div>
-              <div>
-                <dt>Bend</dt>
-                <dd>{bandName}</dd>
-              </div>
-              <div>
-                <dt>Mesto</dt>
-                <dd>{event.city || "—"}</dd>
-              </div>
-              <div>
-                <dt>Lokal</dt>
-                <dd>
-                  {event.venue || event.mapsUrl ? (
-                    <VenueWithMaps venue={event.venue} city={event.city} mapsUrl={event.mapsUrl} />
-                  ) : (
-                    "—"
-                  )}
-                </dd>
-              </div>
-              <div className="event-page-fields-full">
-                <dt>Napomena</dt>
-                <dd>{event.note || "—"}</dd>
-              </div>
+              {filledDayDetails.map((row) => (
+                <div key={row.key}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+              {event.note ? (
+                <div className="event-page-fields-full">
+                  <dt>Napomena</dt>
+                  <dd>{event.note}</dd>
+                </div>
+              ) : null}
               <div className="event-page-fields-full event-page-fee-row">
                 <dt>Moj honorar</dt>
                 <dd className={hasFee ? "is-set" : "is-empty"}>{hasFee ? formatEur(myFee) : "—"}</dd>
@@ -689,7 +708,16 @@ export default function EventPage({
                   role="tabpanel"
                   aria-labelledby={`event-show-tab-${item.id}`}
                 >
-                  <EventRackStubPanel panelId={item.id} readOnly={locked} showToast={showToast} />
+                  {item.id === "set-lists" ? (
+                    <SetListPanel
+                      eventId={event.id}
+                      bandId={financeBandId}
+                      readOnly={locked}
+                      showToast={showToast}
+                    />
+                  ) : (
+                    <EventRackStubPanel panelId={item.id} readOnly={locked} showToast={showToast} />
+                  )}
                 </div>
               ) : null,
             )}
@@ -783,9 +811,10 @@ export default function EventPage({
             </h3>
             <EventDayDetails
               eventId={event.id}
-              bandId={event.bandId || band?.id}
+              bandId={dayDetailsBandId}
               readOnly={locked}
               showToast={showToast}
+              onSaved={setDayDetails}
             />
             </FadeScroll>
           </section>

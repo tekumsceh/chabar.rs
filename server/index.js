@@ -75,7 +75,8 @@ import {
   deleteGoogleImportedEvents,
 } from "./googleCalendar.js";
 import { rateLimit } from "./rateLimit.js";
-import { isBandLead, isBandSaradnik } from "../shared/roles.js";
+import { getCommunityLyricsById, searchCommunityLyrics } from "./lyricsLookup.js";
+import { canEditSetlist, isBandLead, isBandSaradnik } from "../shared/roles.js";
 import { parseDate, startOfToday } from "../src/calculations.js";
 import { normalizeConsoleIds, resolveConsoleLimits } from "../src/mixingConsoles.js";
 
@@ -1545,6 +1546,7 @@ function mapTechChannelRow(row) {
     phantom48v: Boolean(row.phantom_48v),
     pad: Boolean(row.pad),
     stereo: Boolean(row.stereo),
+    isEmpty: Boolean(row.is_empty),
     levelDb: row.level_db == null || row.level_db === "" ? null : Number(row.level_db),
     notes: row.notes || "",
     createdAt: row.created_at,
@@ -1562,16 +1564,18 @@ function normalizeTechChannel(value, { kind = "input" } = {}) {
     }
   }
 
+  const isEmpty = Boolean(value?.isEmpty);
   return {
     kind: normalizedKind,
     label: String(value?.label ?? "").trim().slice(0, 120),
     gear: String(value?.gear ?? "").trim().slice(0, 120),
     cable: String(value?.cable ?? "").trim().slice(0, 120),
     hardware: String(value?.hardware ?? "").trim().slice(0, 120),
-    phantom48v: Boolean(value?.phantom48v),
-    pad: Boolean(value?.pad),
-    stereo: Boolean(value?.stereo),
-    levelDb,
+    phantom48v: isEmpty ? false : Boolean(value?.phantom48v),
+    pad: isEmpty ? false : Boolean(value?.pad),
+    stereo: isEmpty ? false : Boolean(value?.stereo),
+    isEmpty,
+    levelDb: isEmpty ? null : levelDb,
     notes: String(value?.notes ?? "").trim().slice(0, 500),
   };
 }
@@ -1607,7 +1611,7 @@ async function loadTechRiderBundle(eventId, bandId) {
 
   const result = await query(
     `SELECT id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
-            phantom_48v, pad, stereo, level_db, notes, created_at, updated_at
+            phantom_48v, pad, stereo, is_empty, level_db, notes, created_at, updated_at
      FROM event_tech_channels
      WHERE event_id = :eventId AND band_id = :bandId
      ORDER BY kind ASC, sort_order ASC, id ASC`,
@@ -1708,13 +1712,13 @@ app.post("/api/events/:id/tech-rider/channels", requireAuth, requireBandMember, 
     const result = await query(
       `INSERT INTO event_tech_channels (
          event_id, band_id, kind, sort_order, label, gear, cable, hardware,
-         phantom_48v, pad, stereo, level_db, notes
+         phantom_48v, pad, stereo, is_empty, level_db, notes
        ) VALUES (
          :eventId, :bandId, :kind, :sortOrder, :label, :gear, :cable, :hardware,
-         :phantom48v, :pad, :stereo, :levelDb, :notes
+         :phantom48v, :pad, :stereo, :isEmpty, :levelDb, :notes
        )
        RETURNING id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
-                 phantom_48v, pad, stereo, level_db, notes, created_at, updated_at`,
+                 phantom_48v, pad, stereo, is_empty, level_db, notes, created_at, updated_at`,
       {
         eventId,
         bandId: req.bandId,
@@ -1727,6 +1731,7 @@ app.post("/api/events/:id/tech-rider/channels", requireAuth, requireBandMember, 
         phantom48v: channel.phantom48v,
         pad: channel.pad,
         stereo: channel.stereo,
+        isEmpty: channel.isEmpty,
         levelDb: channel.levelDb,
         notes: channel.notes,
       },
@@ -1775,12 +1780,13 @@ app.put(
              phantom_48v = :phantom48v,
              pad = :pad,
              stereo = :stereo,
+             is_empty = :isEmpty,
              level_db = :levelDb,
              notes = :notes,
              updated_at = NOW()
          WHERE id = :channelId AND event_id = :eventId AND band_id = :bandId
          RETURNING id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
-                   phantom_48v, pad, stereo, level_db, notes, created_at, updated_at`,
+                   phantom_48v, pad, stereo, is_empty, level_db, notes, created_at, updated_at`,
         {
           channelId,
           eventId,
@@ -1792,6 +1798,7 @@ app.put(
           phantom48v: channel.phantom48v,
           pad: channel.pad,
           stereo: channel.stereo,
+          isEmpty: channel.isEmpty,
           levelDb: channel.levelDb,
           notes: channel.notes,
         },
@@ -1940,6 +1947,721 @@ app.put("/api/events/:id/tech-rider/consoles", requireAuth, requireBandMember, a
       eventId,
       bandId: req.bandId,
       ...bundle,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+function mapBandSongRow(row) {
+  return {
+    id: row.id,
+    bandId: row.band_id,
+    title: row.title || "",
+    songKey: row.song_key || "",
+    lyrics: row.lyrics || "",
+    durationSec: row.duration_sec == null ? null : Number(row.duration_sec),
+    sortOrder: Number(row.sort_order) || 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapSetlistItemRow(row) {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    bandId: row.band_id,
+    section: row.section,
+    sortOrder: Number(row.sort_order) || 0,
+    songId: row.song_id == null ? null : Number(row.song_id),
+    title: row.title || "",
+    songKey: row.song_key || "",
+    lyrics: row.lyrics || "",
+    durationSec: row.duration_sec == null ? null : Number(row.duration_sec),
+    notes: row.notes || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizeSetlistSection(value) {
+  const section = String(value || "main").toLowerCase();
+  if (section === "encore" || section === "alts") return section;
+  return "main";
+}
+
+function normalizeDurationSec(value) {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.round(parsed);
+}
+
+function buildSetlistStats(sections) {
+  const all = [...sections.main, ...sections.encore, ...sections.alts];
+  const totalDurationSec = all.reduce((sum, item) => sum + (item.durationSec || 0), 0);
+  return {
+    totalSongs: all.length,
+    mainCount: sections.main.length,
+    encoreCount: sections.encore.length,
+    altsCount: sections.alts.length,
+    totalDurationSec,
+  };
+}
+
+async function getBandMemberSetlistFlags(userId, bandId) {
+  const result = await query(
+    `SELECT member_role, can_edit_setlist
+     FROM band_members
+     WHERE band_id = :bandId AND user_id = :userId
+     LIMIT 1`,
+    { bandId, userId },
+  );
+  return result.rows[0] || null;
+}
+
+async function resolveCanEditSetlist(userId, bandId) {
+  const member = await getBandMemberSetlistFlags(userId, bandId);
+  if (!member) return false;
+  return canEditSetlist(member.member_role, member.can_edit_setlist);
+}
+
+async function assertCanEditSetlist(req) {
+  const member = await getBandMemberSetlistFlags(req.user.id, req.bandId);
+  if (!member) {
+    const err = new Error("Forbidden");
+    err.status = 403;
+    throw err;
+  }
+  if (!canEditSetlist(member.member_role, member.can_edit_setlist)) {
+    const err = new Error("Nemaš dozvolu za izmenu set liste.");
+    err.status = 403;
+    throw err;
+  }
+}
+
+async function loadSetlistBundle(eventId, bandId) {
+  const songsResult = await query(
+    `SELECT id, band_id, title, song_key, lyrics, duration_sec, sort_order, created_at, updated_at
+     FROM band_songs
+     WHERE band_id = :bandId
+     ORDER BY sort_order ASC, id ASC`,
+    { bandId },
+  );
+  const itemsResult = await query(
+    `SELECT id, event_id, band_id, section, sort_order, song_id, title, song_key, lyrics,
+            duration_sec, notes, created_at, updated_at
+     FROM event_setlist_items
+     WHERE event_id = :eventId AND band_id = :bandId
+     ORDER BY section ASC, sort_order ASC, id ASC`,
+    { eventId, bandId },
+  );
+  const items = itemsResult.rows.map(mapSetlistItemRow);
+  const sections = {
+    main: items.filter((item) => item.section === "main"),
+    encore: items.filter((item) => item.section === "encore"),
+    alts: items.filter((item) => item.section === "alts"),
+  };
+  return {
+    songs: songsResult.rows.map(mapBandSongRow),
+    sections,
+    stats: buildSetlistStats(sections),
+  };
+}
+
+async function assertEventEditableForSetlist(eventId, bandId) {
+  const event = await query(
+    `SELECT id, event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+    { id: eventId, bandId },
+  );
+  if (!event.rows[0]) {
+    const err = new Error("Not found");
+    err.status = 404;
+    throw err;
+  }
+  if (isPastEventDate(event.rows[0].event_date_text)) {
+    const err = new Error("Prošli termini su zaključani — set lista se ne menja.");
+    err.status = 403;
+    throw err;
+  }
+  return event.rows[0];
+}
+
+async function loadBandSongForBand(songId, bandId) {
+  const result = await query(
+    `SELECT id, band_id, title, song_key, lyrics, duration_sec, sort_order, created_at, updated_at
+     FROM band_songs
+     WHERE id = :songId AND band_id = :bandId
+     LIMIT 1`,
+    { songId, bandId },
+  );
+  return result.rows[0] ? mapBandSongRow(result.rows[0]) : null;
+}
+
+async function createBandSong(bandId, payload) {
+  const title = String(payload.title || "").trim().slice(0, 200);
+  if (!title) {
+    const err = new Error("Naslov pesme je obavezan.");
+    err.status = 400;
+    throw err;
+  }
+  const orderResult = await query(
+    `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order
+     FROM band_songs WHERE band_id = :bandId`,
+    { bandId },
+  );
+  const sortOrder = Number(orderResult.rows[0]?.next_order) || 1;
+  const result = await query(
+    `INSERT INTO band_songs (band_id, title, song_key, lyrics, duration_sec, sort_order)
+     VALUES (:bandId, :title, :songKey, :lyrics, :durationSec, :sortOrder)
+     RETURNING id, band_id, title, song_key, lyrics, duration_sec, sort_order, created_at, updated_at`,
+    {
+      bandId,
+      title,
+      songKey: String(payload.songKey || "").trim().slice(0, 32),
+      lyrics: String(payload.lyrics || ""),
+      durationSec: normalizeDurationSec(payload.durationSec),
+      sortOrder,
+    },
+  );
+  return mapBandSongRow(result.rows[0]);
+}
+
+function snapshotFromSong(song, notes = "") {
+  return {
+    songId: song.id,
+    title: song.title || "",
+    songKey: song.songKey || "",
+    lyrics: song.lyrics || "",
+    durationSec: song.durationSec,
+    notes: String(notes || "").slice(0, 500),
+  };
+}
+
+app.get(
+  "/api/lyrics/search",
+  requireAuth,
+  rateLimit({
+    windowMs: 60_000,
+    max: 60,
+    keyFn: (req) => `lyrics-search:${req.user?.id || req.ip || "unknown"}`,
+  }),
+  async (req, res, next) => {
+    try {
+      const q = String(req.query.q || "").trim();
+      const track = String(req.query.track || "").trim();
+      const artist = String(req.query.artist || "").trim();
+      if (!q && !track) {
+        return res.status(400).json({ error: "Unesi naslov ili ključnu reč." });
+      }
+      if ((q || track).length < 3) {
+        return res.json({
+          source: "lrclib",
+          results: [],
+          rateLimited: false,
+          retryAfter: 0,
+          message: "Unesi bar tri karaktera za online pretragu.",
+        });
+      }
+
+      const search = await searchCommunityLyrics({ q, trackName: track, artistName: artist });
+      res.json({
+        source: "lrclib",
+        disclaimer:
+          "Zajednički katalog (LRCLIB) — nije royalty-free. Proveri autorska prava pre javnog korišćenja.",
+        results: search.results.map((row) => ({
+          id: row.id,
+          trackName: row.trackName,
+          artistName: row.artistName,
+          albumName: row.albumName,
+          durationSec: row.durationSec,
+          instrumental: row.instrumental,
+          hasLyrics: Boolean(row.plainLyrics),
+          lyricsPreview: String(row.plainLyrics || "").slice(0, 140),
+        })),
+        rateLimited: search.rateLimited,
+        retryAfter: search.retryAfter,
+        message: search.rateLimited
+          ? `LRCLIB pretraga pauzirana — sačekaj ${search.retryAfter || 30}s pa klikni Pretraži online.`
+          : "",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get(
+  "/api/lyrics/community/:id",
+  requireAuth,
+  rateLimit({
+    windowMs: 60_000,
+    max: 30,
+    keyFn: (req) => `lyrics-get:${req.user?.id || req.ip || "unknown"}`,
+  }),
+  async (req, res, next) => {
+    try {
+      const row = await getCommunityLyricsById(req.params.id);
+      if (!row) {
+        return res.status(404).json({ error: "Tekst nije pronađen." });
+      }
+      res.json({
+        source: "lrclib",
+        disclaimer:
+          "Zajednički katalog (LRCLIB) — nije royalty-free. Proveri autorska prava pre javnog korišćenja.",
+        ...row,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get("/api/bands/:id/songs", requireAuth, bandIdFromParams, requireBandMember, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT id, band_id, title, song_key, lyrics, duration_sec, sort_order, created_at, updated_at
+       FROM band_songs
+       WHERE band_id = :bandId
+       ORDER BY sort_order ASC, id ASC`,
+      { bandId: req.bandId },
+    );
+    res.json({
+      bandId: req.bandId,
+      songs: result.rows.map(mapBandSongRow),
+      canEdit: await resolveCanEditSetlist(req.user.id, req.bandId),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/bands/:id/songs", requireAuth, bandIdFromParams, requireBandMember, async (req, res, next) => {
+  try {
+    await assertCanEditSetlist(req);
+    const song = await createBandSong(req.bandId, req.body || {});
+    res.status(201).json(song);
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.put(
+  "/api/bands/:id/songs/:songId",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      await assertCanEditSetlist(req);
+      const songId = Number(req.params.songId);
+      if (!songId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      const existing = await query(
+        `SELECT id FROM band_songs WHERE id = :songId AND band_id = :bandId LIMIT 1`,
+        { songId, bandId: req.bandId },
+      );
+      if (!existing.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      const title = String(req.body?.title ?? "").trim().slice(0, 200);
+      if (!title) {
+        return res.status(400).json({ error: "Naslov pesme je obavezan.", detail: "Naslov pesme je obavezan." });
+      }
+
+      const result = await query(
+        `UPDATE band_songs
+         SET title = :title,
+             song_key = :songKey,
+             lyrics = :lyrics,
+             duration_sec = :durationSec,
+             updated_at = NOW()
+         WHERE id = :songId AND band_id = :bandId
+         RETURNING id, band_id, title, song_key, lyrics, duration_sec, sort_order, created_at, updated_at`,
+        {
+          songId,
+          bandId: req.bandId,
+          title,
+          songKey: String(req.body?.songKey ?? "").trim().slice(0, 32),
+          lyrics: String(req.body?.lyrics ?? ""),
+          durationSec: normalizeDurationSec(req.body?.durationSec),
+        },
+      );
+      res.json(mapBandSongRow(result.rows[0]));
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, detail: error.message });
+      }
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  "/api/bands/:id/songs/:songId",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      await assertCanEditSetlist(req);
+      const songId = Number(req.params.songId);
+      if (!songId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      const existing = await query(
+        `SELECT id FROM band_songs WHERE id = :songId AND band_id = :bandId LIMIT 1`,
+        { songId, bandId: req.bandId },
+      );
+      if (!existing.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      await query(`DELETE FROM band_songs WHERE id = :songId AND band_id = :bandId`, {
+        songId,
+        bandId: req.bandId,
+      });
+      res.status(204).end();
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, detail: error.message });
+      }
+      next(error);
+    }
+  },
+);
+
+app.get("/api/events/:id/setlist", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const bundle = await loadSetlistBundle(eventId, req.bandId);
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...bundle,
+      canEdit: await resolveCanEditSetlist(req.user.id, req.bandId),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/events/:id/setlist/items", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+
+    await assertCanEditSetlist(req);
+    await assertEventEditableForSetlist(eventId, req.bandId);
+
+    const section = normalizeSetlistSection(req.body?.section);
+    let snapshot = null;
+
+    const songId = Number(req.body?.songId);
+    if (Number.isFinite(songId) && songId > 0) {
+      const song = await loadBandSongForBand(songId, req.bandId);
+      if (!song) {
+        return res.status(404).json({ error: "Pesma nije u biblioteci benda." });
+      }
+      snapshot = snapshotFromSong(song, req.body?.notes);
+    } else {
+      const title = String(req.body?.title || "").trim();
+      if (!title) {
+        return res.status(400).json({ error: "Izaberi pesmu ili unesi naslov.", detail: "Izaberi pesmu ili unesi naslov." });
+      }
+      const song = await createBandSong(req.bandId, {
+        title,
+        songKey: req.body?.songKey,
+        lyrics: req.body?.lyrics,
+        durationSec: req.body?.durationSec,
+      });
+      snapshot = snapshotFromSong(song, req.body?.notes);
+    }
+
+    const orderResult = await query(
+      `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order
+       FROM event_setlist_items
+       WHERE event_id = :eventId AND band_id = :bandId AND section = :section`,
+      { eventId, bandId: req.bandId, section },
+    );
+    const sortOrder = Number(orderResult.rows[0]?.next_order) || 1;
+
+    const result = await query(
+      `INSERT INTO event_setlist_items (
+         event_id, band_id, section, sort_order, song_id, title, song_key, lyrics, duration_sec, notes
+       ) VALUES (
+         :eventId, :bandId, :section, :sortOrder, :songId, :title, :songKey, :lyrics, :durationSec, :notes
+       )
+       RETURNING id, event_id, band_id, section, sort_order, song_id, title, song_key, lyrics,
+                 duration_sec, notes, created_at, updated_at`,
+      {
+        eventId,
+        bandId: req.bandId,
+        section,
+        sortOrder,
+        songId: snapshot.songId,
+        title: snapshot.title,
+        songKey: snapshot.songKey,
+        lyrics: snapshot.lyrics,
+        durationSec: snapshot.durationSec,
+        notes: snapshot.notes,
+      },
+    );
+
+    res.status(201).json(mapSetlistItemRow(result.rows[0]));
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.put(
+  "/api/events/:id/setlist/items/:itemId",
+  requireAuth,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const eventId = Number(req.params.id);
+      const itemId = Number(req.params.itemId);
+      if (!eventId || !itemId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      await assertCanEditSetlist(req);
+      await assertEventEditableForSetlist(eventId, req.bandId);
+
+      const existing = await query(
+        `SELECT id, section, song_id FROM event_setlist_items
+         WHERE id = :itemId AND event_id = :eventId AND band_id = :bandId
+         LIMIT 1`,
+        { itemId, eventId, bandId: req.bandId },
+      );
+      if (!existing.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      const nextSection = req.body?.section != null
+        ? normalizeSetlistSection(req.body.section)
+        : existing.rows[0].section;
+      const title = req.body?.title != null ? String(req.body.title).trim().slice(0, 200) : null;
+      if (title === "") {
+        return res.status(400).json({ error: "Naslov pesme je obavezan.", detail: "Naslov pesme je obavezan." });
+      }
+
+      const current = await query(
+        `SELECT title, song_key, lyrics, duration_sec, notes
+         FROM event_setlist_items
+         WHERE id = :itemId AND event_id = :eventId AND band_id = :bandId
+         LIMIT 1`,
+        { itemId, eventId, bandId: req.bandId },
+      );
+      const row = current.rows[0];
+
+      const payload = {
+        title: title ?? row.title,
+        songKey: req.body?.songKey != null ? String(req.body.songKey).trim().slice(0, 32) : row.song_key,
+        lyrics: req.body?.lyrics != null ? String(req.body.lyrics) : row.lyrics,
+        durationSec:
+          req.body?.durationSec !== undefined
+            ? normalizeDurationSec(req.body.durationSec)
+            : row.duration_sec == null
+              ? null
+              : Number(row.duration_sec),
+        notes: req.body?.notes != null ? String(req.body.notes).slice(0, 500) : row.notes,
+      };
+
+      if (req.body?.updateLibrary && existing.rows[0].song_id) {
+        await query(
+          `UPDATE band_songs
+           SET title = :title,
+               song_key = :songKey,
+               lyrics = :lyrics,
+               duration_sec = :durationSec,
+               updated_at = NOW()
+           WHERE id = :songId AND band_id = :bandId`,
+          {
+            songId: existing.rows[0].song_id,
+            bandId: req.bandId,
+            title: payload.title,
+            songKey: payload.songKey,
+            lyrics: payload.lyrics,
+            durationSec: payload.durationSec,
+          },
+        );
+      }
+
+      let sortOrder = null;
+      if (nextSection !== existing.rows[0].section) {
+        const orderResult = await query(
+          `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order
+           FROM event_setlist_items
+           WHERE event_id = :eventId AND band_id = :bandId AND section = :section`,
+          { eventId, bandId: req.bandId, section: nextSection },
+        );
+        sortOrder = Number(orderResult.rows[0]?.next_order) || 1;
+      }
+
+      const result = await query(
+        `UPDATE event_setlist_items
+         SET section = :section,
+             title = :title,
+             song_key = :songKey,
+             lyrics = :lyrics,
+             duration_sec = :durationSec,
+             notes = :notes,
+             sort_order = COALESCE(:sortOrder, sort_order),
+             updated_at = NOW()
+         WHERE id = :itemId AND event_id = :eventId AND band_id = :bandId
+         RETURNING id, event_id, band_id, section, sort_order, song_id, title, song_key, lyrics,
+                   duration_sec, notes, created_at, updated_at`,
+        {
+          itemId,
+          eventId,
+          bandId: req.bandId,
+          section: nextSection,
+          title: payload.title,
+          songKey: payload.songKey,
+          lyrics: payload.lyrics,
+          durationSec: payload.durationSec,
+          notes: payload.notes,
+          sortOrder,
+        },
+      );
+
+      res.json(mapSetlistItemRow(result.rows[0]));
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, detail: error.message });
+      }
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  "/api/events/:id/setlist/items/:itemId",
+  requireAuth,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const eventId = Number(req.params.id);
+      const itemId = Number(req.params.itemId);
+      if (!eventId || !itemId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      await assertCanEditSetlist(req);
+      await assertEventEditableForSetlist(eventId, req.bandId);
+
+      const existing = await query(
+        `SELECT id, section FROM event_setlist_items
+         WHERE id = :itemId AND event_id = :eventId AND band_id = :bandId
+         LIMIT 1`,
+        { itemId, eventId, bandId: req.bandId },
+      );
+      if (!existing.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      await query(
+        `DELETE FROM event_setlist_items
+         WHERE id = :itemId AND event_id = :eventId AND band_id = :bandId`,
+        { itemId, eventId, bandId: req.bandId },
+      );
+
+      const remaining = await query(
+        `SELECT id FROM event_setlist_items
+         WHERE event_id = :eventId AND band_id = :bandId AND section = :section
+         ORDER BY sort_order ASC, id ASC`,
+        { eventId, bandId: req.bandId, section: existing.rows[0].section },
+      );
+
+      await Promise.all(
+        remaining.rows.map((row, index) =>
+          query(`UPDATE event_setlist_items SET sort_order = :sortOrder WHERE id = :id`, {
+            id: row.id,
+            sortOrder: index + 1,
+          }),
+        ),
+      );
+
+      res.status(204).end();
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, detail: error.message });
+      }
+      next(error);
+    }
+  },
+);
+
+app.put("/api/events/:id/setlist/reorder", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const section = normalizeSetlistSection(req.body?.section);
+    const orderedIds = Array.isArray(req.body?.orderedIds)
+      ? req.body.orderedIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+      : [];
+
+    if (!eventId || !orderedIds.length) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+
+    await assertCanEditSetlist(req);
+    await assertEventEditableForSetlist(eventId, req.bandId);
+
+    const existing = await query(
+      `SELECT id FROM event_setlist_items
+       WHERE event_id = :eventId AND band_id = :bandId AND section = :section
+       ORDER BY sort_order ASC, id ASC`,
+      { eventId, bandId: req.bandId, section },
+    );
+    const existingIds = existing.rows.map((row) => row.id);
+    if (
+      existingIds.length !== orderedIds.length ||
+      !existingIds.every((id) => orderedIds.includes(id))
+    ) {
+      return res.status(400).json({ error: "Invalid reorder payload" });
+    }
+
+    await Promise.all(
+      orderedIds.map((id, index) =>
+        query(`UPDATE event_setlist_items SET sort_order = :sortOrder WHERE id = :id`, {
+          id,
+          sortOrder: index + 1,
+        }),
+      ),
+    );
+
+    const bundle = await loadSetlistBundle(eventId, req.bandId);
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...bundle,
+      canEdit: true,
     });
   } catch (error) {
     if (error.status) {

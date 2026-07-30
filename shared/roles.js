@@ -43,3 +43,10 @@ export function isBandSaradnik(bandRole) {
 export function bandRoleLabel(role) {
   return BAND_ROLE_LABELS[role] || role || "član";
 }
+
+/** Owner/lead always; members need can_edit_setlist; saradnik never. */
+export function canEditSetlist(memberRole, canEditSetlistFlag) {
+  if (isBandSaradnik(memberRole)) return false;
+  if (isBandLead(memberRole)) return true;
+  return Boolean(canEditSetlistFlag);
+}
