@@ -9835,3 +9835,132 @@ html[data-theme="dark"] body {
     display: none;
   }
 }
+
+/* Event rack stubs — same shell as technical rider, preview content only */
+.event-rack.is-amber {
+  --tech-input: #ff9f0a;
+}
+
+.event-rack.is-violet {
+  --tech-input: #bf5af2;
+}
+
+.event-rack.is-cyan {
+  --tech-input: #64d2ff;
+}
+
+.event-rack.is-lime {
+  --tech-input: #30d158;
+}
+
+.event-rack.is-pink {
+  --tech-input: #ff375f;
+}
+
+.event-rack-stats {
+  gap: 0.55rem 0.85rem;
+}
+
+.event-rack-preview-pill {
+  background: color-mix(in srgb, var(--tech-input) 14%, var(--tech-panel));
+  border: 1px solid color-mix(in srgb, var(--tech-input) 40%, transparent);
+  border-radius: 999px;
+  color: var(--tech-input);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-left: auto;
+  padding: 0.18rem 0.45rem;
+  text-transform: uppercase;
+}
+
+.event-rack-cell {
+  color: var(--tech-ink);
+  font-size: 0.74rem;
+}
+
+.event-rack-canvas {
+  background: var(--tech-panel);
+  border: 1px inset color-mix(in srgb, #fff 6%, transparent);
+  border-radius: 0.5rem;
+  margin-bottom: 0.65rem;
+  min-height: 9.5rem;
+  overflow: hidden;
+  padding: 0.85rem;
+  position: relative;
+}
+
+.event-rack-canvas-grid {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--tech-line) 75%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tech-line) 75%, transparent) 1px, transparent 1px);
+  background-size: 1.25rem 1.25rem;
+  inset: 0;
+  opacity: 0.55;
+  pointer-events: none;
+  position: absolute;
+}
+
+.event-rack-canvas-copy {
+  display: grid;
+  gap: 0.2rem;
+  position: relative;
+  z-index: 1;
+}
+
+.event-rack-canvas-copy strong {
+  font-size: 0.82rem;
+}
+
+.event-rack-canvas-copy span {
+  color: var(--tech-muted);
+  font-size: 0.72rem;
+}
+
+.event-rack-canvas-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+  position: relative;
+  z-index: 1;
+}
+
+.event-rack-chip {
+  background: color-mix(in srgb, var(--tech-bg) 55%, var(--tech-panel));
+  border: 1px solid var(--tech-line);
+  border-radius: 0.3rem;
+  color: var(--tech-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.28rem 0.45rem;
+}
+
+.event-rack-footnote {
+  color: var(--tech-muted);
+  font-size: 0.68rem;
+  margin: 0.65rem 0 0;
+}
+
+.event-rack .tech-rider-mode {
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+}
+
+.event-rack .tech-rider-mode-btn.is-input.is-active {
+  border-color: color-mix(in srgb, var(--tech-input) 55%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tech-input) 25%, transparent),
+    inset 0 0 12px color-mix(in srgb, var(--tech-input) 12%, transparent) !important;
+  color: var(--tech-input) !important;
+}
+
+.event-rack .tech-rider-table tbody tr,
+.event-rack .tech-rider-table tbody tr td {
+  background: color-mix(in srgb, var(--tech-input) 5%, var(--tech-panel)) !important;
+}
+
+.event-rack .tech-rider-table tbody tr:nth-child(even),
+.event-rack .tech-rider-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--tech-input) 7%, var(--tech-panel)) !important;
+}

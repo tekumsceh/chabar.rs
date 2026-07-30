@@ -13,6 +13,7 @@ import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
 import EventDayDetails from "./EventDayDetails.jsx";
 import TechnicalRiderPanel from "./TechnicalRiderPanel.jsx";
+import EventRackStubPanel from "./EventRackStubPanel.jsx";
 import FieldSelect from "./FieldSelect.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import { api } from "./api.js";
@@ -633,35 +634,23 @@ export default function EventPage({
           <FadeScroll viewportClassName="event-page-panel-scroll">
             {TECH_SUBTABS.map((item) =>
               techSubTab === item.id ? (
-                item.id === "technical-rider" ? (
-                  <div
-                    key={item.id}
-                    id={`event-tech-panel-${item.id}`}
-                    role="tabpanel"
-                    aria-labelledby={`event-tech-tab-${item.id}`}
-                  >
+                <div
+                  key={item.id}
+                  id={`event-tech-panel-${item.id}`}
+                  role="tabpanel"
+                  aria-labelledby={`event-tech-tab-${item.id}`}
+                >
+                  {item.id === "technical-rider" ? (
                     <TechnicalRiderPanel
                       eventId={event.id}
                       bandId={financeBandId}
                       readOnly={locked}
                       showToast={showToast}
                     />
-                  </div>
-                ) : (
-                  <div
-                    key={item.id}
-                    id={`event-tech-panel-${item.id}`}
-                    className="event-page-empty"
-                    role="tabpanel"
-                    aria-labelledby={`event-tech-tab-${item.id}`}
-                  >
-                    <span className="event-page-empty-icon" aria-hidden="true">
-                      <TechIcon />
-                    </span>
-                    <h3 className="event-page-stub-title">{item.label}</h3>
-                    <p className="event-page-stub-copy">Sadržaj uskoro.</p>
-                  </div>
-                )
+                  ) : (
+                    <EventRackStubPanel panelId={item.id} readOnly={locked} showToast={showToast} />
+                  )}
+                </div>
               ) : null,
             )}
           </FadeScroll>
@@ -697,15 +686,10 @@ export default function EventPage({
                 <div
                   key={item.id}
                   id={`event-show-panel-${item.id}`}
-                  className="event-page-empty"
                   role="tabpanel"
                   aria-labelledby={`event-show-tab-${item.id}`}
                 >
-                  <span className="event-page-empty-icon" aria-hidden="true">
-                    <ShowIcon />
-                  </span>
-                  <h3 className="event-page-stub-title">{item.label}</h3>
-                  <p className="event-page-stub-copy">Sadržaj uskoro.</p>
+                  <EventRackStubPanel panelId={item.id} readOnly={locked} showToast={showToast} />
                 </div>
               ) : null,
             )}
