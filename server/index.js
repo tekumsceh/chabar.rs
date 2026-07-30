@@ -77,6 +77,7 @@ import {
 import { rateLimit } from "./rateLimit.js";
 import { isBandLead, isBandSaradnik } from "../shared/roles.js";
 import { parseDate, startOfToday } from "../src/calculations.js";
+import { normalizeConsoleIds, resolveConsoleLimits } from "../src/mixingConsoles.js";
 
 const app = express();
 const port = Number(process.env.API_PORT || 3001);
@@ -1583,7 +1584,27 @@ function buildTechRiderStats(inputs, outputs) {
   };
 }
 
+function parseTechConsoleIds(raw) {
+  if (!raw) return [];
+  try {
+    return normalizeConsoleIds(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+function buildTechRiderLimits(consoleIds) {
+  const resolved = resolveConsoleLimits(consoleIds);
+  return { inputMax: resolved.inputMax, outputMax: resolved.outputMax };
+}
+
 async function loadTechRiderBundle(eventId, bandId) {
+  const eventResult = await query(
+    `SELECT tech_console_ids FROM events WHERE id = :eventId AND band_id = :bandId LIMIT 1`,
+    { eventId, bandId },
+  );
+  const consoleIds = parseTechConsoleIds(eventResult.rows[0]?.tech_console_ids);
+
   const result = await query(
     `SELECT id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
             phantom_48v, pad, stereo, level_db, notes, created_at, updated_at
@@ -1595,7 +1616,34 @@ async function loadTechRiderBundle(eventId, bandId) {
   const rows = result.rows.map(mapTechChannelRow);
   const inputs = rows.filter((row) => row.kind === "input");
   const outputs = rows.filter((row) => row.kind === "output");
-  return { inputs, outputs, stats: buildTechRiderStats(inputs, outputs) };
+  return {
+    inputs,
+    outputs,
+    stats: buildTechRiderStats(inputs, outputs),
+    consoleIds,
+    limits: buildTechRiderLimits(consoleIds),
+  };
+}
+
+async function assertTechChannelCapacity(eventId, bandId, kind) {
+  const bundle = await loadTechRiderBundle(eventId, bandId);
+  if (!bundle.consoleIds.length) {
+    const err = new Error("Izaberi mixing konzolu pre dodavanja kanala.");
+    err.status = 400;
+    throw err;
+  }
+  const list = kind === "output" ? bundle.outputs : bundle.inputs;
+  const max = kind === "output" ? bundle.limits.outputMax : bundle.limits.inputMax;
+  if (list.length >= max) {
+    const err = new Error(
+      kind === "output"
+        ? `Maksimum ${max} izlaza za izabrane konzole.`
+        : `Maksimum ${max} ulaza za izabrane konzole.`,
+    );
+    err.status = 400;
+    throw err;
+  }
+  return bundle;
 }
 
 async function assertEventEditableForTechRider(eventId, bandId) {
@@ -1647,6 +1695,7 @@ app.post("/api/events/:id/tech-rider/channels", requireAuth, requireBandMember, 
 
     await assertEventEditableForTechRider(eventId, req.bandId);
     const channel = normalizeTechChannel(req.body || {});
+    await assertTechChannelCapacity(eventId, req.bandId, channel.kind);
 
     const orderResult = await query(
       `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order
@@ -1849,6 +1898,41 @@ app.put("/api/events/:id/tech-rider/reorder", requireAuth, requireBandMember, as
           sortOrder: index + 1,
         }),
       ),
+    );
+
+    const bundle = await loadTechRiderBundle(eventId, req.bandId);
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...bundle,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.put("/api/events/:id/tech-rider/consoles", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+
+    await assertEventEditableForTechRider(eventId, req.bandId);
+    const consoleIds = normalizeConsoleIds(req.body?.consoleIds);
+
+    await query(
+      `UPDATE events
+       SET tech_console_ids = :consoleIds, updated_at = NOW()
+       WHERE id = :eventId AND band_id = :bandId`,
+      {
+        eventId,
+        bandId: req.bandId,
+        consoleIds: JSON.stringify(consoleIds),
+      },
     );
 
     const bundle = await loadTechRiderBundle(eventId, req.bandId);

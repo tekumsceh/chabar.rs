@@ -8956,16 +8956,222 @@ html[data-theme="dark"] body {
 }
 
 .tech-rider-stats {
+  align-items: center;
   background: var(--tech-panel);
   border: 1px inset color-mix(in srgb, #fff 8%, transparent);
   border-radius: 0.45rem;
   color: var(--tech-muted);
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   font-size: 0.72rem;
-  gap: 0.65rem 1rem;
+  gap: 0.65rem 0.85rem;
   margin-bottom: 0.65rem;
-  padding: 0.45rem 0.65rem;
+  min-height: 1.65rem;
+  overflow: visible;
+  padding: 0.28rem 0.55rem;
+}
+
+.tech-rider-stats > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.tech-rider-console-select {
+  flex: 0 0 auto;
+  margin-left: auto;
+  position: relative;
+}
+
+.tech-rider-console-select-trigger {
+  align-items: center;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--tech-muted) !important;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.72rem !important;
+  gap: 0.28rem;
+  justify-content: flex-end;
+  line-height: 1.2;
+  min-height: 0 !important;
+  padding: 0 !important;
+  text-align: left;
+  transform: none !important;
+  width: auto;
+}
+
+.tech-rider-console-select-trigger:hover:not(:disabled) {
+  background: transparent !important;
+  color: var(--tech-ink) !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.tech-rider-console-select.is-open .tech-rider-console-select-trigger {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--tech-input) !important;
+}
+
+.tech-rider-console-select-label {
+  color: inherit;
+  flex-shrink: 0;
+  font-size: inherit;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tech-rider-console-select-label::after {
+  content: ":";
+}
+
+.tech-rider-console-select-value {
+  color: var(--tech-ink);
+  flex: 0 1 auto;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: inherit;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: inherit;
+  max-width: 5.5rem;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tech-rider-console-select-value.is-placeholder {
+  color: var(--tech-muted);
+  font-weight: 700;
+}
+
+.tech-rider-console-select-chevron {
+  flex-shrink: 0;
+  height: 0.45rem;
+  opacity: 0.7;
+  transition: transform 140ms ease;
+  width: 0.6rem;
+}
+
+.tech-rider-console-select.is-open .tech-rider-console-select-chevron {
+  transform: rotate(180deg);
+}
+
+.tech-rider-console-select-menu {
+  --tech-bg: #121214;
+  --tech-panel: #1e1e22;
+  --tech-line: #2c2c31;
+  --tech-ink: #ececef;
+  --tech-muted: #9898a0;
+  --tech-input: #64d2ff;
+  background: var(--tech-panel);
+  border: 1px solid color-mix(in srgb, var(--tech-line) 82%, var(--tech-muted) 18%);
+  border-radius: 0.4rem;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+  color: var(--tech-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: min(16rem, calc(100vh - 2rem));
+  overflow: auto;
+  padding: 0.35rem;
+  position: fixed;
+  z-index: 1400;
+}
+
+.tech-rider-console-select-group + .tech-rider-console-select-group {
+  border-top: 1px solid color-mix(in srgb, var(--tech-line) 72%, transparent);
+  margin-top: 0.12rem;
+  padding-top: 0.35rem;
+}
+
+.tech-rider-console-select-maker {
+  color: var(--tech-muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.2rem;
+  padding: 0 0.15rem;
+  text-transform: uppercase;
+}
+
+.tech-rider-console-select-models {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.tech-rider-console-select-item {
+  align-items: center;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.32rem !important;
+  box-shadow: none !important;
+  color: var(--tech-ink) !important;
+  cursor: pointer;
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.35rem 0.4rem !important;
+  text-align: left;
+  transform: none !important;
+  width: 100%;
+}
+
+.tech-rider-console-select-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tech-input) 8%, var(--tech-panel)) !important;
+  border-color: color-mix(in srgb, var(--tech-input) 18%, transparent) !important;
+}
+
+.tech-rider-console-select-item.is-checked {
+  background: color-mix(in srgb, var(--tech-input) 10%, var(--tech-panel)) !important;
+  border-color: color-mix(in srgb, var(--tech-input) 28%, transparent) !important;
+}
+
+.tech-rider-console-check {
+  align-items: center;
+  background: color-mix(in srgb, var(--tech-bg) 70%, var(--tech-panel));
+  border: 1px solid color-mix(in srgb, var(--tech-line) 88%, var(--tech-muted) 12%);
+  border-radius: 0.22rem;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 0.95rem;
+  justify-content: center;
+  width: 0.95rem;
+}
+
+.tech-rider-console-select-item.is-checked .tech-rider-console-check {
+  background: color-mix(in srgb, var(--tech-input) 18%, var(--tech-panel));
+  border-color: color-mix(in srgb, var(--tech-input) 55%, var(--tech-line));
+  color: var(--tech-input);
+}
+
+.tech-rider-console-check svg {
+  display: block;
+  height: 0.72rem;
+  width: 0.72rem;
+}
+
+.tech-rider-console-select-copy {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.tech-rider-console-select-copy strong {
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.tech-rider-console-select-copy small {
+  color: var(--tech-muted);
+  font-size: 0.58rem;
+  line-height: 1.2;
 }
 
 .tech-rider-stats strong {

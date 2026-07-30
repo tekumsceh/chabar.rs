@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "./api.js";
+import { MIXING_CONSOLE_GROUPS } from "./mixingConsoles.js";
 import {
   CABLE_PRESETS,
   emptyTechChannel,
@@ -9,6 +11,8 @@ import {
   POPULAR_GEAR,
 } from "./techRiderPresets.js";
 
+const SAVE_DEBOUNCE_MS = 700;
+
 function formatInputCh(index) {
   return String(index + 1).padStart(2, "0");
 }
@@ -17,11 +21,45 @@ function formatOutputCh(index) {
   return `A${index + 1}`;
 }
 
+function channelSnapshot(row) {
+  return {
+    kind: row.kind,
+    label: row.label ?? "",
+    gear: row.gear ?? "",
+    cable: row.cable ?? "",
+    hardware: row.hardware ?? "",
+    phantom48v: Boolean(row.phantom48v),
+    pad: Boolean(row.pad),
+    stereo: Boolean(row.stereo),
+    levelDb: row.levelDb == null || row.levelDb === "" ? null : Number(row.levelDb),
+    notes: row.notes ?? "",
+  };
+}
+
+function sameChannelContent(a, b) {
+  const left = channelSnapshot(a);
+  const right = channelSnapshot(b);
+  return (
+    left.kind === right.kind &&
+    left.label === right.label &&
+    left.gear === right.gear &&
+    left.cable === right.cable &&
+    left.hardware === right.hardware &&
+    left.phantom48v === right.phantom48v &&
+    left.pad === right.pad &&
+    left.stereo === right.stereo &&
+    left.levelDb === right.levelDb &&
+    left.notes === right.notes
+  );
+}
+
 export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false, showToast }) {
   const [mode, setMode] = useState("input");
   const [inputs, setInputs] = useState([]);
   const [outputs, setOutputs] = useState([]);
   const [stats, setStats] = useState({ inputCount: 0, outputCount: 0, phantom48vActive: 0 });
+  const [consoleIds, setConsoleIds] = useState([]);
+  const [limits, setLimits] = useState({ inputMax: 0, outputMax: 0 });
   const [loading, setLoading] = useState(Boolean(eventId && bandId));
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -30,7 +68,18 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   const [drawerDraft, setDrawerDraft] = useState(null);
   const [gearCategory, setGearCategory] = useState("dynamic");
 
+  const inputsRef = useRef(inputs);
+  const outputsRef = useRef(outputs);
+  const saveTimersRef = useRef(new Map());
+  const saveInFlightRef = useRef(new Map());
+
+  inputsRef.current = inputs;
+  outputsRef.current = outputs;
+
   const channels = mode === "output" ? outputs : inputs;
+  const activeLimit = mode === "output" ? limits.outputMax : limits.inputMax;
+  const atChannelLimit = activeLimit > 0 && channels.length >= activeLimit;
+  const canAddChannel = !readOnly && consoleIds.length > 0 && !atChannelLimit;
 
   const filteredChannels = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -42,6 +91,14 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         .includes(q),
     );
   }, [channels, search]);
+
+  function refreshStats(nextInputs = inputsRef.current, nextOutputs = outputsRef.current) {
+    setStats({
+      inputCount: nextInputs.length,
+      outputCount: nextOutputs.length,
+      phantom48vActive: nextInputs.filter((row) => row.phantom48v).length,
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -58,9 +115,13 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       try {
         const data = await api(`/api/events/${eventId}/tech-rider`, { bandId });
         if (cancelled) return;
-        setInputs(Array.isArray(data.inputs) ? data.inputs : []);
-        setOutputs(Array.isArray(data.outputs) ? data.outputs : []);
+        const nextInputs = Array.isArray(data.inputs) ? data.inputs : [];
+        const nextOutputs = Array.isArray(data.outputs) ? data.outputs : [];
+        setInputs(nextInputs);
+        setOutputs(nextOutputs);
         setStats(data.stats || { inputCount: 0, outputCount: 0, phantom48vActive: 0 });
+        setConsoleIds(Array.isArray(data.consoleIds) ? data.consoleIds : []);
+        setLimits(data.limits || { inputMax: 0, outputMax: 0 });
       } catch (requestError) {
         if (!cancelled) {
           setError(requestError.message || "Rider nije učitan.");
@@ -72,6 +133,10 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
     load();
     return () => {
       cancelled = true;
+      for (const timer of saveTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      saveTimersRef.current.clear();
     };
   }, [eventId, bandId]);
 
@@ -79,19 +144,183 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
     setInputs(Array.isArray(data.inputs) ? data.inputs : []);
     setOutputs(Array.isArray(data.outputs) ? data.outputs : []);
     setStats(data.stats || { inputCount: 0, outputCount: 0, phantom48vActive: 0 });
+    setConsoleIds(Array.isArray(data.consoleIds) ? data.consoleIds : []);
+    setLimits(data.limits || { inputMax: 0, outputMax: 0 });
+  }
+
+  function getChannel(id, kind) {
+    const list = kind === "output" ? outputsRef.current : inputsRef.current;
+    return list.find((row) => row.id === id) || null;
+  }
+
+  async function persistChannel(id, kind) {
+    if (readOnly || !eventId || !bandId) return;
+    const channel = getChannel(id, kind);
+    if (!channel) return;
+
+    const snapshot = channelSnapshot(channel);
+    const key = String(id);
+    const previous = saveInFlightRef.current.get(key);
+    if (previous) await previous.catch(() => {});
+
+    const request = (async () => {
+      try {
+        const updated = await api(`/api/events/${eventId}/tech-rider/channels/${id}`, {
+          method: "PUT",
+          bandId,
+          body: { ...channel, ...snapshot },
+        });
+        const reconcile = (list) =>
+          list.map((row) => {
+            if (row.id !== id) return row;
+            // Keep newer local typing if the user kept editing during the request.
+            if (!sameChannelContent(row, snapshot)) return row;
+            return updated;
+          });
+        if (kind === "output") {
+          setOutputs(reconcile);
+        } else {
+          setInputs((current) => {
+            const next = reconcile(current);
+            refreshStats(next, outputsRef.current);
+            return next;
+          });
+        }
+      } catch (requestError) {
+        showToast?.(requestError.message || "Kanal nije sačuvan", "error");
+      } finally {
+        if (saveInFlightRef.current.get(key) === request) {
+          saveInFlightRef.current.delete(key);
+        }
+      }
+    })();
+
+    saveInFlightRef.current.set(key, request);
+    await request;
+  }
+
+  function scheduleSave(id, kind) {
+    if (readOnly || !id) return;
+    const key = String(id);
+    const existing = saveTimersRef.current.get(key);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      saveTimersRef.current.delete(key);
+      persistChannel(id, kind);
+    }, SAVE_DEBOUNCE_MS);
+    saveTimersRef.current.set(key, timer);
+  }
+
+  async function flushSave(id, kind) {
+    if (!id) return;
+    const key = String(id);
+    const existing = saveTimersRef.current.get(key);
+    if (existing) {
+      clearTimeout(existing);
+      saveTimersRef.current.delete(key);
+    }
+    await persistChannel(id, kind);
+  }
+
+  async function flushAllPending() {
+    const pending = [...saveTimersRef.current.entries()];
+    saveTimersRef.current.clear();
+    for (const [, timer] of pending) clearTimeout(timer);
+
+    const ids = new Set([
+      ...pending.map(([id]) => id),
+      ...saveInFlightRef.current.keys(),
+    ]);
+    await Promise.all(
+      [...ids].map(async (id) => {
+        const channel =
+          inputsRef.current.find((row) => String(row.id) === String(id)) ||
+          outputsRef.current.find((row) => String(row.id) === String(id));
+        if (!channel) return;
+        await persistChannel(channel.id, channel.kind);
+      }),
+    );
+  }
+
+  function updateChannel(id, kind, patch) {
+    if (kind === "output") {
+      const next = outputsRef.current.map((row) => (row.id === id ? { ...row, ...patch } : row));
+      outputsRef.current = next;
+      setOutputs(next);
+    } else {
+      const next = inputsRef.current.map((row) => (row.id === id ? { ...row, ...patch } : row));
+      inputsRef.current = next;
+      setInputs(next);
+      if ("phantom48v" in patch) refreshStats(next, outputsRef.current);
+    }
+    scheduleSave(id, kind);
+  }
+
+  async function saveConsoles(nextIds) {
+    if (readOnly || !eventId || !bandId) return;
+    const previousIds = consoleIds;
+    setConsoleIds(nextIds);
+    try {
+      await flushAllPending();
+      const data = await api(`/api/events/${eventId}/tech-rider/consoles`, {
+        method: "PUT",
+        bandId,
+        body: { consoleIds: nextIds },
+      });
+      // Only sync console selection/limits — do not replace channel rows.
+      setConsoleIds(Array.isArray(data.consoleIds) ? data.consoleIds : nextIds);
+      setLimits(data.limits || { inputMax: 0, outputMax: 0 });
+    } catch (requestError) {
+      setConsoleIds(previousIds);
+      showToast?.(requestError.message || "Konzole nisu sačuvane", "error");
+    }
+  }
+
+  function toggleConsole(consoleId) {
+    const nextIds = consoleIds.includes(consoleId)
+      ? consoleIds.filter((id) => id !== consoleId)
+      : [...consoleIds, consoleId];
+    saveConsoles(nextIds);
   }
 
   async function addChannel() {
     if (readOnly || !eventId || !bandId) return;
+    if (!consoleIds.length) {
+      showToast?.("Izaberi mixing konzolu pre dodavanja kanala.", "error");
+      return;
+    }
+    if (atChannelLimit) {
+      showToast?.(
+        mode === "output"
+          ? `Maksimum ${limits.outputMax} izlaza za izabrane konzole.`
+          : `Maksimum ${limits.inputMax} ulaza za izabrane konzole.`,
+        "error",
+      );
+      return;
+    }
     setBusyId("add");
     try {
-      await api(`/api/events/${eventId}/tech-rider/channels`, {
+      await flushAllPending();
+      const created = await api(`/api/events/${eventId}/tech-rider/channels`, {
         method: "POST",
         bandId,
         body: emptyTechChannel(mode),
       });
-      const data = await api(`/api/events/${eventId}/tech-rider`, { bandId });
-      applyBundle(data);
+      if (mode === "output") {
+        setOutputs((current) => {
+          const next = [...current, created];
+          outputsRef.current = next;
+          refreshStats(inputsRef.current, next);
+          return next;
+        });
+      } else {
+        setInputs((current) => {
+          const next = [...current, created];
+          inputsRef.current = next;
+          refreshStats(next, outputsRef.current);
+          return next;
+        });
+      }
       showToast?.(mode === "output" ? "Output dodat" : "Input dodat");
     } catch (requestError) {
       showToast?.(requestError.message || "Kanal nije dodat", "error");
@@ -102,73 +331,34 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
 
   async function saveChannel(channel, patch) {
     if (readOnly || !eventId || !bandId) return;
-    const next = { ...channel, ...patch };
-    const applyLocal = (list) => list.map((row) => (row.id === channel.id ? next : row));
-
-    if (channel.kind === "output") {
-      setOutputs(applyLocal);
-    } else {
-      setInputs((current) => {
-        const updated = applyLocal(current);
-        if ("phantom48v" in patch) {
-          setStats((currentStats) => ({
-            ...currentStats,
-            phantom48vActive: updated.filter((row) => row.phantom48v).length,
-          }));
-        }
-        return updated;
-      });
-    }
-
-    try {
-      const updated = await api(`/api/events/${eventId}/tech-rider/channels/${channel.id}`, {
-        method: "PUT",
-        bandId,
-        body: next,
-      });
-      const reconcile = (list) => list.map((row) => (row.id === channel.id ? updated : row));
-      if (channel.kind === "output") {
-        setOutputs(reconcile);
-      } else {
-        setInputs((current) => {
-          const reconciled = reconcile(current);
-          if ("phantom48v" in patch) {
-            setStats((currentStats) => ({
-              ...currentStats,
-              phantom48vActive: reconciled.filter((row) => row.phantom48v).length,
-            }));
-          }
-          return reconciled;
-        });
-      }
-    } catch (requestError) {
-      const revert = (list) => list.map((row) => (row.id === channel.id ? channel : row));
-      if (channel.kind === "output") {
-        setOutputs(revert);
-      } else {
-        setInputs((current) => {
-          const restored = revert(current);
-          setStats((currentStats) => ({
-            ...currentStats,
-            phantom48vActive: restored.filter((row) => row.phantom48v).length,
-          }));
-          return restored;
-        });
-      }
-      showToast?.(requestError.message || "Kanal nije sačuvan", "error");
-    }
+    updateChannel(channel.id, channel.kind, patch);
+    await flushSave(channel.id, channel.kind);
   }
 
   async function removeChannel(channel) {
     if (readOnly || !eventId || !bandId) return;
     setBusyId(String(channel.id));
     try {
+      await flushAllPending();
       await api(`/api/events/${eventId}/tech-rider/channels/${channel.id}`, {
         method: "DELETE",
         bandId,
       });
-      const data = await api(`/api/events/${eventId}/tech-rider`, { bandId });
-      applyBundle(data);
+      if (channel.kind === "output") {
+        setOutputs((current) => {
+          const next = current.filter((row) => row.id !== channel.id);
+          outputsRef.current = next;
+          refreshStats(inputsRef.current, next);
+          return next;
+        });
+      } else {
+        setInputs((current) => {
+          const next = current.filter((row) => row.id !== channel.id);
+          inputsRef.current = next;
+          refreshStats(next, outputsRef.current);
+          return next;
+        });
+      }
       showToast?.("Kanal obrisan");
     } catch (requestError) {
       showToast?.(requestError.message || "Brisanje nije uspelo", "error");
@@ -179,7 +369,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
 
   async function moveChannel(channel, direction) {
     if (readOnly || !eventId || !bandId) return;
-    const list = channel.kind === "output" ? outputs : inputs;
+    const list = channel.kind === "output" ? outputsRef.current : inputsRef.current;
     const index = list.findIndex((row) => row.id === channel.id);
     const target = index + direction;
     if (index < 0 || target < 0 || target >= list.length) return;
@@ -189,6 +379,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
 
     setBusyId(String(channel.id));
     try {
+      await flushAllPending();
       const data = await api(`/api/events/${eventId}/tech-rider/reorder`, {
         method: "PUT",
         bandId,
@@ -238,7 +429,14 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           <button
             type="button"
             className="tech-rider-add-btn"
-            disabled={busyId === "add"}
+            disabled={busyId === "add" || !canAddChannel}
+            title={
+              !consoleIds.length
+                ? "Izaberi mixing konzolu u stats traci"
+                : atChannelLimit
+                  ? `Maksimum ${activeLimit} kanala za izabrane konzole`
+                  : "+ Dodaj kanal"
+            }
             onClick={addChannel}
           >
             {busyId === "add" ? "…" : "+ Add channel"}
@@ -248,14 +446,28 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
 
       <div className="tech-rider-stats" aria-label="Patch statistika">
         <span>
-          Inputs: <strong>{stats.inputCount}</strong>/32
+          Inputs:{" "}
+          <strong>
+            {stats.inputCount}
+            {limits.inputMax ? `/${limits.inputMax}` : ""}
+          </strong>
         </span>
         <span>
-          Aux outs: <strong>{stats.outputCount}</strong>
+          Aux outs:{" "}
+          <strong>
+            {stats.outputCount}
+            {limits.outputMax ? `/${limits.outputMax}` : ""}
+          </strong>
         </span>
         <span>
           +48V active: <strong>{stats.phantom48vActive}</strong>
         </span>
+        <ConsoleMultiSelect
+          groups={MIXING_CONSOLE_GROUPS}
+          selectedIds={consoleIds}
+          readOnly={readOnly}
+          onToggle={toggleConsole}
+        />
       </div>
 
       <div className="tech-rider-mode" role="tablist" aria-label="Patch mode">
@@ -331,18 +543,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                         value={channel.label}
                         readOnly={readOnly}
                         placeholder={mode === "output" ? "Mon 1" : "Kick In"}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const updater = (list) =>
-                            list.map((row) => (row.id === channel.id ? { ...row, label: value } : row));
-                          if (mode === "output") setOutputs(updater);
-                          else setInputs(updater);
-                        }}
-                        onBlur={(e) => {
-                          if (e.target.value !== channel.label) {
-                            saveChannel(channel, { label: e.target.value });
-                          }
-                        }}
+                        onChange={(e) => updateChannel(channel.id, channel.kind, { label: e.target.value })}
+                        onBlur={() => flushSave(channel.id, channel.kind)}
                       />
                     </td>
                     <td>
@@ -351,18 +553,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                         value={channel.gear}
                         readOnly={readOnly}
                         placeholder="Mic / DI"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const updater = (list) =>
-                            list.map((row) => (row.id === channel.id ? { ...row, gear: value } : row));
-                          if (mode === "output") setOutputs(updater);
-                          else setInputs(updater);
-                        }}
-                        onBlur={(e) => {
-                          if (e.target.value !== channel.gear) {
-                            saveChannel(channel, { gear: e.target.value });
-                          }
-                        }}
+                        onChange={(e) => updateChannel(channel.id, channel.kind, { gear: e.target.value })}
+                        onBlur={() => flushSave(channel.id, channel.kind)}
                       />
                     </td>
                     <td>
@@ -371,18 +563,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                         value={channel.cable}
                         readOnly={readOnly}
                         placeholder="XLR 3-Pin"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const updater = (list) =>
-                            list.map((row) => (row.id === channel.id ? { ...row, cable: value } : row));
-                          if (mode === "output") setOutputs(updater);
-                          else setInputs(updater);
-                        }}
-                        onBlur={(e) => {
-                          if (e.target.value !== channel.cable) {
-                            saveChannel(channel, { cable: e.target.value });
-                          }
-                        }}
+                        onChange={(e) => updateChannel(channel.id, channel.kind, { cable: e.target.value })}
+                        onBlur={() => flushSave(channel.id, channel.kind)}
                       />
                     </td>
                     <td>
@@ -391,18 +573,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                         value={channel.hardware}
                         readOnly={readOnly}
                         placeholder="Stand / rack"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const updater = (list) =>
-                            list.map((row) => (row.id === channel.id ? { ...row, hardware: value } : row));
-                          if (mode === "output") setOutputs(updater);
-                          else setInputs(updater);
-                        }}
-                        onBlur={(e) => {
-                          if (e.target.value !== channel.hardware) {
-                            saveChannel(channel, { hardware: e.target.value });
-                          }
-                        }}
+                        onChange={(e) => updateChannel(channel.id, channel.kind, { hardware: e.target.value })}
+                        onBlur={() => flushSave(channel.id, channel.kind)}
                       />
                     </td>
                     {mode === "input" ? (
@@ -445,20 +617,18 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                             value={channel.levelDb ?? ""}
                             readOnly={readOnly}
                             placeholder="0 dB"
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              const updater = (list) =>
-                                list.map((row) =>
-                                  row.id === channel.id ? { ...row, levelDb: value } : row,
-                                );
-                              setOutputs(updater);
-                            }}
-                            onBlur={(e) => {
-                              const raw = e.target.value.trim();
+                            onChange={(e) =>
+                              updateChannel(channel.id, channel.kind, { levelDb: e.target.value })
+                            }
+                            onBlur={() => {
+                              const raw = String(
+                                outputsRef.current.find((row) => row.id === channel.id)?.levelDb ?? "",
+                              ).trim();
                               const parsed = raw === "" ? null : Number(raw.replace(",", "."));
-                              if (parsed !== channel.levelDb) {
-                                saveChannel(channel, { levelDb: parsed });
-                              }
+                              updateChannel(channel.id, channel.kind, {
+                                levelDb: Number.isFinite(parsed) ? parsed : null,
+                              });
+                              flushSave(channel.id, channel.kind);
                             }}
                           />
                         </td>
@@ -598,7 +768,12 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       </ul>
 
       {readOnly ? null : (
-        <button type="button" className="tech-rider-mobile-add" disabled={busyId === "add"} onClick={addChannel}>
+        <button
+          type="button"
+          className="tech-rider-mobile-add"
+          disabled={busyId === "add" || !canAddChannel}
+          onClick={addChannel}
+        >
           + Add new channel line
         </button>
       )}
@@ -701,6 +876,171 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ConsoleMultiSelect({ groups, selectedIds, readOnly = false, onToggle }) {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const flatConsoles = useMemo(
+    () => groups.flatMap((group) => group.consoles.map((item) => ({ ...item, maker: group.maker }))),
+    [groups],
+  );
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function updatePosition() {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = 14.5 * 16;
+      const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
+      setMenuPos({
+        top: rect.bottom + 4,
+        left,
+        width,
+      });
+    }
+
+    function handlePointerDown(event) {
+      if (!rootRef.current?.contains(event.target) && !event.target.closest?.(".tech-rider-console-select-menu")) {
+        setOpen(false);
+      }
+    }
+
+    function handleKey(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    updatePosition();
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
+  const summary = useMemo(() => {
+    if (!selectedIds.length) return "—";
+    if (selectedIds.length === 1) {
+      const match = flatConsoles.find((item) => item.id === selectedIds[0]);
+      return match?.model || "1";
+    }
+    return String(selectedIds.length);
+  }, [flatConsoles, selectedIds]);
+
+  const menu = open && menuPos ? (
+    <div
+      className="tech-rider-console-select-menu"
+      role="listbox"
+      aria-multiselectable="true"
+      aria-label="Mixing konzole"
+      style={{
+        top: `${menuPos.top}px`,
+        left: `${menuPos.left}px`,
+        width: `${menuPos.width}px`,
+      }}
+    >
+      {groups.map((group) => (
+        <div key={group.maker} className="tech-rider-console-select-group">
+          <div className="tech-rider-console-select-maker">{group.maker}</div>
+          <div className="tech-rider-console-select-models">
+            {group.consoles.map((item) => {
+              const checked = selectedIds.includes(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={checked}
+                  className={`tech-rider-console-select-item ${checked ? "is-checked" : ""}`}
+                  onClick={() => onToggle(item.id)}
+                >
+                  <span className="tech-rider-console-check" aria-hidden="true">
+                    {checked ? <ConsoleCheckIcon /> : null}
+                  </span>
+                  <span className="tech-rider-console-select-copy">
+                    <strong>{item.model}</strong>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
+  return (
+    <div ref={rootRef} className={`tech-rider-console-select ${open ? "is-open" : ""}`}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="tech-rider-console-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={
+          selectedIds.length
+            ? `Console: ${selectedIds.length} selected`
+            : "Izaberi mixing konzole"
+        }
+        disabled={readOnly}
+        onClick={() => {
+          if (readOnly) return;
+          setOpen((current) => {
+            const next = !current;
+            if (next) {
+              const rect = triggerRef.current?.getBoundingClientRect();
+              if (rect) {
+                const width = 14.5 * 16;
+                const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
+                setMenuPos({ top: rect.bottom + 4, left, width });
+              }
+            } else {
+              setMenuPos(null);
+            }
+            return next;
+          });
+        }}
+      >
+        <span className="tech-rider-console-select-label">Console</span>
+        <span className={`tech-rider-console-select-value ${selectedIds.length ? "" : "is-placeholder"}`}>
+          {summary}
+        </span>
+        <ConsoleSelectChevron />
+      </button>
+      {typeof document !== "undefined" && menu ? createPortal(menu, document.body) : null}
+    </div>
+  );
+}
+
+function ConsoleSelectChevron() {
+  return (
+    <svg className="tech-rider-console-select-chevron" viewBox="0 0 12 8" aria-hidden="true" focusable="false">
+      <path d="M1.5 1.5 6 6l4.5-4.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+function ConsoleCheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path
+        d="M3.5 8.2 6.8 11.5 12.5 4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
   );
 }
 
