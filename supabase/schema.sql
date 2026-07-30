@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS events (
   event_date_text VARCHAR(32) NOT NULL DEFAULT '',
   city VARCHAR(255) NOT NULL DEFAULT '',
   venue VARCHAR(255) NOT NULL DEFAULT '',
+  maps_url TEXT NOT NULL DEFAULT '',
   note VARCHAR(255) NOT NULL DEFAULT '',
   price_eur NUMERIC(12, 2) NOT NULL DEFAULT 0,
   transport_rsd NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -85,6 +86,28 @@ CREATE TABLE IF NOT EXISTS event_assignees (
 
 CREATE INDEX IF NOT EXISTS event_assignees_user_id_idx ON event_assignees(user_id);
 CREATE INDEX IF NOT EXISTS event_assignees_event_id_idx ON event_assignees(event_id);
+
+CREATE TABLE IF NOT EXISTS event_tech_channels (
+  id SERIAL PRIMARY KEY,
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('input', 'output')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  label TEXT NOT NULL DEFAULT '',
+  gear TEXT NOT NULL DEFAULT '',
+  cable TEXT NOT NULL DEFAULT '',
+  hardware TEXT NOT NULL DEFAULT '',
+  phantom_48v BOOLEAN NOT NULL DEFAULT FALSE,
+  pad BOOLEAN NOT NULL DEFAULT FALSE,
+  stereo BOOLEAN NOT NULL DEFAULT FALSE,
+  level_db NUMERIC(6, 1) NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS event_tech_channels_event_kind_idx
+  ON event_tech_channels (event_id, kind, sort_order);
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$

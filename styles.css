@@ -7299,6 +7299,69 @@ html[data-theme="dark"] body {
   white-space: nowrap;
 }
 
+.venue-with-maps {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.35rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.venue-with-maps-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.venue-maps-btn {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.35rem;
+  justify-content: center;
+  text-decoration: none;
+  width: 1.35rem;
+}
+
+.venue-maps-btn svg {
+  height: 1rem;
+  width: 1rem;
+}
+
+.venue-maps-btn:hover,
+.venue-maps-btn:focus-visible {
+  color: var(--brand-dark, var(--brand));
+}
+
+.event-page-sub .venue-with-maps-name {
+  font-weight: 600;
+}
+
+.event-page-sub-sep {
+  color: inherit;
+}
+
+.event-venue-maps-hint {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 0.65rem;
+  margin: -0.35rem 0 0;
+}
+
+.event-venue-maps-clear {
+  background: transparent;
+  border: 0;
+  color: var(--brand-dark, var(--brand));
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
 .event-page-lock {
   align-items: center;
   border: 1px solid transparent;
@@ -7405,7 +7468,56 @@ html[data-theme="dark"] body {
   color: var(--ink) !important;
 }
 
-.event-page-tabs-shell > .event-page-panel {
+.event-page-subtabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.35rem;
+  margin: 0;
+  overflow-x: auto;
+  padding: 0.55rem 0.75rem 0.15rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.event-page-subtabs::-webkit-scrollbar {
+  display: none;
+}
+
+.event-page-subtab {
+  background: color-mix(in srgb, var(--ink) 4%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent) !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+  flex: 0 0 auto;
+  font-size: 0.72rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  min-height: 1.85rem;
+  padding: 0.28rem 0.7rem !important;
+  transform: none !important;
+  white-space: nowrap;
+}
+
+.event-page-subtab:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent) !important;
+  border-color: color-mix(in srgb, var(--line) 85%, transparent) !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  transform: none !important;
+}
+
+.event-page-subtab.is-active {
+  background: color-mix(in srgb, var(--brand) 14%, transparent) !important;
+  border-color: color-mix(in srgb, var(--brand) 35%, transparent) !important;
+  box-shadow: none !important;
+  color: var(--brand-dark, var(--brand)) !important;
+  font-weight: 750 !important;
+  transform: none !important;
+}
+
+.event-page-panel {
   border: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
   border-radius: 0 0 0.75rem 0.75rem;
   border-top: 0;
@@ -8774,5 +8886,746 @@ html[data-theme="dark"] body {
 @media (min-width: 980px) {
   .btn-showcase-page {
     max-width: 52rem;
+  }
+}
+
+
+/* Technical rider — rack/console aesthetic (scoped) */
+.tech-rider {
+  --tech-bg: #121214;
+  --tech-panel: #1e1e22;
+  --tech-line: #2c2c31;
+  --tech-ink: #ececef;
+  --tech-muted: #9898a0;
+  --tech-input: #64d2ff;
+  --tech-output: #30d158;
+  --tech-phantom: #ff9f0a;
+  --tech-pad: #ff453a;
+  background: linear-gradient(180deg, var(--tech-bg) 0%, #0e0e10 100%);
+  border: 1px solid var(--tech-line);
+  border-radius: 0.65rem;
+  color: var(--tech-ink);
+  font-family: Inter, system-ui, sans-serif;
+  padding: 0.85rem;
+}
+
+.tech-rider-status {
+  color: var(--muted);
+  margin: 0;
+  padding: 1rem 0.25rem;
+}
+
+.tech-rider-status.is-error {
+  color: #ff453a;
+}
+
+.tech-rider-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.tech-rider-eyebrow {
+  color: var(--tech-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.15rem;
+  text-transform: uppercase;
+}
+
+.tech-rider-title {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.tech-rider-add-btn {
+  background: color-mix(in srgb, var(--tech-input) 18%, var(--tech-panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-input) 45%, transparent) !important;
+  border-radius: 0.45rem !important;
+  box-shadow: none !important;
+  color: var(--tech-input) !important;
+  flex-shrink: 0;
+  font-size: 0.74rem !important;
+  font-weight: 700 !important;
+  padding: 0.45rem 0.65rem !important;
+  transform: none !important;
+}
+
+.tech-rider-stats {
+  background: var(--tech-panel);
+  border: 1px inset color-mix(in srgb, #fff 8%, transparent);
+  border-radius: 0.45rem;
+  color: var(--tech-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.65rem;
+  padding: 0.45rem 0.65rem;
+}
+
+.tech-rider-stats strong {
+  color: var(--tech-ink);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.tech-rider-mode {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 0.65rem;
+}
+
+.tech-rider-mode-btn {
+  background: var(--tech-panel) !important;
+  border: 1px solid var(--tech-line) !important;
+  border-radius: 0.45rem !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent) !important;
+  color: var(--tech-muted) !important;
+  font-size: 0.72rem !important;
+  font-weight: 650 !important;
+  min-height: 2rem;
+  padding: 0.4rem 0.55rem !important;
+  transform: none !important;
+}
+
+.tech-rider-mode-btn.is-input.is-active {
+  border-color: color-mix(in srgb, var(--tech-input) 55%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tech-input) 25%, transparent),
+    inset 0 0 12px color-mix(in srgb, var(--tech-input) 12%, transparent) !important;
+  color: var(--tech-input) !important;
+}
+
+.tech-rider-mode-btn.is-output.is-active {
+  border-color: color-mix(in srgb, var(--tech-output) 55%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tech-output) 25%, transparent),
+    inset 0 0 12px color-mix(in srgb, var(--tech-output) 12%, transparent) !important;
+  color: var(--tech-output) !important;
+}
+
+.tech-rider-search input {
+  background: var(--tech-panel);
+  border: 1px solid var(--tech-line);
+  border-radius: 0.45rem;
+  color: var(--tech-ink);
+  font-size: 0.82rem;
+  margin-bottom: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  width: 100%;
+}
+
+.tech-rider-locknote {
+  color: var(--tech-muted);
+  font-size: 0.78rem;
+  margin: 0 0 0.65rem;
+}
+
+.tech-rider-desktop {
+  display: none;
+}
+
+.tech-rider-table {
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  width: 100%;
+}
+
+.tech-rider-table th,
+.tech-rider-table td {
+  border-bottom: 1px solid color-mix(in srgb, var(--tech-line) 72%, transparent);
+  padding: 0.4rem 0.35rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.tech-rider .tech-rider-table th,
+.tech-rider .tech-rider-table td {
+  background: transparent !important;
+}
+
+.tech-rider .tech-rider-table tbody tr:hover td {
+  background: transparent !important;
+}
+
+.tech-rider-table thead th {
+  background: color-mix(in srgb, var(--tech-panel) 94%, var(--tech-bg));
+  border-bottom-color: color-mix(in srgb, var(--tech-line) 82%, var(--tech-muted) 18%);
+  color: var(--tech-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tech-rider .tech-rider-table thead th {
+  background: color-mix(in srgb, var(--tech-panel) 94%, var(--tech-bg)) !important;
+}
+
+.tech-rider-table tbody tr {
+  background: color-mix(in srgb, var(--tech-panel) 90%, var(--tech-bg));
+}
+
+.tech-rider-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--tech-panel) 98%, var(--tech-bg));
+}
+
+.tech-rider .tech-rider-table tbody tr {
+  background: color-mix(in srgb, var(--tech-panel) 90%, var(--tech-bg)) !important;
+}
+
+.tech-rider .tech-rider-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--tech-panel) 98%, var(--tech-bg)) !important;
+}
+
+.tech-rider .tech-rider-table tbody tr td {
+  background: inherit !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-table tbody tr {
+  background: color-mix(in srgb, var(--tech-input) 5%, var(--tech-panel));
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--tech-input) 7%, var(--tech-panel));
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-table tbody tr {
+  background: color-mix(in srgb, var(--tech-output) 5%, var(--tech-panel));
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--tech-output) 7%, var(--tech-panel));
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-table tbody tr,
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-table tbody tr td {
+  background: color-mix(in srgb, var(--tech-input) 5%, var(--tech-panel)) !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-table tbody tr:nth-child(even),
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--tech-input) 7%, var(--tech-panel)) !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-table tbody tr,
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-table tbody tr td {
+  background: color-mix(in srgb, var(--tech-output) 5%, var(--tech-panel)) !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-table tbody tr:nth-child(even),
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--tech-output) 7%, var(--tech-panel)) !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--tech-input) 9%, var(--tech-panel)) !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--tech-output) 9%, var(--tech-panel)) !important;
+}
+
+.tech-rider .tech-rider-table td input:not(.tech-rider-cell-input) {
+  background: color-mix(in srgb, var(--tech-bg) 58%, var(--tech-panel)) !important;
+  border-color: color-mix(in srgb, var(--tech-line) 88%, var(--tech-muted) 12%) !important;
+  color: var(--tech-ink) !important;
+}
+
+.tech-rider-ch {
+  color: var(--tech-input);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-ch {
+  color: var(--tech-output);
+}
+
+.tech-rider .tech-rider-cell-input {
+  background: color-mix(in srgb, var(--tech-bg) 58%, var(--tech-panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-line) 88%, var(--tech-muted) 12%) !important;
+  border-radius: 0.35rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+  color: var(--tech-ink) !important;
+  font-size: 0.74rem;
+  min-width: 4.5rem !important;
+  padding: 0.28rem 0.4rem !important;
+  width: 100%;
+}
+
+.tech-rider .tech-rider-cell-input::placeholder {
+  color: color-mix(in srgb, var(--tech-muted) 78%, transparent);
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-cell-input:focus {
+  border-color: color-mix(in srgb, var(--tech-input) 48%, var(--tech-line)) !important;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.28),
+    0 0 0 1px color-mix(in srgb, var(--tech-input) 22%, transparent) !important;
+  outline: 0;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-cell-input:focus {
+  border-color: color-mix(in srgb, var(--tech-output) 48%, var(--tech-line)) !important;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.28),
+    0 0 0 1px color-mix(in srgb, var(--tech-output) 22%, transparent) !important;
+  outline: 0;
+}
+
+.tech-rider .tech-rider-cell-input:disabled,
+.tech-rider .tech-rider-cell-input:read-only {
+  background: color-mix(in srgb, var(--tech-panel) 72%, var(--tech-bg)) !important;
+  color: color-mix(in srgb, var(--tech-ink) 78%, var(--tech-muted)) !important;
+  opacity: 1;
+}
+
+.tech-rider-level-input {
+  max-width: 4rem;
+  min-width: 3.5rem;
+}
+
+.tech-rider-toggle {
+  align-items: center;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tech-panel) 88%, #fff 4%) 0%,
+    color-mix(in srgb, var(--tech-bg) 72%, var(--tech-panel)) 100%
+  ) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-line) 82%, #000 18%) !important;
+  border-radius: 0.32rem !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent),
+    0 1px 0 color-mix(in srgb, #000 28%, transparent),
+    0 2px 5px rgba(0, 0, 0, 0.34) !important;
+  color: var(--tech-muted) !important;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+  gap: 0.18rem;
+  justify-content: center;
+  min-height: 2.2rem;
+  min-width: 2.95rem;
+  padding: 0.24rem 0.42rem 0.3rem !important;
+  transform: none !important;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 80ms ease !important;
+}
+
+.tech-rider-toggle-led {
+  background: color-mix(in srgb, var(--tech-muted) 35%, var(--tech-bg));
+  border-radius: 999px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55);
+  display: block;
+  flex-shrink: 0;
+  height: 0.42rem;
+  opacity: 0.7;
+  width: 0.42rem;
+}
+
+.tech-rider-toggle-label {
+  font-size: 0.58rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
+.tech-rider .tech-rider-toggle:hover:not(:disabled),
+.tech-rider button.tech-rider-toggle:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tech-panel) 92%, #fff 6%) 0%,
+    color-mix(in srgb, var(--tech-bg) 66%, var(--tech-panel)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--tech-muted) 32%, var(--tech-line)) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent),
+    0 1px 0 color-mix(in srgb, #000 22%, transparent),
+    0 3px 7px rgba(0, 0, 0, 0.38) !important;
+  color: var(--tech-ink) !important;
+  filter: none !important;
+  transform: translateY(-1px) !important;
+}
+
+.tech-rider-toggle:active:not(:disabled) {
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.48),
+    0 0 0 transparent !important;
+  transform: translateY(1px) !important;
+}
+
+.tech-rider-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tech-input) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.tech-rider-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none !important;
+}
+
+.tech-rider-toggle.is-phantom:hover:not(:disabled):not(.is-on) {
+  border-color: color-mix(in srgb, var(--tech-phantom) 35%, var(--tech-line)) !important;
+  color: color-mix(in srgb, var(--tech-phantom) 80%, var(--tech-ink)) !important;
+}
+
+.tech-rider-toggle.is-pad:hover:not(:disabled):not(.is-on) {
+  border-color: color-mix(in srgb, var(--tech-pad) 35%, var(--tech-line)) !important;
+  color: color-mix(in srgb, var(--tech-pad) 80%, var(--tech-ink)) !important;
+}
+
+.tech-rider-toggle.is-output:hover:not(:disabled):not(.is-on) {
+  border-color: color-mix(in srgb, var(--tech-output) 35%, var(--tech-line)) !important;
+  color: color-mix(in srgb, var(--tech-output) 80%, var(--tech-ink)) !important;
+}
+
+.tech-rider-toggle.is-phantom.is-on {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tech-phantom) 28%, var(--tech-panel)) 0%,
+    color-mix(in srgb, var(--tech-phantom) 12%, var(--tech-bg)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--tech-phantom) 72%, transparent) !important;
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.42),
+    0 0 10px color-mix(in srgb, var(--tech-phantom) 42%, transparent) !important;
+  color: var(--tech-phantom) !important;
+  transform: translateY(1px) !important;
+}
+
+.tech-rider-toggle.is-phantom.is-on .tech-rider-toggle-led {
+  background: var(--tech-phantom);
+  box-shadow:
+    0 0 5px var(--tech-phantom),
+    0 0 10px color-mix(in srgb, var(--tech-phantom) 55%, transparent);
+  opacity: 1;
+}
+
+.tech-rider-toggle.is-pad.is-on {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tech-pad) 24%, var(--tech-panel)) 0%,
+    color-mix(in srgb, var(--tech-pad) 10%, var(--tech-bg)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--tech-pad) 68%, transparent) !important;
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.42),
+    0 0 10px color-mix(in srgb, var(--tech-pad) 32%, transparent) !important;
+  color: var(--tech-pad) !important;
+  transform: translateY(1px) !important;
+}
+
+.tech-rider-toggle.is-pad.is-on .tech-rider-toggle-led {
+  background: var(--tech-pad);
+  box-shadow:
+    0 0 5px var(--tech-pad),
+    0 0 10px color-mix(in srgb, var(--tech-pad) 50%, transparent);
+  opacity: 1;
+}
+
+.tech-rider-toggle.is-output.is-on {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tech-output) 24%, var(--tech-panel)) 0%,
+    color-mix(in srgb, var(--tech-output) 10%, var(--tech-bg)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, var(--tech-output) 68%, transparent) !important;
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.42),
+    0 0 10px color-mix(in srgb, var(--tech-output) 32%, transparent) !important;
+  color: var(--tech-output) !important;
+  transform: translateY(1px) !important;
+}
+
+.tech-rider-toggle.is-output.is-on .tech-rider-toggle-led {
+  background: var(--tech-output);
+  box-shadow:
+    0 0 5px var(--tech-output),
+    0 0 10px color-mix(in srgb, var(--tech-output) 50%, transparent);
+  opacity: 1;
+}
+
+.tech-rider-actions {
+  display: flex;
+  gap: 0.15rem;
+  white-space: nowrap;
+}
+
+.tech-rider-icon-btn {
+  align-items: center;
+  background: color-mix(in srgb, var(--tech-bg) 58%, var(--tech-panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-line) 88%, var(--tech-muted) 12%) !important;
+  border-radius: 0.35rem !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22) !important;
+  color: var(--tech-muted) !important;
+  display: inline-flex;
+  font-size: 0.72rem !important;
+  height: 1.65rem;
+  justify-content: center;
+  min-width: 1.65rem;
+  padding: 0 !important;
+  transform: none !important;
+  width: 1.65rem;
+}
+
+.tech-rider-icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tech-panel) 88%, var(--tech-line)) !important;
+  border-color: color-mix(in srgb, var(--tech-muted) 28%, var(--tech-line)) !important;
+  color: var(--tech-ink) !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-icon-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--tech-input) 35%, var(--tech-line)) !important;
+  color: var(--tech-input) !important;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-icon-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--tech-output) 35%, var(--tech-line)) !important;
+  color: var(--tech-output) !important;
+}
+
+.tech-rider-icon-btn-danger {
+  color: var(--tech-pad) !important;
+}
+
+.tech-rider-empty-row {
+  color: var(--tech-muted);
+  padding: 1rem 0.35rem !important;
+  text-align: center;
+}
+
+.tech-rider-mobile {
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tech-rider-card {
+  background: var(--tech-panel);
+  border: 1px inset color-mix(in srgb, #fff 6%, transparent);
+  border-radius: 0.55rem;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
+  padding: 0.65rem 0.75rem;
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-card:not(.tech-rider-card-empty) {
+  background: color-mix(in srgb, var(--tech-input) 5%, var(--tech-panel));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tech-input) 10%, transparent);
+}
+
+.tech-rider:has(.tech-rider-mode-btn.is-output.is-active) .tech-rider-card:not(.tech-rider-card-empty) {
+  background: color-mix(in srgb, var(--tech-output) 5%, var(--tech-panel));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tech-output) 10%, transparent);
+}
+
+.tech-rider-card-head {
+  align-items: baseline;
+  display: flex;
+  gap: 0.55rem;
+  margin-bottom: 0.45rem;
+}
+
+.tech-rider-card-meta {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+}
+
+.tech-rider-card-meta dt {
+  color: var(--tech-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tech-rider-card-meta dd {
+  font-size: 0.8rem;
+  margin: 0.05rem 0 0;
+}
+
+.tech-rider-card-toggles {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.tech-rider-card-level {
+  color: var(--tech-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+}
+
+.tech-rider-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tech-rider-card-actions button {
+  background: color-mix(in srgb, var(--tech-bg) 58%, var(--tech-panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-line) 88%, var(--tech-muted) 12%) !important;
+  border-radius: 0.4rem !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22) !important;
+  color: var(--tech-ink) !important;
+  font-size: 0.72rem !important;
+  padding: 0.35rem 0.55rem !important;
+  transform: none !important;
+}
+
+.tech-rider-card-actions button.is-danger {
+  color: var(--tech-pad) !important;
+}
+
+.tech-rider-card-empty {
+  color: var(--tech-muted);
+  text-align: center;
+}
+
+.tech-rider-mobile-add {
+  background: color-mix(in srgb, var(--tech-output) 14%, var(--tech-panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-output) 40%, transparent) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: none !important;
+  color: var(--tech-output) !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.75rem !important;
+  transform: none !important;
+  width: 100%;
+}
+
+.tech-rider-drawer-backdrop {
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 120;
+}
+
+.tech-rider-drawer {
+  background: var(--tech-panel);
+  border: 1px solid var(--tech-line);
+  border-radius: 0.85rem 0.85rem 0 0;
+  color: var(--tech-ink);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 0.85rem;
+  width: min(100%, 28rem);
+}
+
+.tech-rider-drawer-head {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.tech-rider-drawer-head h4 {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.tech-rider-drawer-field {
+  display: grid;
+  font-size: 0.72rem;
+  gap: 0.3rem;
+  margin-bottom: 0.65rem;
+}
+
+.tech-rider-drawer-field input {
+  background: #151519;
+  border: 1px solid var(--tech-line);
+  border-radius: 0.4rem;
+  color: var(--tech-ink);
+  font-size: 0.82rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.tech-rider-drawer-section {
+  margin-bottom: 0.75rem;
+}
+
+.tech-rider-drawer-label {
+  color: var(--tech-muted);
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.tech-rider-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tech-rider-chip {
+  background: #151519 !important;
+  border: 1px solid var(--tech-line) !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  color: var(--tech-muted) !important;
+  font-size: 0.68rem !important;
+  padding: 0.28rem 0.55rem !important;
+  transform: none !important;
+}
+
+.tech-rider-chip.is-active {
+  border-color: color-mix(in srgb, var(--tech-input) 55%, transparent) !important;
+  color: var(--tech-input) !important;
+}
+
+.tech-rider-drawer-save {
+  background: color-mix(in srgb, var(--tech-input) 20%, var(--tech-panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--tech-input) 50%, transparent) !important;
+  border-radius: 0.45rem !important;
+  box-shadow: none !important;
+  color: var(--tech-input) !important;
+  font-weight: 700 !important;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.75rem !important;
+  transform: none !important;
+  width: 100%;
+}
+
+@media (min-width: 860px) {
+  .tech-rider-desktop {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .tech-rider-mobile,
+  .tech-rider-mobile-add {
+    display: none;
   }
 }

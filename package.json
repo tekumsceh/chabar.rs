@@ -19,6 +19,8 @@
     "db:migrate:notifications": "node scripts/apply-user-notifications.js",
     "db:migrate:notifications-push": "node scripts/apply-notifications-push.js",
     "db:migrate:expenses": "node scripts/apply-event-expenses.js",
+    "db:migrate:maps-url": "node scripts/apply-event-maps-url.js",
+    "db:migrate:tech-rider": "node scripts/apply-event-tech-rider.js",
     "db:migrate:day-details": "node scripts/apply-event-day-details.js",
     "db:migrate:bands": "node scripts/migrate-bands-ownership.js",
     "db:migrate:finance": "node scripts/migrate-member-finance.js",

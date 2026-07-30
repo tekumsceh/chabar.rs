@@ -59,6 +59,7 @@ export function snapshotEvent(row) {
     date: row.event_date_text ?? row.date ?? "",
     city: row.city ?? "",
     venue: row.venue ?? "",
+    mapsUrl: row.maps_url ?? row.mapsUrl ?? "",
     note: row.note ?? "",
     priceEur: Number(row.price_eur ?? row.priceEur ?? 0),
     transportRsd: Number(row.transport_rsd ?? row.transportRsd ?? 0),

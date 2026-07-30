@@ -364,9 +364,6 @@ export default function SchedulePage({
                       <strong className="raspored-city">{row.city || "—"}</strong>
                       {row.venue ? (
                         <span className="raspored-venue">
-                          <span className="raspored-venue-pin" aria-hidden="true">
-                            <VenuePinIcon />
-                          </span>
                           <span className="raspored-venue-text">{row.venue}</span>
                         </span>
                       ) : (
@@ -703,21 +700,6 @@ function DateRowMenu({ feeMarked, locked, onDelete }) {
         </ul>
       ) : null}
     </div>
-  );
-}
-
-function VenuePinIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M12 21s6.5-5.2 6.5-11a6.5 6.5 0 1 0-13 0c0 5.8 6.5 11 6.5 11z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="10" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
   );
 }
 

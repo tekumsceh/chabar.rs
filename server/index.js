@@ -686,15 +686,15 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
     const created = await withTransaction(async (tx) => {
       const result = await tx(
         `INSERT INTO events
-          (band_id, sort_order, event_date_text, city, venue, note, price_eur, transport_rsd)
+          (band_id, sort_order, event_date_text, city, venue, maps_url, note, price_eur, transport_rsd)
          VALUES (
           :bandId,
           COALESCE((SELECT max_order + 1 FROM (
             SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM events WHERE band_id = :bandId
           ) AS t), 1),
-          :date, :city, :venue, :note, :priceEur, :transportRsd
+          :date, :city, :venue, :mapsUrl, :note, :priceEur, :transportRsd
          )
-         RETURNING id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd`,
+         RETURNING id, band_id, event_date_text, city, venue, maps_url, note, price_eur, transport_rsd`,
         { ...event, bandId: req.bandId },
       );
       const row = result.rows[0];
@@ -753,7 +753,7 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
       });
     }
     const existing = await query(
-      `SELECT id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd
+      `SELECT id, band_id, event_date_text, city, venue, maps_url, note, price_eur, transport_rsd
        FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
       { id: req.params.id, bandId: req.bandId },
     );
@@ -801,11 +801,12 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
              event_date_text = :date,
              city = :city,
              venue = :venue,
+             maps_url = :mapsUrl,
              note = :note,
              price_eur = :priceEur,
              transport_rsd = :transportRsd
          WHERE id = :id AND band_id = :bandId
-         RETURNING id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd`,
+         RETURNING id, band_id, event_date_text, city, venue, maps_url, note, price_eur, transport_rsd`,
         { ...event, id: req.params.id, bandId: req.bandId, nextBandId },
       );
       if (!result.rowCount) {
@@ -879,7 +880,7 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
       });
     }
     const existing = await query(
-      `SELECT id, band_id, event_date_text, city, venue, note, price_eur, transport_rsd
+      `SELECT id, band_id, event_date_text, city, venue, maps_url, note, price_eur, transport_rsd
        FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
       { id: req.params.id, bandId: req.bandId },
     );
@@ -1529,6 +1530,341 @@ app.put("/api/events/:id/day-details", requireAuth, requireBandMember, async (re
   }
 });
 
+function mapTechChannelRow(row) {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    bandId: row.band_id,
+    kind: row.kind === "output" ? "output" : "input",
+    sortOrder: Number(row.sort_order) || 0,
+    label: row.label || "",
+    gear: row.gear || "",
+    cable: row.cable || "",
+    hardware: row.hardware || "",
+    phantom48v: Boolean(row.phantom_48v),
+    pad: Boolean(row.pad),
+    stereo: Boolean(row.stereo),
+    levelDb: row.level_db == null || row.level_db === "" ? null : Number(row.level_db),
+    notes: row.notes || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizeTechChannel(value, { kind = "input" } = {}) {
+  const normalizedKind = value?.kind === "output" || kind === "output" ? "output" : "input";
+  let levelDb = null;
+  if (value?.levelDb != null && String(value.levelDb).trim() !== "") {
+    const parsed = Number(String(value.levelDb).replace(",", "."));
+    if (Number.isFinite(parsed) && parsed >= -60 && parsed <= 24) {
+      levelDb = Math.round(parsed * 10) / 10;
+    }
+  }
+
+  return {
+    kind: normalizedKind,
+    label: String(value?.label ?? "").trim().slice(0, 120),
+    gear: String(value?.gear ?? "").trim().slice(0, 120),
+    cable: String(value?.cable ?? "").trim().slice(0, 120),
+    hardware: String(value?.hardware ?? "").trim().slice(0, 120),
+    phantom48v: Boolean(value?.phantom48v),
+    pad: Boolean(value?.pad),
+    stereo: Boolean(value?.stereo),
+    levelDb,
+    notes: String(value?.notes ?? "").trim().slice(0, 500),
+  };
+}
+
+function buildTechRiderStats(inputs, outputs) {
+  return {
+    inputCount: inputs.length,
+    outputCount: outputs.length,
+    phantom48vActive: inputs.filter((row) => row.phantom48v).length,
+  };
+}
+
+async function loadTechRiderBundle(eventId, bandId) {
+  const result = await query(
+    `SELECT id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
+            phantom_48v, pad, stereo, level_db, notes, created_at, updated_at
+     FROM event_tech_channels
+     WHERE event_id = :eventId AND band_id = :bandId
+     ORDER BY kind ASC, sort_order ASC, id ASC`,
+    { eventId, bandId },
+  );
+  const rows = result.rows.map(mapTechChannelRow);
+  const inputs = rows.filter((row) => row.kind === "input");
+  const outputs = rows.filter((row) => row.kind === "output");
+  return { inputs, outputs, stats: buildTechRiderStats(inputs, outputs) };
+}
+
+async function assertEventEditableForTechRider(eventId, bandId) {
+  const event = await query(
+    `SELECT id, event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+    { id: eventId, bandId },
+  );
+  if (!event.rows[0]) {
+    const err = new Error("Not found");
+    err.status = 404;
+    throw err;
+  }
+  if (isPastEventDate(event.rows[0].event_date_text)) {
+    const err = new Error("Prošli termini su zaključani — rider se ne menja.");
+    err.status = 403;
+    throw err;
+  }
+  return event.rows[0];
+}
+
+app.get("/api/events/:id/tech-rider", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const bundle = await loadTechRiderBundle(eventId, req.bandId);
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...bundle,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/events/:id/tech-rider/channels", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+
+    await assertEventEditableForTechRider(eventId, req.bandId);
+    const channel = normalizeTechChannel(req.body || {});
+
+    const orderResult = await query(
+      `SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order
+       FROM event_tech_channels
+       WHERE event_id = :eventId AND band_id = :bandId AND kind = :kind`,
+      { eventId, bandId: req.bandId, kind: channel.kind },
+    );
+    const sortOrder = Number(orderResult.rows[0]?.next_order) || 1;
+
+    const result = await query(
+      `INSERT INTO event_tech_channels (
+         event_id, band_id, kind, sort_order, label, gear, cable, hardware,
+         phantom_48v, pad, stereo, level_db, notes
+       ) VALUES (
+         :eventId, :bandId, :kind, :sortOrder, :label, :gear, :cable, :hardware,
+         :phantom48v, :pad, :stereo, :levelDb, :notes
+       )
+       RETURNING id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
+                 phantom_48v, pad, stereo, level_db, notes, created_at, updated_at`,
+      {
+        eventId,
+        bandId: req.bandId,
+        kind: channel.kind,
+        sortOrder,
+        label: channel.label,
+        gear: channel.gear,
+        cable: channel.cable,
+        hardware: channel.hardware,
+        phantom48v: channel.phantom48v,
+        pad: channel.pad,
+        stereo: channel.stereo,
+        levelDb: channel.levelDb,
+        notes: channel.notes,
+      },
+    );
+
+    res.status(201).json(mapTechChannelRow(result.rows[0]));
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.put(
+  "/api/events/:id/tech-rider/channels/:channelId",
+  requireAuth,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const eventId = Number(req.params.id);
+      const channelId = Number(req.params.channelId);
+      if (!eventId || !channelId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      await assertEventEditableForTechRider(eventId, req.bandId);
+
+      const existing = await query(
+        `SELECT id, kind FROM event_tech_channels
+         WHERE id = :channelId AND event_id = :eventId AND band_id = :bandId
+         LIMIT 1`,
+        { channelId, eventId, bandId: req.bandId },
+      );
+      if (!existing.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      const channel = normalizeTechChannel(req.body || {}, { kind: existing.rows[0].kind });
+      const result = await query(
+        `UPDATE event_tech_channels
+         SET label = :label,
+             gear = :gear,
+             cable = :cable,
+             hardware = :hardware,
+             phantom_48v = :phantom48v,
+             pad = :pad,
+             stereo = :stereo,
+             level_db = :levelDb,
+             notes = :notes,
+             updated_at = NOW()
+         WHERE id = :channelId AND event_id = :eventId AND band_id = :bandId
+         RETURNING id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
+                   phantom_48v, pad, stereo, level_db, notes, created_at, updated_at`,
+        {
+          channelId,
+          eventId,
+          bandId: req.bandId,
+          label: channel.label,
+          gear: channel.gear,
+          cable: channel.cable,
+          hardware: channel.hardware,
+          phantom48v: channel.phantom48v,
+          pad: channel.pad,
+          stereo: channel.stereo,
+          levelDb: channel.levelDb,
+          notes: channel.notes,
+        },
+      );
+
+      res.json(mapTechChannelRow(result.rows[0]));
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, detail: error.message });
+      }
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  "/api/events/:id/tech-rider/channels/:channelId",
+  requireAuth,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const eventId = Number(req.params.id);
+      const channelId = Number(req.params.channelId);
+      if (!eventId || !channelId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      await assertEventEditableForTechRider(eventId, req.bandId);
+
+      const existing = await query(
+        `SELECT id, kind FROM event_tech_channels
+         WHERE id = :channelId AND event_id = :eventId AND band_id = :bandId
+         LIMIT 1`,
+        { channelId, eventId, bandId: req.bandId },
+      );
+      if (!existing.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      await query(
+        `DELETE FROM event_tech_channels
+         WHERE id = :channelId AND event_id = :eventId AND band_id = :bandId`,
+        { channelId, eventId, bandId: req.bandId },
+      );
+
+      const remaining = await query(
+        `SELECT id FROM event_tech_channels
+         WHERE event_id = :eventId AND band_id = :bandId AND kind = :kind
+         ORDER BY sort_order ASC, id ASC`,
+        { eventId, bandId: req.bandId, kind: existing.rows[0].kind },
+      );
+
+      await Promise.all(
+        remaining.rows.map((row, index) =>
+          query(
+            `UPDATE event_tech_channels SET sort_order = :sortOrder WHERE id = :id`,
+            { id: row.id, sortOrder: index + 1 },
+          ),
+        ),
+      );
+
+      res.status(204).end();
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, detail: error.message });
+      }
+      next(error);
+    }
+  },
+);
+
+app.put("/api/events/:id/tech-rider/reorder", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const kind = req.body?.kind === "output" ? "output" : "input";
+    const orderedIds = Array.isArray(req.body?.orderedIds)
+      ? req.body.orderedIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+      : [];
+
+    if (!eventId || !orderedIds.length) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+
+    await assertEventEditableForTechRider(eventId, req.bandId);
+
+    const existing = await query(
+      `SELECT id FROM event_tech_channels
+       WHERE event_id = :eventId AND band_id = :bandId AND kind = :kind
+       ORDER BY sort_order ASC, id ASC`,
+      { eventId, bandId: req.bandId, kind },
+    );
+    const existingIds = existing.rows.map((row) => row.id);
+    if (
+      existingIds.length !== orderedIds.length ||
+      !existingIds.every((id) => orderedIds.includes(id))
+    ) {
+      return res.status(400).json({ error: "Invalid reorder payload" });
+    }
+
+    await Promise.all(
+      orderedIds.map((id, index) =>
+        query(`UPDATE event_tech_channels SET sort_order = :sortOrder WHERE id = :id`, {
+          id,
+          sortOrder: index + 1,
+        }),
+      ),
+    );
+
+    const bundle = await loadTechRiderBundle(eventId, req.bandId);
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...bundle,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
 app.get("/api/events/:id/comments", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const event = await query(
@@ -1916,7 +2252,7 @@ function eventDateWithinLookbackSql(alias = "e", lookback = SCHEDULE_LOOKBACK) {
 
 async function getBandEventsForUser(bandId, userId) {
   const result = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.note,
+    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note,
             COALESCE(f.price_eur, 0) AS price_eur,
             COALESCE(f.transport_rsd, 0) AS transport_rsd
      FROM events e
@@ -1941,7 +2277,7 @@ async function getBandEventsForUser(bandId, userId) {
 
 async function getAllScheduleEventsForUser(userId) {
   const result = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.note,
+    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note,
             COALESCE(f.price_eur, 0) AS price_eur,
             COALESCE(f.transport_rsd, 0) AS transport_rsd
      FROM events e
@@ -1965,7 +2301,7 @@ async function getAllScheduleEventsForUser(userId) {
 
 async function getMyFinanceEvents(userId) {
   const result = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.note,
+    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note,
             COALESCE(f.price_eur, 0) AS price_eur,
             COALESCE(f.transport_rsd, 0) AS transport_rsd
      FROM events e
@@ -2061,7 +2397,7 @@ async function getBandMeta(bandId) {
 
 async function getBandFinanceEvents(bandId) {
   const eventsResult = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.note
+    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note
      FROM events e
      JOIN bands b ON b.id = e.band_id
      WHERE e.band_id = :bandId
@@ -2142,6 +2478,7 @@ async function getBandFinanceEvents(bandId) {
       date: row.event_date_text,
       city: row.city,
       venue: row.venue,
+      mapsUrl: row.maps_url || "",
       note: row.note,
       priceEur,
       transportRsd,
@@ -2247,6 +2584,7 @@ function mapEventRow(row) {
     date: row.event_date_text,
     city: row.city,
     venue: row.venue,
+    mapsUrl: row.maps_url || "",
     note: row.note,
     priceEur: Number(row.price_eur),
     transportRsd: Number(row.transport_rsd),
@@ -2311,7 +2649,8 @@ function normalizeEvent(value) {
   return {
     date: String(value.date ?? ""),
     city: String(value.city ?? ""),
-    venue: String(value.venue ?? ""),
+    venue: String(value.venue ?? "").slice(0, 255),
+    mapsUrl: String(value.mapsUrl ?? value.maps_url ?? "").trim().slice(0, 2000),
     note: String(value.note ?? ""),
     priceEur: numberValue(value.priceEur),
     transportRsd: numberValue(value.transportRsd),
@@ -2330,3 +2669,4 @@ function numberValue(value) {
   const parsed = Number.parseFloat(String(value ?? "").replace(",", "."));
   return Number.isFinite(parsed) ? parsed : 0;
 }
+

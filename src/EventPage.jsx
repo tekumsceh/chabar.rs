@@ -12,15 +12,29 @@ import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
 import EventDayDetails from "./EventDayDetails.jsx";
+import TechnicalRiderPanel from "./TechnicalRiderPanel.jsx";
 import FieldSelect from "./FieldSelect.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import { api } from "./api.js";
+import { parseMapsVenueInput, resolveMapsUrl } from "./mapsLink.js";
 
 const TABS = [
   { id: "osnovno", label: "Osnovno" },
   { id: "tehnicki", label: "Tehnički" },
   { id: "show", label: "Show" },
   { id: "finansije", label: "Finansije", leadOnly: true },
+];
+
+const TECH_SUBTABS = [
+  { id: "hospitality-rider", label: "Hospitality rider" },
+  { id: "technical-rider", label: "Technical rider" },
+  { id: "lighting-rider", label: "Lighting rider" },
+  { id: "stage-plot", label: "Stage plot" },
+];
+
+const SHOW_SUBTABS = [
+  { id: "set-lists", label: "Set lists" },
+  { id: "visuals", label: "Visuals" },
 ];
 
 const EMPTY_FINANCE_MEMBERS = [];
@@ -39,6 +53,8 @@ export default function EventPage({
 }) {
   const { confirm } = useConfirm();
   const [tab, setTab] = useState("osnovno");
+  const [techSubTab, setTechSubTab] = useState(TECH_SUBTABS[0].id);
+  const [showSubTab, setShowSubTab] = useState(SHOW_SUBTABS[0].id);
   const [editing, setEditing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -58,6 +74,8 @@ export default function EventPage({
 
   useEffect(() => {
     backRef.current?.focus({ preventScroll: true });
+    setTechSubTab(TECH_SUBTABS[0].id);
+    setShowSubTab(SHOW_SUBTABS[0].id);
   }, [event?.id]);
 
   const memberRole = band?.memberRole || "member";
@@ -109,6 +127,7 @@ export default function EventPage({
     form.date !== initialForm.date ||
     form.city !== initialForm.city ||
     form.venue !== initialForm.venue ||
+    form.mapsUrl !== initialForm.mapsUrl ||
     form.note !== initialForm.note;
 
   editingRef.current = editing;
@@ -124,7 +143,7 @@ export default function EventPage({
     setEditing(false);
     setDetailsOpen(false);
     setFormError("");
-  }, [event?.id, event?.bandId, event?.date, event?.city, event?.venue, event?.note, event?.priceEur]);
+  }, [event?.id, event?.bandId, event?.date, event?.city, event?.venue, event?.mapsUrl, event?.note, event?.priceEur]);
 
   useEffect(() => {
     if (tab === "finansije" && !canSeeFinance) setTab("osnovno");
@@ -216,6 +235,7 @@ export default function EventPage({
     const date = String(current.date || "").trim();
     const city = String(current.city || "").trim();
     const venue = String(current.venue || "").trim();
+    const mapsUrl = String(current.mapsUrl || "").trim();
     const note = String(current.note || "").trim();
 
     if (!bandId) return { error: "Izaberi bend ili Personal." };
@@ -227,10 +247,18 @@ export default function EventPage({
     if (parsed.getTime() <= startOfToday().getTime()) {
       return { error: "Datum ne sme biti danas ili u prošlosti." };
     }
-    if (!city && !venue && !note) {
+    if (!city && !venue && !mapsUrl && !note) {
       return { error: "Unesi bar mesto, lokal ili napomenu." };
     }
-    return { bandId, date, city, venue, note };
+    return { bandId, date, city, venue, mapsUrl, note };
+  }
+
+  function applyMapsLinkInput(raw) {
+    const parsed = parseMapsVenueInput(raw);
+    setForm((current) => ({
+      ...current,
+      mapsUrl: parsed.isMapsLink ? parsed.mapsUrl : String(raw || "").trim(),
+    }));
   }
 
   async function persistEdit({ askConfirm = true } = {}) {
@@ -244,7 +272,7 @@ export default function EventPage({
       return false;
     }
 
-    const { bandId, date, city, venue, note } = validated;
+    const { bandId, date, city, venue, mapsUrl, note } = validated;
     if (!dirtyRef.current) {
       setEditing(false);
       return true;
@@ -263,9 +291,9 @@ export default function EventPage({
     try {
       setSaving(true);
       setFormError("");
-      await onUpdate?.(eventRef.current.id, { bandId, date, city, venue, note });
-      setInitialForm({ bandId, date, city, venue, note });
-      setForm({ bandId, date, city, venue, note });
+      await onUpdate?.(eventRef.current.id, { bandId, date, city, venue, mapsUrl, note });
+      setInitialForm({ bandId, date, city, venue, mapsUrl, note });
+      setForm({ bandId, date, city, venue, mapsUrl, note });
       setEditing(false);
       return true;
     } catch (error) {
@@ -351,7 +379,16 @@ export default function EventPage({
             {dateParts.month ? ` ${dateParts.month}` : ""}
             {event.city ? ` · ${event.city}` : ""}
           </h2>
-          <p className="event-page-sub">{[event.venue, bandName].filter(Boolean).join(" · ") || "—"}</p>
+          <p className="event-page-sub">
+            {event.venue || event.mapsUrl ? (
+              <>
+                <VenueWithMaps venue={event.venue} city={event.city} mapsUrl={event.mapsUrl} />
+                {bandName ? <span className="event-page-sub-sep"> · {bandName}</span> : null}
+              </>
+            ) : (
+              bandName || "—"
+            )}
+          </p>
         </div>
         {locked ? (
           <span className="event-page-lock" title="Prošli termin je zaključan" aria-label="Zaključan termin">
@@ -444,12 +481,45 @@ export default function EventPage({
                   id="eventVenue"
                   name="eventVenue"
                   type="text"
-                  placeholder="Ime kluba / prostora"
+                  placeholder="Ime lokala"
                   value={form.venue}
                   onChange={(e) => updateForm("venue", e.target.value)}
                   autoComplete="organization"
                 />
               </label>
+              <label htmlFor="eventMapsUrl" className="termin-form-full">
+                Google Maps link
+                <input
+                  id="eventMapsUrl"
+                  name="eventMapsUrl"
+                  type="url"
+                  inputMode="url"
+                  placeholder="Nalepi Maps link (opciono)"
+                  value={form.mapsUrl}
+                  onChange={(e) => applyMapsLinkInput(e.target.value)}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData?.getData("text");
+                    if (!pasted) return;
+                    const parsed = parseMapsVenueInput(pasted);
+                    if (!parsed.isMapsLink) return;
+                    e.preventDefault();
+                    applyMapsLinkInput(pasted);
+                  }}
+                  autoComplete="off"
+                />
+              </label>
+              {form.mapsUrl ? (
+                <p className="event-venue-maps-hint termin-form-full">
+                  Pin otvara ovaj link
+                  <button
+                    type="button"
+                    className="event-venue-maps-clear"
+                    onClick={() => setForm((current) => ({ ...current, mapsUrl: "" }))}
+                  >
+                    Ukloni
+                  </button>
+                </p>
+              ) : null}
               <label className="termin-form-full" htmlFor="eventNote">
                 Napomena
                 <input
@@ -495,7 +565,13 @@ export default function EventPage({
               </div>
               <div>
                 <dt>Lokal</dt>
-                <dd>{event.venue || "—"}</dd>
+                <dd>
+                  {event.venue || event.mapsUrl ? (
+                    <VenueWithMaps venue={event.venue} city={event.city} mapsUrl={event.mapsUrl} />
+                  ) : (
+                    "—"
+                  )}
+                </dd>
               </div>
               <div className="event-page-fields-full">
                 <dt>Napomena</dt>
@@ -534,18 +610,60 @@ export default function EventPage({
       {tab === "tehnicki" ? (
         <section
           id="event-tabpanel-tehnicki"
-          className="event-page-panel event-page-stub"
+          className="event-page-panel"
           role="tabpanel"
           aria-labelledby="event-tab-tehnicki"
         >
-          <FadeScroll viewportClassName="event-page-panel-scroll">
-          <div className="event-page-empty">
-            <span className="event-page-empty-icon" aria-hidden="true">
-              <TechIcon />
-            </span>
-            <h3 className="event-page-stub-title">Tehnički</h3>
-            <p className="event-page-stub-copy">Rider, stage i tehnika — uskoro.</p>
+          <div className="event-page-subtabs" role="tablist" aria-label="Tehnički delovi">
+            {TECH_SUBTABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`event-tech-tab-${item.id}`}
+                className={`event-page-subtab ${techSubTab === item.id ? "is-active" : ""}`}
+                aria-selected={techSubTab === item.id}
+                aria-controls={`event-tech-panel-${item.id}`}
+                onClick={() => setTechSubTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
+          <FadeScroll viewportClassName="event-page-panel-scroll">
+            {TECH_SUBTABS.map((item) =>
+              techSubTab === item.id ? (
+                item.id === "technical-rider" ? (
+                  <div
+                    key={item.id}
+                    id={`event-tech-panel-${item.id}`}
+                    role="tabpanel"
+                    aria-labelledby={`event-tech-tab-${item.id}`}
+                  >
+                    <TechnicalRiderPanel
+                      eventId={event.id}
+                      bandId={financeBandId}
+                      readOnly={locked}
+                      showToast={showToast}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    key={item.id}
+                    id={`event-tech-panel-${item.id}`}
+                    className="event-page-empty"
+                    role="tabpanel"
+                    aria-labelledby={`event-tech-tab-${item.id}`}
+                  >
+                    <span className="event-page-empty-icon" aria-hidden="true">
+                      <TechIcon />
+                    </span>
+                    <h3 className="event-page-stub-title">{item.label}</h3>
+                    <p className="event-page-stub-copy">Sadržaj uskoro.</p>
+                  </div>
+                )
+              ) : null,
+            )}
           </FadeScroll>
         </section>
       ) : null}
@@ -553,18 +671,44 @@ export default function EventPage({
       {tab === "show" ? (
         <section
           id="event-tabpanel-show"
-          className="event-page-panel event-page-stub"
+          className="event-page-panel"
           role="tabpanel"
           aria-labelledby="event-tab-show"
         >
-          <FadeScroll viewportClassName="event-page-panel-scroll">
-          <div className="event-page-empty">
-            <span className="event-page-empty-icon" aria-hidden="true">
-              <ShowIcon />
-            </span>
-            <h3 className="event-page-stub-title">Show</h3>
-            <p className="event-page-stub-copy">Setlista i show materijal — uskoro.</p>
+          <div className="event-page-subtabs" role="tablist" aria-label="Show delovi">
+            {SHOW_SUBTABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`event-show-tab-${item.id}`}
+                className={`event-page-subtab ${showSubTab === item.id ? "is-active" : ""}`}
+                aria-selected={showSubTab === item.id}
+                aria-controls={`event-show-panel-${item.id}`}
+                onClick={() => setShowSubTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
+          <FadeScroll viewportClassName="event-page-panel-scroll">
+            {SHOW_SUBTABS.map((item) =>
+              showSubTab === item.id ? (
+                <div
+                  key={item.id}
+                  id={`event-show-panel-${item.id}`}
+                  className="event-page-empty"
+                  role="tabpanel"
+                  aria-labelledby={`event-show-tab-${item.id}`}
+                >
+                  <span className="event-page-empty-icon" aria-hidden="true">
+                    <ShowIcon />
+                  </span>
+                  <h3 className="event-page-stub-title">{item.label}</h3>
+                  <p className="event-page-stub-copy">Sadržaj uskoro.</p>
+                </div>
+              ) : null,
+            )}
           </FadeScroll>
         </section>
       ) : null}
@@ -673,6 +817,7 @@ function formFromEvent(event) {
     date: event?.date || "",
     city: event?.city || "",
     venue: event?.venue || "",
+    mapsUrl: event?.mapsUrl || "",
     note: event?.note || "",
   };
 }
@@ -744,6 +889,43 @@ function TechIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <rect x="4" y="6" width="16" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
       <path d="M8 10h8M8 14h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function VenueWithMaps({ venue, city = "", mapsUrl = "" }) {
+  const href = resolveMapsUrl({ mapsUrl, venue, city });
+  if (!venue && !href) return null;
+  return (
+    <span className="venue-with-maps">
+      {venue ? <span className="venue-with-maps-name">{venue}</span> : null}
+      {href ? (
+        <a
+          className="venue-maps-btn"
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Otvori na Google Maps"
+          aria-label={`Otvori ${venue || "lokaciju"} na Google Maps`}
+        >
+          <MapsPinIcon />
+        </a>
+      ) : null}
+    </span>
+  );
+}
+
+function MapsPinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 21s6.5-5.2 6.5-11a6.5 6.5 0 1 0-13 0c0 5.8 6.5 11 6.5 11z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="10" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
