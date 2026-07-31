@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
+import { useT } from "./i18n/I18nProvider.jsx";
 
-const SECTIONS = [
-  { id: "main", label: "Main set" },
-  { id: "encore", label: "Encore" },
-  { id: "alts", label: "Alternates" },
-];
+const SECTION_IDS = ["main", "encore", "alts"];
 
 function formatDuration(sec) {
   if (sec == null || !Number.isFinite(sec) || sec <= 0) return "—";
@@ -83,6 +80,7 @@ function splitLyricsByCapitals(text) {
 }
 
 export default function SetListPanel({ eventId, bandId, readOnly = false, showToast }) {
+  const t = useT();
   const [mode, setMode] = useState("main");
   const [sections, setSections] = useState(emptySections);
   const [songs, setSongs] = useState([]);
@@ -145,7 +143,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
     const query = addQuery.trim();
     if (query.length < 3) {
       setCommunityResults([]);
-      setLookupError("Unesi bar tri karaktera za online pretragu.");
+      setLookupError(t("setlist.searchMinChars"));
       return;
     }
 
@@ -168,7 +166,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
       lastLookupKeyRef.current = lookupKey;
       setCommunityResults(Array.isArray(data.results) ? data.results : []);
       if (data.rateLimited) {
-        setLookupError(data.message || "Previše pretraga — sačekaj malo pa pokušaj ponovo.");
+        setLookupError(data.message || t("setlist.rateLimited"));
       } else if (data.message && !(data.results || []).length) {
         setLookupError(data.message);
       } else {
@@ -177,7 +175,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
     } catch (requestError) {
       if (requestError.name === "AbortError") return;
       setCommunityResults([]);
-      setLookupError(requestError.message || "Online pretraga nije uspela.");
+      setLookupError(requestError.message || t("setlist.onlineSearchFail"));
     } finally {
       if (!controller.signal.aborted) {
         setLookupLoading(false);
@@ -220,7 +218,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
       if (!eventId || !bandId) {
         if (!cancelled) {
           setLoading(false);
-          setError("Nedostaje bend za ovaj termin.");
+          setError(t("common.missingBand"));
         }
         return;
       }
@@ -232,7 +230,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
         applyBundle(data);
       } catch (requestError) {
         if (!cancelled) {
-          setError(requestError.message || "Set lista nije učitana.");
+          setError(requestError.message || t("setlist.loadFail"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -242,7 +240,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
     return () => {
       cancelled = true;
     };
-  }, [eventId, bandId]);
+  }, [eventId, bandId, t]);
 
   function recomputeStats(nextSections) {
     const all = [...nextSections.main, ...nextSections.encore, ...nextSections.alts];
@@ -284,9 +282,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
         return next;
       });
       resetAddForm();
-      showToast?.("Pesma dodata iz biblioteke benda");
+      showToast?.(t("setlist.addedFromLibrary"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Pesma nije dodata", "error");
+      showToast?.(requestError.message || t("setlist.addFail"), "error");
     } finally {
       setBusyId("");
     }
@@ -296,7 +294,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
     if (!editable || !eventId || !bandId) return;
     const title = (titleOverride || addQuery).trim();
     if (!title) {
-      showToast?.("Unesi naslov pesme.", "error");
+      showToast?.(t("setlist.titleRequired"), "error");
       return;
     }
     setBusyId("add");
@@ -330,9 +328,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
         });
       }
       resetAddForm();
-      showToast?.("Pesma kreirana — dodaj tekst ručno");
+      showToast?.(t("setlist.createdManual"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Pesma nije dodata", "error");
+      showToast?.(requestError.message || t("setlist.addFail"), "error");
     } finally {
       setBusyId("");
     }
@@ -345,7 +343,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
       const full = await api(`/api/lyrics/community/${match.id}`);
       const title = full.trackName || match.trackName || addQuery.trim();
       if (!title) {
-        showToast?.("Naslov pesme nedostaje.", "error");
+        showToast?.(t("setlist.titleMissing"), "error");
         return;
       }
       const created = await api(`/api/events/${eventId}/setlist/items`, {
@@ -383,9 +381,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
         });
       }
       resetAddForm();
-      showToast?.("Pesma uvezena sa tekstom");
+      showToast?.(t("setlist.importedWithLyrics"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Uvoz nije uspeo", "error");
+      showToast?.(requestError.message || t("setlist.importFail"), "error");
     } finally {
       setBusyId("");
     }
@@ -418,9 +416,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
         setStats(recomputeStats(next));
         return next;
       });
-      showToast?.("Pesma uklonjena");
+      showToast?.(t("setlist.deleted"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Pesma nije uklonjena", "error");
+      showToast?.(requestError.message || t("setlist.deleteFail"), "error");
     } finally {
       setBusyId("");
     }
@@ -450,7 +448,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
       });
       applyBundle(data);
     } catch (requestError) {
-      showToast?.(requestError.message || "Redosled nije sačuvan", "error");
+      showToast?.(requestError.message || t("setlist.reorderFail"), "error");
       const data = await api(`/api/events/${eventId}/setlist`, { bandId });
       applyBundle(data);
     } finally {
@@ -514,7 +512,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
     if (!drawerItem || !drawerDraft || !editable || !eventId || !bandId) return;
     const title = drawerDraft.title.trim();
     if (!title) {
-      showToast?.("Naslov je obavezan.", "error");
+      showToast?.(t("setlist.titleRequiredSave"), "error");
       return;
     }
     setBusyId(String(drawerItem.id));
@@ -548,16 +546,16 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
         );
       }
       closeDrawer();
-      showToast?.("Pesma sačuvana");
+      showToast?.(t("setlist.saved"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Pesma nije sačuvana", "error");
+      showToast?.(requestError.message || t("setlist.saveSongFail"), "error");
     } finally {
       setBusyId("");
     }
   }
 
   if (loading) {
-    return <p className="tech-rider-status">Učitavam set listu…</p>;
+    return <p className="tech-rider-status">{t("setlist.loading")}</p>;
   }
 
   if (error) {
@@ -569,7 +567,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
       <header className="tech-rider-head">
         <div>
           <p className="tech-rider-eyebrow">Chabar show</p>
-          <h3 className="tech-rider-title">Set lists</h3>
+          <h3 className="tech-rider-title">{t("setlist.title")}</h3>
         </div>
         {editable ? (
           <button
@@ -578,34 +576,34 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             disabled={busyId === "add"}
             onClick={() => setAddOpen((open) => !open)}
           >
-            {busyId === "add" ? "…" : "+ Add song"}
+            {busyId === "add" ? "…" : `+ ${t("setlist.addSong")}`}
           </button>
         ) : null}
       </header>
 
-      <div className="tech-rider-stats event-rack-stats" aria-label="Set statistika">
+      <div className="tech-rider-stats event-rack-stats" aria-label={t("setlist.title")}>
         <span>
-          Songs: <strong>{stats.totalSongs}</strong>
+          {t("setlist.stats.songs")}: <strong>{stats.totalSongs}</strong>
         </span>
         <span>
-          Runtime: <strong>{formatTotalDuration(stats.totalDurationSec)}</strong>
+          {t("setlist.stats.runtime")}: <strong>{formatTotalDuration(stats.totalDurationSec)}</strong>
         </span>
         <span>
-          Encore: <strong>{stats.encoreCount}</strong>
+          {t("setlist.stats.encore")}: <strong>{stats.encoreCount}</strong>
         </span>
       </div>
 
-      <div className="tech-rider-mode" role="tablist" aria-label="Set sekcije">
-        {SECTIONS.map((section) => (
+      <div className="tech-rider-mode" role="tablist" aria-label={t("setlist.sectionsAria")}>
+        {SECTION_IDS.map((sectionId) => (
           <button
-            key={section.id}
+            key={sectionId}
             type="button"
             role="tab"
-            className={`tech-rider-mode-btn is-input ${mode === section.id ? "is-active" : ""}`}
-            aria-selected={mode === section.id}
-            onClick={() => setMode(section.id)}
+            className={`tech-rider-mode-btn is-input ${mode === sectionId ? "is-active" : ""}`}
+            aria-selected={mode === sectionId}
+            onClick={() => setMode(sectionId)}
           >
-            {section.label} ({stats[`${section.id}Count`] ?? 0})
+            {t(`setlist.${sectionId}`)} ({stats[`${sectionId}Count`] ?? 0})
           </button>
         ))}
       </div>
@@ -614,14 +612,14 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
         <div className="setlist-lookup">
           <div className="setlist-add-bar">
             <label className="setlist-add-field setlist-add-field-grow">
-              <span className="sr-only">Naslov pesme</span>
+              <span className="sr-only">{t("setlist.songTitle")}</span>
               <input
                 id="setlist-add-title"
                 name="setlist-add-title"
                 type="search"
                 autoComplete="off"
                 autoFocus
-                placeholder="Naslov pesme…"
+                placeholder={t("setlist.songTitlePlaceholder")}
                 value={addQuery}
                 onChange={(e) => {
                   setAddQuery(e.target.value);
@@ -639,13 +637,13 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
               />
             </label>
             <label className="setlist-add-field">
-              <span className="sr-only">Izvođač (opciono)</span>
+              <span className="sr-only">{t("setlist.artistOptional")}</span>
               <input
                 id="setlist-add-artist"
                 name="setlist-add-artist"
                 type="text"
                 autoComplete="off"
-                placeholder="Izvođač"
+                placeholder={t("setlist.artist")}
                 value={addArtist}
                 onChange={(e) => setAddArtist(e.target.value)}
                 onKeyDown={(e) => {
@@ -659,9 +657,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
               disabled={busyId === "add" || lookupLoading || addQuery.trim().length < 3}
               onClick={() => runCommunityLookup({ force: true })}
             >
-              {lookupLoading ? "…" : "Pretraži online"}
+              {lookupLoading ? "…" : t("setlist.searchOnline")}
             </button>
-            <button type="button" className="setlist-add-cancel" onClick={resetAddForm}>
+            <button type="button" className="setlist-add-cancel" onClick={resetAddForm} aria-label={t("common.close")}>
               ×
             </button>
           </div>
@@ -669,7 +667,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
           <div className="setlist-lookup-results" aria-live="polite">
             {bandLookupResults.length ? (
               <section className="setlist-lookup-group">
-                <h4>Vaša biblioteka</h4>
+                <h4>{t("setlist.yourLibrary")}</h4>
                 <ul>
                   {bandLookupResults.map((song) => (
                     <li key={song.id}>
@@ -679,9 +677,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                         disabled={busyId === "add"}
                         onClick={() => addItemFromBand(song.id)}
                       >
-                        <strong>{song.title || "Bez naslova"}</strong>
+                        <strong>{song.title || t("setlist.noTitle")}</strong>
                         <span>
-                          {song.songKey || "—"} · {song.lyrics?.trim() ? "ima tekst" : "bez teksta"}
+                          {song.songKey || "—"} · {song.lyrics?.trim() ? t("setlist.hasLyrics") : t("setlist.noLyrics")}
                         </span>
                       </button>
                     </li>
@@ -692,11 +690,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
 
             {addQuery.trim().length >= 3 ? (
               <section className="setlist-lookup-group">
-                <h4>Online pretraga (LRCLIB)</h4>
-                <p className="setlist-lookup-note">
-                  Zajednički katalog — nije royalty-free. Pretraga ide na klik / pauza pri kucanju (≈1s).
-                </p>
-                {lookupLoading ? <p className="setlist-lookup-status">Tražim…</p> : null}
+                <h4>{t("setlist.onlineSearch")}</h4>
+                <p className="setlist-lookup-note">{t("setlist.onlineSearchNote")}</p>
+                {lookupLoading ? <p className="setlist-lookup-status">{t("setlist.searching")}</p> : null}
                 {lookupError ? <p className="setlist-lookup-status is-error">{lookupError}</p> : null}
                 {!lookupLoading && !lookupError && communityResults.length ? (
                   <ul>
@@ -708,11 +704,11 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                           disabled={busyId === "add" || !match.hasLyrics}
                           onClick={() => importCommunityMatch(match)}
                         >
-                          <strong>{match.trackName || "Bez naslova"}</strong>
+                          <strong>{match.trackName || t("setlist.noTitle")}</strong>
                           <span>
-                            {match.artistName || "Nepoznat izvođač"}
+                            {match.artistName || t("setlist.unknownArtist")}
                             {match.durationSec ? ` · ${formatDuration(match.durationSec)}` : ""}
-                            {match.hasLyrics ? " · uvezi tekst" : " · instrumentalno"}
+                            {match.hasLyrics ? ` · ${t("setlist.importLyrics")}` : ` · ${t("setlist.instrumental")}`}
                           </span>
                         </button>
                       </li>
@@ -720,7 +716,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                   </ul>
                 ) : null}
                 {!lookupLoading && !lookupError && !communityResults.length ? (
-                  <p className="setlist-lookup-status">Nema online pogodaka — probaj drugačiji naslov ili ručni unos.</p>
+                  <p className="setlist-lookup-status">{t("setlist.noOnlineResults")}</p>
                 ) : null}
               </section>
             ) : null}
@@ -732,42 +728,42 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                 disabled={busyId === "add" || !addQuery.trim()}
                 onClick={() => addItemManual()}
               >
-                Kreiraj praznu pesmu
+                {t("setlist.createEmptySong")}
               </button>
-              <span className="setlist-lookup-note">Zatim paste / ručno u tekst pesme.</span>
+              <span className="setlist-lookup-note">{t("setlist.createEmptyHint")}</span>
             </div>
           </div>
         </div>
       ) : null}
 
       <label className="tech-rider-search">
-        <span className="sr-only">Pretraga pesama</span>
+        <span className="sr-only">{t("setlist.searchSongs")}</span>
         <input
           id="setlist-search"
           name="setlist-search"
           type="search"
           autoComplete="off"
-          placeholder="Search songs…"
+          placeholder={t("setlist.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </label>
 
       {readOnly ? (
-        <p className="tech-rider-locknote">Prošli termin — set lista je samo za pregled.</p>
+        <p className="tech-rider-locknote">{t("setlist.locknote")}</p>
       ) : !canEdit ? (
-        <p className="tech-rider-locknote">Samo vlasnik, lead ili dodeljeni urednik mogu menjati set listu.</p>
+        <p className="tech-rider-locknote">{t("setlist.noEdit")}</p>
       ) : null}
 
       <div className="tech-rider-desktop event-rack-table-wrap">
         <table className="tech-rider-table">
           <thead>
             <tr>
-              <th>#</th>
-              <th>Song</th>
-              <th>Key</th>
-              <th>Time</th>
-              <th aria-label="Akcije" />
+              <th>{t("setlist.col.num")}</th>
+              <th>{t("setlist.col.song")}</th>
+              <th>{t("setlist.key")}</th>
+              <th>{t("setlist.col.time")}</th>
+              <th aria-label={t("common.actions")} />
             </tr>
           </thead>
           <tbody>
@@ -783,9 +779,9 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                         type="button"
                         className="setlist-title-btn"
                         onClick={() => openDrawer(item)}
-                        title={item.notes || "Otvori tekst i detalje"}
+                        title={item.notes || t("setlist.openDetails")}
                       >
-                        {item.title || "Bez naslova"}
+                        {item.title || t("setlist.noTitle")}
                       </button>
                     </td>
                     <td>
@@ -800,8 +796,8 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                           <button
                             type="button"
                             className="tech-rider-icon-btn"
-                            aria-label="Tekst pesme"
-                            title="Tekst pesme"
+                            aria-label={t("setlist.lyricsAria")}
+                            title={t("setlist.lyricsAria")}
                             disabled={rowBusy}
                             onClick={() => openDrawer(item)}
                           >
@@ -810,7 +806,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                           <button
                             type="button"
                             className="tech-rider-icon-btn"
-                            aria-label="Pomeri gore"
+                            aria-label={t("setlist.moveUp")}
                             disabled={rowBusy || index === 0}
                             onClick={() => moveItem(item, -1)}
                           >
@@ -819,7 +815,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                           <button
                             type="button"
                             className="tech-rider-icon-btn"
-                            aria-label="Pomeri dole"
+                            aria-label={t("setlist.moveDown")}
                             disabled={rowBusy || index === items.length - 1}
                             onClick={() => moveItem(item, 1)}
                           >
@@ -828,7 +824,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                           <button
                             type="button"
                             className="tech-rider-icon-btn tech-rider-icon-btn-danger"
-                            aria-label="Ukloni pesmu"
+                            aria-label={t("setlist.removeSong")}
                             disabled={rowBusy}
                             onClick={() => removeItem(item)}
                           >
@@ -839,8 +835,8 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                         <button
                           type="button"
                           className="tech-rider-icon-btn"
-                          aria-label="Tekst pesme"
-                          title="Tekst pesme"
+                          aria-label={t("setlist.lyricsAria")}
+                          title={t("setlist.lyricsAria")}
                           onClick={() => openDrawer(item)}
                         >
                           <LyricsIcon />
@@ -853,7 +849,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             ) : (
               <tr>
                 <td colSpan={5} className="tech-rider-empty-row">
-                  {search.trim() ? "Nema rezultata pretrage." : "Nema pesama — dodaj prvu u ovu sekciju."}
+                  {search.trim() ? t("search.noResults") : t("setlist.emptySection")}
                 </td>
               </tr>
             )}
@@ -870,21 +866,21 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
               <li key={item.id} className="tech-rider-card">
                 <div className="tech-rider-card-head">
                   <span className="tech-rider-ch">{formatItemNumber(mode, index)}</span>
-                  <strong>{item.title || "Bez naslova"}</strong>
+                  <strong>{item.title || t("setlist.noTitle")}</strong>
                 </div>
                 <dl className="tech-rider-card-meta">
                   <div>
-                    <dt>Key</dt>
+                    <dt>{t("setlist.key")}</dt>
                     <dd>{item.songKey || "—"}</dd>
                   </div>
                   <div>
-                    <dt>Time</dt>
+                    <dt>{t("setlist.col.time")}</dt>
                     <dd>{formatDuration(item.durationSec)}</dd>
                   </div>
                 </dl>
                 <div className="tech-rider-card-actions">
                   <button type="button" disabled={rowBusy} onClick={() => openDrawer(item)}>
-                    Tekst
+                    {t("setlist.lyricsBtn")}
                   </button>
                   {editable ? (
                     <>
@@ -903,7 +899,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                         className="is-danger"
                         disabled={rowBusy}
                         onClick={() => removeItem(item)}
-                        aria-label="Ukloni pesmu"
+                        aria-label={t("setlist.removeSong")}
                       >
                         ×
                       </button>
@@ -915,7 +911,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
           })
         ) : (
           <li className="tech-rider-card tech-rider-card-empty">
-            {search.trim() ? "Nema rezultata pretrage." : "Nema pesama — dodaj prvu u ovu sekciju."}
+            {search.trim() ? t("search.noResults") : t("setlist.emptySection")}
           </li>
         )}
       </ul>
@@ -925,18 +921,18 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
           <div
             className="tech-rider-drawer setlist-drawer"
             role="dialog"
-            aria-label={`Pesma ${drawerDraft.title || ""}`}
+            aria-label={t("setlist.songDialog", { title: drawerDraft.title || "" })}
             onClick={(e) => e.stopPropagation()}
           >
             <header className="tech-rider-drawer-head">
-              <h4>{drawerDraft.title || "Pesma"}</h4>
-              <button type="button" className="tech-rider-icon-btn" aria-label="Zatvori" onClick={closeDrawer}>
+              <h4>{drawerDraft.title || t("setlist.songDefault")}</h4>
+              <button type="button" className="tech-rider-icon-btn" aria-label={t("common.close")} onClick={closeDrawer}>
                 ×
               </button>
             </header>
 
             <label className="tech-rider-drawer-field">
-              Naslov
+              {t("setlist.titleField")}
               <input
                 id={`setlist-${drawerItem.id}-title`}
                 name={`setlist-${drawerItem.id}-title`}
@@ -948,7 +944,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             </label>
 
             <label className="tech-rider-drawer-field">
-              Tonality (key)
+              {t("setlist.tonality")}
               <input
                 id={`setlist-${drawerItem.id}-key`}
                 name={`setlist-${drawerItem.id}-key`}
@@ -961,7 +957,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             </label>
 
             <label className="tech-rider-drawer-field">
-              Trajanje (sekunde)
+              {t("setlist.duration")}
               <input
                 id={`setlist-${drawerItem.id}-duration`}
                 name={`setlist-${drawerItem.id}-duration`}
@@ -976,20 +972,20 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
             </label>
 
             <label className="tech-rider-drawer-field">
-              Napomena za ovaj datum
+              {t("setlist.notes")}
               <input
                 id={`setlist-${drawerItem.id}-notes`}
                 name={`setlist-${drawerItem.id}-notes`}
                 autoComplete="off"
                 value={drawerDraft.notes}
                 readOnly={!editable}
-                placeholder="Intro skraćen, drugi refren…"
+                placeholder={t("setlist.notesPlaceholder")}
                 onChange={(e) => setDrawerDraft((current) => ({ ...current, notes: e.target.value }))}
               />
             </label>
 
             <div className="setlist-lyrics-head">
-              <span className="tech-rider-drawer-label">Tekst</span>
+              <span className="tech-rider-drawer-label">{t("setlist.lyrics")}</span>
               {editable ? (
                 <div className="setlist-lyrics-tools">
                   <label className="setlist-capital-test">
@@ -1000,15 +996,15 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                       checked={splitByCapitalsTest}
                       onChange={(e) => setSplitByCapitalsTest(e.target.checked)}
                     />
-                    Test: podeli po velikim slovima
+                    {t("setlist.splitCapitals")}
                   </label>
                   <button
                     type="button"
                     className="setlist-split-btn"
-                    title="Novi red pre velikog slova posle malog (npr. stihDrugi → stih / Drugi)"
+                    title={t("setlist.capitalSplitTitle")}
                     onClick={applyCapitalSplit}
                   >
-                    Podeli sada
+                    {t("setlist.splitNow")}
                   </button>
                 </div>
               ) : null}
@@ -1021,7 +1017,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
               autoComplete="off"
               value={drawerDraft.lyrics}
               readOnly={!editable}
-              placeholder="Stihovi za ovaj termin…"
+              placeholder={t("setlist.lyricsPlaceholder")}
               onChange={(e) => setDrawerDraft((current) => ({ ...current, lyrics: e.target.value }))}
               onPaste={handleLyricsPaste}
             />
@@ -1035,7 +1031,7 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                   checked={updateLibrary}
                   onChange={(e) => setUpdateLibrary(e.target.checked)}
                 />
-                Ažuriraj i pesmu u biblioteci benda
+                {t("setlist.updateLibrary")}
               </label>
             ) : null}
 
@@ -1047,11 +1043,11 @@ export default function SetListPanel({ eventId, bandId, readOnly = false, showTo
                   disabled={busyId === String(drawerItem.id)}
                   onClick={saveDrawer}
                 >
-                  Sačuvaj
+                  {t("common.save")}
                 </button>
               ) : null}
               <button type="button" className="setlist-drawer-close" onClick={closeDrawer}>
-                Zatvori
+                {t("common.close")}
               </button>
             </div>
           </div>

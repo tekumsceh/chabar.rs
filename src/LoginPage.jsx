@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useT } from "./i18n/I18nProvider.jsx";
 import { authRedirectTo, friendlyAuthError, supabase } from "./supabase.js";
 import { peekPendingJoinToken, rememberJoinToken } from "./joinLink.js";
 import FadeScroll from "./FadeScroll.jsx";
 
 export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }) {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState("signin");
@@ -35,7 +37,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && data.bandName) {
-          setJoinHint(`Posle prijave ulaziš u bend „${data.bandName}” kao član.`);
+          setJoinHint(t("login.joinHint", { bandName: data.bandName }));
         }
       } catch {
         // ignore preview failures
@@ -44,7 +46,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   async function handleEmailAuth(event) {
     event.preventDefault();
@@ -60,11 +62,11 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
       } else {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
-        setMessage("Proveri email za potvrdu naloga, zatim se prijavi.");
+        setMessage(t("login.checkEmail"));
         setMode("signin");
       }
     } catch (authError) {
-      setError(friendlyAuthError(authError.message) || "Prijava nije uspela");
+      setError(friendlyAuthError(authError.message) || t("login.authFailed"));
     } finally {
       setBusy(false);
     }
@@ -89,7 +91,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
       });
       if (oauthError) throw oauthError;
     } catch (authError) {
-      setError(friendlyAuthError(authError.message) || "Google prijava nije uspela");
+      setError(friendlyAuthError(authError.message) || t("login.googleFailed"));
       setBusy(false);
     }
   }
@@ -99,16 +101,16 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
       <article className="login-card panel">
         <div className="panel-heading compact">
           <div>
-            <h2>{mode === "signin" ? "Prijava" : "Registracija"}</h2>
-            <p className="login-welcome">Dobrodošli</p>
-            <p className="login-subtitle">Prijavite se ili se registrujete.</p>
+            <h2>{mode === "signin" ? t("login.title") : t("login.register")}</h2>
+            <p className="login-welcome">{t("login.welcome")}</p>
+            <p className="login-subtitle">{t("login.subtitle")}</p>
             {joinHint ? <p className="login-join-hint">{joinHint}</p> : null}
           </div>
         </div>
 
         <form className="login-form" onSubmit={handleEmailAuth}>
           <label>
-            Email
+            {t("login.email")}
             <input
               id="login-email"
               name="email"
@@ -120,7 +122,7 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
             />
           </label>
           <label>
-            Lozinka
+            {t("login.password")}
             <input
               id="login-password"
               name="password"
@@ -137,15 +139,15 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
           {message ? <div className="app-alert app-alert-ok">{message}</div> : null}
 
           <button type="submit" disabled={busy}>
-            {busy ? "Sačekaj..." : mode === "signin" ? "Prijavi se" : "Kreiraj nalog"}
+            {busy ? t("login.busy") : mode === "signin" ? t("login.signIn") : t("login.createAccount")}
           </button>
         </form>
 
-        <div className="login-divider">ili</div>
+        <div className="login-divider">{t("login.or")}</div>
 
         <button type="button" className="login-google" onClick={handleGoogle} disabled={busy}>
           <GoogleIcon />
-          <span>Nastavi sa Google</span>
+          <span>{t("login.google")}</span>
         </button>
 
         <button
@@ -157,21 +159,21 @@ export default function LoginPage({ onSignedIn, initialError = "", onOpenLegal }
             setMessage("");
           }}
         >
-          {mode === "signin" ? "Nemam nalog — registruj se" : "Imam nalog — prijavi se"}
+          {mode === "signin" ? t("login.switchNoAccount") : t("login.switchHasAccount")}
         </button>
 
-        <nav className="login-legal" aria-label="Pravne stranice">
+        <nav className="login-legal" aria-label={t("login.legalNav")}>
           <button type="button" onClick={() => onOpenLegal?.("terms")}>
-            Uslovi
+            {t("login.termsLink")}
           </button>
           <button type="button" onClick={() => onOpenLegal?.("privacy")}>
-            Privatnost
+            {t("login.privacyLink")}
           </button>
           <button type="button" onClick={() => onOpenLegal?.("cookies")}>
-            Kolačići
+            {t("login.cookies")}
           </button>
           <button type="button" onClick={() => onOpenLegal?.("imprint")}>
-            Pravno
+            {t("login.imprint")}
           </button>
         </nav>
       </article>

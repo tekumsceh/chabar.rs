@@ -24,24 +24,25 @@ import FieldSelect from "./FieldSelect.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import { api } from "./api.js";
 import { parseMapsVenueInput, resolveMapsUrl } from "./mapsLink.js";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 const TABS = [
-  { id: "osnovno", label: "Osnovno" },
-  { id: "tehnicki", label: "Tehnički" },
-  { id: "show", label: "Show" },
-  { id: "finansije", label: "Finansije", leadOnly: true },
+  { id: "osnovno", labelKey: "event.tab.osnovno" },
+  { id: "tehnicki", labelKey: "event.tab.tehnicki" },
+  { id: "show", labelKey: "event.tab.show" },
+  { id: "finansije", labelKey: "event.tab.finansije", leadOnly: true },
 ];
 
 const TECH_SUBTABS = [
-  { id: "hospitality-rider", label: "Hospitality rider" },
-  { id: "technical-rider", label: "Technical rider" },
-  { id: "lighting-rider", label: "Lighting rider" },
-  { id: "stage-plot", label: "Stage plot" },
+  { id: "hospitality-rider", labelKey: "event.sub.hospitality" },
+  { id: "technical-rider", labelKey: "event.sub.technical" },
+  { id: "lighting-rider", labelKey: "event.sub.lighting" },
+  { id: "stage-plot", labelKey: "event.sub.stage" },
 ];
 
 const SHOW_SUBTABS = [
-  { id: "set-lists", label: "Set lists" },
-  { id: "visuals", label: "Visuals" },
+  { id: "set-lists", labelKey: "event.sub.setlists" },
+  { id: "visuals", labelKey: "event.sub.visuals" },
 ];
 
 const EMPTY_FINANCE_MEMBERS = [];
@@ -58,6 +59,7 @@ export default function EventPage({
   leaveSignal = 0,
   showToast,
 }) {
+  const t = useT();
   const { confirm } = useConfirm();
   const [tab, setTab] = useState("osnovno");
   const [techSubTab, setTechSubTab] = useState(TECH_SUBTABS[0].id);
@@ -136,18 +138,18 @@ export default function EventPage({
     () =>
       DAY_TIME_FIELDS.map((field) => ({
         key: field.key,
-        label: field.label,
+        label: t(field.labelKey),
         value: formatDayDetailValue(dayDetails, field),
       })).filter((row) => row.value),
-    [dayDetails],
+    [dayDetails, t],
   );
   const bandOptions = useMemo(
     () =>
       (bands || []).map((item) => ({
         id: item.id,
-        label: `${item.name}${item.kind === "personal" ? " (lično)" : ""}`,
+        label: `${item.name}${item.kind === "personal" ? ` ${t("event.personalSuffix")}` : ""}`,
       })),
-    [bands],
+    [bands, t],
   );
 
   const isDirty =
@@ -218,7 +220,7 @@ export default function EventPage({
       })
       .catch((requestError) => {
         if (cancelled) return;
-        setFinanceError(requestError.message || "Finansije nisu učitane.");
+        setFinanceError(requestError.message || t("event.financeLoadFail"));
         setFinanceBundle(null);
       })
       .finally(() => {
@@ -228,7 +230,7 @@ export default function EventPage({
     return () => {
       cancelled = true;
     };
-  }, [canSeeFinance, event?.id, financeBandId]);
+  }, [canSeeFinance, event?.id, financeBandId, t]);
 
   useEffect(() => {
     if (locked && editing) {
@@ -264,10 +266,10 @@ export default function EventPage({
     if (saving) return;
     if (isDirty) {
       const confirmed = await confirm({
-        title: "Nesačuvane izmene",
-        message: "Imaš nesačuvane izmene. Odbaciti izmene?",
-        confirmLabel: "Odbaci",
-        cancelLabel: "Ostani",
+        title: t("event.unsavedTitle"),
+        message: t("event.discardMessage"),
+        confirmLabel: t("event.discard"),
+        cancelLabel: t("event.stay"),
         danger: true,
       });
       if (!confirmed) return;
@@ -286,17 +288,17 @@ export default function EventPage({
     const mapsUrl = String(current.mapsUrl || "").trim();
     const note = String(current.note || "").trim();
 
-    if (!bandId) return { error: "Izaberi bend ili Personal." };
-    if (!date) return { error: "Datum je obavezan." };
+    if (!bandId) return { error: t("event.validation.band") };
+    if (!date) return { error: t("event.validation.dateRequired") };
     const parsed = parseDate(date);
     if (Number.isNaN(parsed.getTime())) {
-      return { error: "Datum nije ispravan. Izaberi datum iz kalendara." };
+      return { error: t("event.validation.dateInvalid") };
     }
     if (parsed.getTime() <= startOfToday().getTime()) {
-      return { error: "Datum ne sme biti danas ili u prošlosti." };
+      return { error: t("event.validation.datePast") };
     }
     if (!city && !venue && !mapsUrl && !note) {
-      return { error: "Unesi bar mesto, lokal ili napomenu." };
+      return { error: t("event.validation.minField") };
     }
     return { bandId, date, city, venue, mapsUrl, note };
   }
@@ -328,10 +330,10 @@ export default function EventPage({
 
     if (askConfirm) {
       const confirmed = await confirm({
-        title: "Sačuvati izmene?",
+        title: t("event.saveConfirmTitle"),
         message: `${date}${city ? ` — ${city}` : ""}`,
-        confirmLabel: "Sačuvaj",
-        cancelLabel: "Otkaži",
+        confirmLabel: t("common.save"),
+        cancelLabel: t("common.cancel"),
       });
       if (!confirmed) return false;
     }
@@ -345,7 +347,7 @@ export default function EventPage({
       setEditing(false);
       return true;
     } catch (error) {
-      setFormError(error.message || "Nije moguće sačuvati termin.");
+      setFormError(error.message || t("event.saveFail"));
       setTab("osnovno");
       setEditing(true);
       return false;
@@ -360,10 +362,10 @@ export default function EventPage({
 
     if (editingRef.current && dirtyRef.current) {
       const save = await confirm({
-        title: "Nesačuvane izmene",
-        message: "Imaš nesačuvane izmene. Sačuvati pre povratka na raspored?",
-        confirmLabel: "Sačuvaj",
-        cancelLabel: "Otkaži",
+        title: t("event.unsavedTitle"),
+        message: t("event.saveBeforeBack"),
+        confirmLabel: t("common.save"),
+        cancelLabel: t("common.cancel"),
       });
       if (!save) return false;
       const saved = await persistEdit({ askConfirm: false });
@@ -393,17 +395,17 @@ export default function EventPage({
             type="button"
             ref={backRef}
             className="event-page-back"
-            aria-label="Nazad"
-            title="Nazad"
+            aria-label={t("common.back")}
+            title={t("common.back")}
             onClick={onBack}
           >
             <ChevronLeftIcon />
           </button>
           <div className="event-page-title-wrap">
-            <h2 className="event-page-title">Termin nije pronađen</h2>
+            <h2 className="event-page-title">{t("event.notFound")}</h2>
           </div>
         </header>
-        <p className="raspored-empty">Ovaj termin više nije u rasporedu.</p>
+        <p className="raspored-empty">{t("event.notFoundHint")}</p>
       </div>
     );
   }
@@ -415,8 +417,8 @@ export default function EventPage({
           type="button"
           ref={backRef}
           className="event-page-back"
-          aria-label="Nazad na raspored"
-          title="Nazad na raspored"
+          aria-label={t("event.back")}
+          title={t("event.back")}
           onClick={requestBack}
         >
           <ChevronLeftIcon />
@@ -435,15 +437,15 @@ export default function EventPage({
           ) : null}
         </div>
         {locked ? (
-          <span className="event-page-lock" title="Prošli termin je zaključan" aria-label="Zaključan termin">
+          <span className="event-page-lock" title={t("event.lockedTitle")} aria-label={t("event.lockedAria")}>
             <LockIcon />
           </span>
         ) : (
           <button
             type="button"
             className={`raspored-icon-btn ${editing ? "is-active-filter" : ""}`}
-            title={editing ? "U režimu izmene" : "Izmeni termin"}
-            aria-label={editing ? "U režimu izmene" : "Izmeni termin"}
+            title={editing ? t("event.editingMode") : t("event.editEvent")}
+            aria-label={editing ? t("event.editingMode") : t("event.editEvent")}
             aria-pressed={editing}
             onClick={() => (editing ? cancelEdit() : startEdit())}
             disabled={saving || detailsOpen}
@@ -455,7 +457,7 @@ export default function EventPage({
 
       {!detailsOpen ? (
         <div className="event-page-tabs-shell">
-          <div className="event-page-tabs" role="tablist" aria-label="Sekcije termina">
+          <div className="event-page-tabs" role="tablist" aria-label={t("event.tabSections")}>
             {visibleTabs.map((item) => (
               <button
                 key={item.id}
@@ -467,7 +469,7 @@ export default function EventPage({
                 aria-controls={`event-tabpanel-${item.id}`}
                 onClick={() => setTab(item.id)}
               >
-                {item.label}
+                {t(item.labelKey)}
               </button>
             ))}
           </div>
@@ -484,19 +486,19 @@ export default function EventPage({
           {editing ? (
             <form className="event-page-form termin-form" onSubmit={saveEdit}>
               <label htmlFor="eventBand" className="termin-form-full">
-                Bend / Personal
+                {t("event.bandPersonal")}
                 <FieldSelect
                   id="eventBand"
-                  label="Bend / Personal"
+                  label={t("event.bandPersonal")}
                   value={form.bandId}
-                  placeholder="— Izaberi —"
+                  placeholder={t("common.choose")}
                   required
                   options={bandOptions}
                   onChange={(id) => updateForm("bandId", id)}
                 />
               </label>
               <label htmlFor="eventDate" className="termin-form-full">
-                Datum
+                {t("schedule.date")}
                 <input
                   id="eventDate"
                   name="eventDate"
@@ -508,37 +510,37 @@ export default function EventPage({
                 />
               </label>
               <label htmlFor="eventCity">
-                Mesto
+                {t("event.form.city")}
                 <input
                   id="eventCity"
                   name="eventCity"
                   type="text"
-                  placeholder="Beograd, Novi Sad..."
+                  placeholder={t("event.cityPlaceholder")}
                   value={form.city}
                   onChange={(e) => updateForm("city", e.target.value)}
                   autoComplete="address-level2"
                 />
               </label>
               <label htmlFor="eventVenue">
-                Lokal
+                {t("event.form.venue")}
                 <input
                   id="eventVenue"
                   name="eventVenue"
                   type="text"
-                  placeholder="Ime lokala"
+                  placeholder={t("event.venuePlaceholder")}
                   value={form.venue}
                   onChange={(e) => updateForm("venue", e.target.value)}
                   autoComplete="organization"
                 />
               </label>
               <label htmlFor="eventMapsUrl" className="termin-form-full">
-                Google Maps link
+                {t("event.mapsUrl")}
                 <input
                   id="eventMapsUrl"
                   name="eventMapsUrl"
                   type="url"
                   inputMode="url"
-                  placeholder="Nalepi Maps link (opciono)"
+                  placeholder={t("event.mapsUrlPlaceholder")}
                   value={form.mapsUrl}
                   onChange={(e) => applyMapsLinkInput(e.target.value)}
                   onPaste={(e) => {
@@ -554,31 +556,31 @@ export default function EventPage({
               </label>
               {form.mapsUrl ? (
                 <p className="event-venue-maps-hint termin-form-full">
-                  Pin otvara ovaj link
+                  {t("event.mapsPinHint")}
                   <button
                     type="button"
                     className="event-venue-maps-clear"
                     onClick={() => setForm((current) => ({ ...current, mapsUrl: "" }))}
                   >
-                    Ukloni
+                    {t("event.remove")}
                   </button>
                 </p>
               ) : null}
               <label className="termin-form-full" htmlFor="eventNote">
-                Napomena
+                {t("event.note")}
                 <input
                   id="eventNote"
                   name="eventNote"
                   type="text"
-                  placeholder="Bend, tip događaja..."
+                  placeholder={t("event.notePlaceholder")}
                   value={form.note}
                   onChange={(e) => updateForm("note", e.target.value)}
                   autoComplete="off"
                 />
               </label>
 
-              <div className="event-page-fee termin-form-full" aria-label="Moj honorar">
-                <span className="event-page-fee-label">Moj honorar</span>
+              <div className="event-page-fee termin-form-full" aria-label={t("event.myFee")}>
+                <span className="event-page-fee-label">{t("event.myFee")}</span>
                 <strong>{hasFee ? formatEur(myFee) : "—"}</strong>
               </div>
 
@@ -586,10 +588,10 @@ export default function EventPage({
 
               <div className="termin-form-actions termin-form-full">
                 <button type="button" className="danger" onClick={cancelEdit} disabled={saving}>
-                  Otkaži
+                  {t("common.cancel")}
                 </button>
                 <button type="submit" disabled={saving}>
-                  {saving ? "Čuvam..." : "Sačuvaj izmene"}
+                  {saving ? t("common.saving") : t("event.saveChanges")}
                 </button>
               </div>
             </form>
@@ -603,12 +605,12 @@ export default function EventPage({
               ))}
               {event.note ? (
                 <div className="event-page-fields-full">
-                  <dt>Napomena</dt>
+                  <dt>{t("event.note")}</dt>
                   <dd>{event.note}</dd>
                 </div>
               ) : null}
               <div className="event-page-fields-full event-page-fee-row">
-                <dt>Moj honorar</dt>
+                <dt>{t("event.myFee")}</dt>
                 <dd className={hasFee ? "is-set" : "is-empty"}>{hasFee ? formatEur(myFee) : "—"}</dd>
               </div>
             </dl>
@@ -619,16 +621,16 @@ export default function EventPage({
           <button
             type="button"
             className="event-page-full-details"
-            aria-label="Kompletni detalji"
+            aria-label={t("event.fullDetails")}
             aria-expanded={false}
-            title="Kompletni detalji"
+            title={t("event.fullDetails")}
             onClick={() => {
               setEditing(false);
               setDetailsOpen(true);
             }}
           >
             <DetailsIcon />
-            <span>Kompletni detalji</span>
+            <span>{t("event.fullDetails")}</span>
             <em className="event-page-full-details-chevron" aria-hidden="true">
               ▾
             </em>
@@ -644,7 +646,7 @@ export default function EventPage({
           role="tabpanel"
           aria-labelledby="event-tab-tehnicki"
         >
-          <div className="event-page-subtabs" role="tablist" aria-label="Tehnički delovi">
+          <div className="event-page-subtabs" role="tablist" aria-label={t("event.techParts")}>
             {TECH_SUBTABS.map((item) => (
               <button
                 key={item.id}
@@ -656,7 +658,7 @@ export default function EventPage({
                 aria-controls={`event-tech-panel-${item.id}`}
                 onClick={() => setTechSubTab(item.id)}
               >
-                {item.label}
+                {t(item.labelKey)}
               </button>
             ))}
           </div>
@@ -697,7 +699,7 @@ export default function EventPage({
           role="tabpanel"
           aria-labelledby="event-tab-show"
         >
-          <div className="event-page-subtabs" role="tablist" aria-label="Show delovi">
+          <div className="event-page-subtabs" role="tablist" aria-label={t("event.showParts")}>
             {SHOW_SUBTABS.map((item) => (
               <button
                 key={item.id}
@@ -709,7 +711,7 @@ export default function EventPage({
                 aria-controls={`event-show-panel-${item.id}`}
                 onClick={() => setShowSubTab(item.id)}
               >
-                {item.label}
+                {t(item.labelKey)}
               </button>
             ))}
           </div>
@@ -750,7 +752,7 @@ export default function EventPage({
           <FadeScroll viewportClassName="event-page-panel-scroll">
           <h3 className="event-page-section-title">
             <HonorarIcon />
-            <span>{canManageMemberFees ? "Honorari" : "Moj honorar"}</span>
+            <span>{canManageMemberFees ? t("finance.fees") : t("event.myFee")}</span>
           </h3>
           <EventFinancePanel
             eventId={event.id}
@@ -807,21 +809,21 @@ export default function EventPage({
           <button
             type="button"
             className="event-page-full-details is-open"
-            aria-label="Zatvori kompletne detalje"
+            aria-label={t("event.closeFullDetails")}
             aria-expanded
-            title="Zatvori kompletne detalje"
+            title={t("event.closeFullDetails")}
             onClick={() => setDetailsOpen(false)}
           >
             <DetailsIcon />
-            <span>Kompletni detalji</span>
+            <span>{t("event.fullDetails")}</span>
             <em className="event-page-full-details-chevron" aria-hidden="true">
               ▴
             </em>
           </button>
-          <section className="event-page-panel" role="tabpanel" aria-label="Kompletni detalji">
+          <section className="event-page-panel" role="tabpanel" aria-label={t("event.fullDetails")}>
             <FadeScroll viewportClassName="event-page-panel-scroll">
             <h3 className="event-page-section-title">
-              <span>Vremenski raspored</span>
+              <span>{t("event.timeSchedule")}</span>
             </h3>
             <EventDayDetails
               eventId={event.id}
@@ -921,8 +923,10 @@ function TechIcon() {
 }
 
 function VenueWithMaps({ venue, city = "", mapsUrl = "" }) {
+  const t = useT();
   const href = resolveMapsUrl({ mapsUrl, venue, city });
   if (!venue && !href) return null;
+  const mapsLabel = venue || t("event.location");
   return (
     <span className="venue-with-maps">
       {venue ? <span className="venue-with-maps-name">{venue}</span> : null}
@@ -932,8 +936,8 @@ function VenueWithMaps({ venue, city = "", mapsUrl = "" }) {
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          title="Otvori na Google Maps"
-          aria-label={`Otvori ${venue || "lokaciju"} na Google Maps`}
+          title={t("event.openMaps")}
+          aria-label={t("event.openMapsFor", { name: mapsLabel })}
         >
           <MapsPinIcon />
         </a>

@@ -126,14 +126,8 @@ export const HARDWARE_PRESETS = [
   "Claw",
 ];
 
-export const OUTPUT_GEAR_PRESETS = [
-  "Sennheiser IEM G4",
-  "Shure PSM1000",
-  "dB Technologies Wedge",
-  "QSC K12.2",
-  "In-Ear Transmitter",
-  "Active Wedge",
-];
+/** Monitor / output destination type (industry terms, keep English). */
+export const OUTPUT_GEAR_PRESETS = ["Wedge", "IEM RF"];
 
 export function suggestGearForSource(label, kind = "input") {
   if (kind === "output") {

@@ -17,6 +17,7 @@ import {
   ProfileNavIcon,
   ScheduleNavIcon,
 } from "./appIcons.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 import { log } from "./logger.js";
 import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase.js";
 import { takePendingJoinToken } from "./joinLink.js";
@@ -24,9 +25,9 @@ import { isBandLead } from "../shared/roles.js";
 import { ownerBandLimit } from "../shared/bandLimits.js";
 
 const NAV_ITEMS = [
-  { id: "schedule", label: "Raspored", icon: ScheduleNavIcon },
-  { id: "add", label: "Dodaj", icon: AddNavIcon, isAction: true },
-  { id: "profile", label: "Profil", icon: ProfileNavIcon },
+  { id: "schedule", labelKey: "nav.schedule", icon: ScheduleNavIcon },
+  { id: "add", labelKey: "nav.add", icon: AddNavIcon, isAction: true },
+  { id: "profile", labelKey: "nav.profile", icon: ProfileNavIcon },
 ];
 
 const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings", "button-showcase"]);
@@ -63,6 +64,7 @@ function writeStoredScheduleCache(map) {
 }
 
 export default function App() {
+  const t = useT();
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -136,7 +138,7 @@ export default function App() {
     if (gcalError) {
       showToast(gcalError, "error");
     } else if (gcal === "connected") {
-      showToast("Google kalendar povezan");
+      showToast(t("toast.googleCalendarConnected"));
     }
     if (pageParam === "band" && bandParam) {
       setActiveBandId(bandParam);
@@ -600,7 +602,7 @@ export default function App() {
     try {
       await api(`/api/me/invites/${inviteId}/decline`, { method: "POST" });
       setPendingInvites((current) => current.filter((invite) => invite.id !== inviteId));
-      showToast("Pozivnica odbijena");
+      showToast(t("toast.inviteDeclined"));
     } catch (requestError) {
       showToast(requestError.message || "Odbijanje nije uspelo", "error");
     }
@@ -625,7 +627,7 @@ export default function App() {
         ),
       );
     } catch (requestError) {
-      showToast(requestError.message || "Nije sačuvano", "error");
+      showToast(requestError.message || t("toast.notSaved"), "error");
     }
   }
 
@@ -635,7 +637,7 @@ export default function App() {
       const now = new Date().toISOString();
       setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt || now })));
     } catch (requestError) {
-      showToast(requestError.message || "Nije sačuvano", "error");
+      showToast(requestError.message || t("toast.notSaved"), "error");
     }
   }
 
@@ -685,7 +687,7 @@ export default function App() {
       setProfile((current) =>
         current ? { ...current, invitePreference: result.invitePreference || next } : current,
       );
-      showToast("Sačuvano");
+      showToast(t("toast.saved"));
     } catch (requestError) {
       reportError(requestError, "save invite preference failed");
     }
@@ -899,7 +901,7 @@ export default function App() {
     const created = await api("/api/payments", { method: "POST", body: payment });
     setPayments((current) => [...current, created]);
     setPage("report");
-    showToast("Uplata dodata");
+    showToast(t("toast.paymentAdded"));
   }
 
   async function removePayment(id) {
@@ -912,7 +914,7 @@ export default function App() {
     const rsd = numberValue(planner.rsd);
 
     if (!eur && !rsd) {
-      showToast("Unesi EUR ili DIN iznos");
+      showToast(t("toast.enterAmount"));
       return;
     }
 
@@ -927,7 +929,7 @@ export default function App() {
       null,
       2,
     );
-    navigator.clipboard.writeText(payload).then(() => showToast("JSON kopiran u clipboard"));
+    navigator.clipboard.writeText(payload).then(() => showToast(t("toast.copied")));
   }
 
   async function handleSignOut() {
@@ -939,7 +941,7 @@ export default function App() {
   }
 
   if (!authReady) {
-    return <AppBoot />;
+    return <AppBoot t={t} />;
   }
 
   if (isLegalPage(activePage)) {
@@ -974,8 +976,8 @@ export default function App() {
         <button
           type="button"
           className="app-topbar-brand"
-          aria-label="Chabar — Raspored"
-          title="Raspored"
+          aria-label={t("nav.brandAria")}
+          title={t("nav.schedule")}
           onClick={() => {
             setProfileHubOpen(false);
             goToSchedule();
@@ -1127,9 +1129,10 @@ export default function App() {
         onSignOut={handleSignOut}
       />
 
-      <nav className="app-tabbar" aria-label="Glavna navigacija">
+      <nav className="app-tabbar" aria-label={t("nav.mainNav")}>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
+          const label = t(item.labelKey);
           if (item.isAction) {
             return (
               <div
@@ -1140,17 +1143,17 @@ export default function App() {
                 <button
                   type="button"
                   className={`app-tabbar-add ${addMenuOpen ? "is-open" : ""}`}
-                  aria-label="Dodaj termin ili bend"
+                  aria-label={t("nav.addMenu")}
                   aria-haspopup="menu"
                   aria-expanded={addMenuOpen}
-                  title="Dodaj"
+                  title={label}
                   onClick={() => handleNav("add")}
                 >
                   <Icon />
-                  <span className="sr-only">Dodaj</span>
+                  <span className="sr-only">{label}</span>
                 </button>
                 {addMenuOpen ? (
-                  <ul className="app-tabbar-add-menu" role="menu" aria-label="Dodaj">
+                  <ul className="app-tabbar-add-menu" role="menu" aria-label={label}>
                     <li role="none">
                       <button
                         type="button"
@@ -1159,7 +1162,7 @@ export default function App() {
                         onClick={() => requestAddAction("termin")}
                       >
                         <CalendarPlusNavIcon />
-                        <span>Dodaj termin</span>
+                        <span>{t("nav.addEvent")}</span>
                       </button>
                     </li>
                     <li role="none">
@@ -1170,22 +1173,23 @@ export default function App() {
                         disabled={!canCreateBand}
                         title={
                           canCreateBand
-                            ? "Kreiraj grupni bend"
-                            : `Limit ${ownedGroupBands}/${ownerLimit} grupnih bendova`
+                            ? t("nav.createGroupBand")
+                            : t("nav.bandLimit", { owned: ownedGroupBands, limit: ownerLimit })
                         }
                         onClick={() => {
                           if (!canCreateBand) {
-                            showToast(
-                              `Limit: najviše ${ownerLimit} grupnih bendova. Zatraži grant za više.`,
-                              "error",
-                            );
+                            showToast(t("nav.bandLimitToast", { limit: ownerLimit }), "error");
                             return;
                           }
                           requestAddAction("band");
                         }}
                       >
                         <NewBandNavIcon />
-                        <span>{canCreateBand ? "Novi bend" : `Limit ${ownedGroupBands}/${ownerLimit}`}</span>
+                        <span>
+                          {canCreateBand
+                            ? t("schedule.createBand")
+                            : t("nav.bandLimit", { owned: ownedGroupBands, limit: ownerLimit })}
+                        </span>
                       </button>
                     </li>
                   </ul>
@@ -1205,12 +1209,12 @@ export default function App() {
               className={`app-tabbar-item ${isActive ? "is-active" : ""} ${item.id === "profile" && profileBadgeCount > 0 ? "has-badge" : ""}`.trim()}
               aria-current={isActive ? "page" : undefined}
               aria-expanded={item.id === "profile" ? profileHubOpen : undefined}
-              aria-label={item.label}
-              title={item.label}
+              aria-label={label}
+              title={label}
               onClick={() => handleNav(item.id)}
             >
               <Icon />
-              <span className="sr-only">{item.label}</span>
+              <span className="sr-only">{label}</span>
               {item.id === "profile" && profileBadgeCount > 0 ? (
                 <span className="app-tabbar-badge" aria-hidden="true">
                   {profileBadgeCount > 9 ? "9+" : profileBadgeCount}
@@ -1230,10 +1234,10 @@ export default function App() {
   );
 }
 
-function AppBoot() {
+function AppBoot({ t }) {
   return (
     <main className="app-boot" role="status" aria-live="polite" aria-busy="true">
-      <span className="sr-only">Učitavanje</span>
+      <span className="sr-only">{t("common.loading")}</span>
       <div className="app-boot-orb" aria-hidden="true">
         <span className="app-boot-ring" />
         <span className="app-boot-core" />

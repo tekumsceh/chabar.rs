@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import { ConfirmProvider } from "./confirmDialog.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
+import { I18nProvider } from "./i18n/I18nProvider.jsx";
 import { initFadeScrollbars } from "./fadeScrollbar.js";
 import "../styles.css";
 
@@ -15,9 +16,11 @@ if (typeof window !== "undefined" && window.location.hostname === "www.chabar.rs
   createRoot(document.getElementById("root")).render(
     <React.StrictMode>
       <ErrorBoundary>
-        <ConfirmProvider>
-          <App />
-        </ConfirmProvider>
+        <I18nProvider>
+          <ConfirmProvider>
+            <App />
+          </ConfirmProvider>
+        </I18nProvider>
       </ErrorBoundary>
     </React.StrictMode>,
   );

@@ -12,6 +12,7 @@ import {
 } from "./appIcons.jsx";
 import { formatEur } from "./calculations.js";
 import { isBandLead } from "../shared/roles.js";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 function getInitials(displayName, email) {
   const source = String(displayName || email || "").trim();
@@ -42,6 +43,7 @@ export default function ProfileHub({
   onOpenSettings,
   onSignOut,
 }) {
+  const t = useT();
   const [view, setView] = useState("main");
   const [busyId, setBusyId] = useState("");
   const panelId = useId();
@@ -109,7 +111,7 @@ export default function ProfileHub({
   return (
     <>
       <div className="profile-hub-backdrop" role="presentation" onClick={() => onClose?.()} />
-      <div className="profile-hub" role="dialog" aria-modal="true" aria-label="Profil" id={panelId}>
+      <div className="profile-hub" role="dialog" aria-modal="true" aria-label={t("profile.aria")} id={panelId}>
         {view === "main" ? (
           <>
             <div className="profile-hub-user">
@@ -121,15 +123,15 @@ export default function ProfileHub({
                 )}
               </div>
               <div className="profile-hub-user-text">
-                <p className="profile-hub-name">{displayName || email?.split("@")[0] || "Profil"}</p>
+                <p className="profile-hub-name">{displayName || email?.split("@")[0] || t("profile.title")}</p>
                 {email ? <p className="profile-hub-email">{email}</p> : null}
               </div>
             </div>
 
-            <div className="profile-hub-grid" role="menu" aria-label="Meni">
+            <div className="profile-hub-grid" role="menu" aria-label={t("profile.menu")}>
               <ProfileHubTile
                 icon={<BellIcon />}
-                label="Obaveštenja"
+                label={t("profile.notifications")}
                 badge={noticeCount}
                 onClick={() => {
                   setView("notices");
@@ -138,29 +140,33 @@ export default function ProfileHub({
               />
               <ProfileHubTile
                 icon={<InviteIcon />}
-                label="Pozivnice"
+                label={t("profile.invites")}
                 badge={inviteCount}
                 onClick={() => setView("invites")}
               />
               <ProfileHubTile
                 icon={<MoneyIcon />}
-                label="Novac"
+                label={t("profile.money")}
                 hint={showMoneyHint ? formatEur(claimEur) : null}
                 onClick={() => closeAnd(onOpenMoney)}
               />
-              <ProfileHubTile icon={<BandsIcon />} label="Bendovi" onClick={() => setView("bands")} />
-              <ProfileHubTile icon={<SettingsIcon />} label="Podešavanja" onClick={() => closeAnd(onOpenSettings)} />
-              <ProfileHubTile icon={<SignOutIcon />} label="Odjava" tone="danger" onClick={() => closeAnd(onSignOut)} />
+              <ProfileHubTile icon={<BandsIcon />} label={t("profile.bands")} onClick={() => setView("bands")} />
+              <ProfileHubTile icon={<SettingsIcon />} label={t("profile.settings")} onClick={() => closeAnd(onOpenSettings)} />
+              <ProfileHubTile icon={<SignOutIcon />} label={t("profile.signOut")} tone="danger" onClick={() => closeAnd(onSignOut)} />
             </div>
           </>
         ) : (
           <>
             <div className="profile-hub-subhead">
-              <button type="button" className="profile-hub-back" aria-label="Nazad" onClick={goMain}>
+              <button type="button" className="profile-hub-back" aria-label={t("common.back")} onClick={goMain}>
                 <BackIcon />
               </button>
               <p className="profile-hub-subtitle">
-                {view === "invites" ? "Pozivnice" : view === "notices" ? "Obaveštenja" : "Bendovi"}
+                {view === "invites"
+                  ? t("profile.invites")
+                  : view === "notices"
+                    ? t("profile.notifications")
+                    : t("profile.bands")}
               </p>
               {view === "notices" && noticeCount > 0 ? (
                 <button
@@ -176,7 +182,7 @@ export default function ProfileHub({
                     }
                   }}
                 >
-                  Pročitano
+                  {t("profile.markRead")}
                 </button>
               ) : (
                 <span className="profile-hub-subaction-spacer" />
@@ -186,7 +192,7 @@ export default function ProfileHub({
             <FadeScroll className="fade-scroll-inset profile-hub-scroll">
               {view === "invites" ? (
                 pendingInvites.length === 0 ? (
-                  <p className="profile-hub-empty">Nema pozivnica.</p>
+                  <p className="profile-hub-empty">{t("profile.noInvites")}</p>
                 ) : (
                   <ul className="profile-hub-list">
                     {pendingInvites.map((invite) => (
@@ -211,7 +217,7 @@ export default function ProfileHub({
 
               {view === "notices" ? (
                 notifications.length === 0 ? (
-                  <p className="profile-hub-empty">Nema obaveštenja.</p>
+                  <p className="profile-hub-empty">{t("profile.noNotifications")}</p>
                 ) : (
                   <ul className="profile-hub-list">
                     {notifications.map((notice) => (
@@ -233,12 +239,13 @@ export default function ProfileHub({
 
               {view === "bands" ? (
                 bands.length === 0 ? (
-                  <p className="profile-hub-empty">Nema benda.</p>
+                  <p className="profile-hub-empty">{t("profile.noBands")}</p>
                 ) : (
                   <ul className="profile-hub-band-list">
                     {bands.map((band) => {
                       const color = resolveBandColor(band, band.id);
-                      const label = band.kind === "personal" ? `${band.name} (lično)` : band.name;
+                      const label =
+                        band.kind === "personal" ? `${band.name} ${t("event.personalSuffix")}` : band.name;
                       const manage = isBandLead(band.memberRole);
                       return (
                         <li key={band.id}>

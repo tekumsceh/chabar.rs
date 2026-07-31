@@ -1,5 +1,17 @@
 import { Component } from "react";
 import FadeScroll from "./FadeScroll.jsx";
+import { LOCALE_KEY } from "./i18n/I18nProvider.jsx";
+import { DEFAULT_LOCALE, translate } from "./i18n/messages.js";
+
+function currentLocale() {
+  try {
+    const stored = String(localStorage.getItem(LOCALE_KEY) || "").trim();
+    if (stored === "en" || stored === "sr") return stored;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_LOCALE;
+}
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -17,16 +29,17 @@ export default class ErrorBoundary extends Component {
 
   render() {
     if (this.state.error) {
+      const t = (key) => translate(currentLocale(), key);
       return (
         <main className="app-crash" role="alert">
-          <h1>Nešto nije u redu</h1>
-          <p>Aplikacija se zaustavila. Osveži stranicu ili se vrati na početak.</p>
+          <h1>{t("error.boundary")}</h1>
+          <p>{t("error.boundaryHint")}</p>
           <div className="app-crash-actions">
             <button type="button" onClick={() => window.location.assign("/")}>
-              Početak
+              {t("error.home")}
             </button>
             <button type="button" onClick={() => window.location.reload()}>
-              Osveži
+              {t("error.reload")}
             </button>
           </div>
           <FadeScroll className="fade-scroll-inset app-crash-detail-scroll">

@@ -10,6 +10,7 @@ import {
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { api } from "./api.js";
 import { useConfirm } from "./confirmDialog.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import EventPage from "./EventPage.jsx";
 import FadeScroll from "./FadeScroll.jsx";
@@ -53,6 +54,7 @@ export default function SchedulePage({
   canManageBand = false,
   onManageBand,
 }) {
+  const t = useT();
   const { confirm } = useConfirm();
   const search = searchQuery;
   const [filter, setFilter] = useState("upcoming");
@@ -177,19 +179,19 @@ export default function SchedulePage({
     const name = createBandName.trim();
     if (!name || createBandBusy) return;
     if (!canCreateBand) {
-      showToast?.(`Limit: najviše ${ownerLimit} grupnih bendova. Zatraži grant za više.`, "error");
+      showToast?.(t("nav.bandLimitToast", { limit: ownerLimit }), "error");
       return;
     }
     setCreateBandBusy(true);
     try {
       const created = await api("/api/bands", { method: "POST", body: { name } });
-      showToast?.(`Bend kreiran: ${created.name}`);
+      showToast?.(t("schedule.created", { name: created.name }));
       setCreateBandOpen(false);
       setCreateBandName("");
       await onBandsChanged?.();
       onBandChange?.(created.id);
     } catch (error) {
-      showToast?.(error.message || "Kreiranje benda nije uspelo", "error");
+      showToast?.(error.message || t("schedule.createFail"), "error");
     } finally {
       setCreateBandBusy(false);
     }
@@ -206,10 +208,10 @@ export default function SchedulePage({
     if (saving) return;
     if (isDirty) {
       const confirmed = await confirm({
-        title: "Nesačuvane izmene",
-        message: "Imaš nesačuvane izmene. Zatvoriti formu bez čuvanja?",
-        confirmLabel: "Zatvori",
-        cancelLabel: "Ostani",
+        title: t("schedule.unsavedTitle"),
+        message: t("schedule.closeFormMessage"),
+        confirmLabel: t("schedule.closeForm"),
+        cancelLabel: t("schedule.stay"),
         danger: true,
       });
       if (!confirmed) return;
@@ -223,12 +225,12 @@ export default function SchedulePage({
   }
 
   async function requestRemove(row) {
-    const label = [row.date, row.city, row.venue].filter(Boolean).join(" — ") || "ovaj termin";
+    const label = [row.date, row.city, row.venue].filter(Boolean).join(" — ") || t("schedule.thisEvent");
     const confirmed = await confirm({
-      title: "Obrisati termin?",
-      message: `Da li si siguran/a da želiš da obrišeš ovaj termin?\n\n${label}\n\nOva akcija se ne može poništiti.`,
-      confirmLabel: "Obriši",
-      cancelLabel: "Otkaži",
+      title: t("schedule.deleteTitle"),
+      message: t("schedule.deleteMessage", { label }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (!confirmed) return;
@@ -241,24 +243,24 @@ export default function SchedulePage({
     const city = String(form.city || "").trim();
 
     if (!bandId) {
-      setFormError("Moraš izabrati bend.");
+      setFormError(t("schedule.validation.band"));
       return null;
     }
 
     if (!date) {
-      setFormError("Datum je obavezan.");
+      setFormError(t("event.validation.dateRequired"));
       return null;
     }
 
     const parsed = parseDate(date);
     if (Number.isNaN(parsed.getTime())) {
-      setFormError("Datum nije ispravan. Izaberi datum iz kalendara.");
+      setFormError(t("event.validation.dateInvalid"));
       return null;
     }
 
     const today = startOfToday();
     if (parsed.getTime() < today.getTime()) {
-      setFormError("Datum ne sme biti u prošlosti.");
+      setFormError(t("schedule.validation.datePast"));
       return null;
     }
 
@@ -280,7 +282,7 @@ export default function SchedulePage({
       }
       return created;
     } catch (error) {
-      setFormError(error.message || "Nije moguće sačuvati termin.");
+      setFormError(error.message || t("schedule.saveFail"));
       return null;
     } finally {
       setSaving(false);
@@ -330,11 +332,11 @@ export default function SchedulePage({
         onManageBand={onManageBand}
       />
 
-      <FadeScroll viewportClassName="raspored-panel" viewportAriaLabel="Termini">
+      <FadeScroll viewportClassName="raspored-panel" viewportAriaLabel={t("schedule.eventsAria")}>
         {loading && events.length === 0 ? (
           <RasporedSkeleton variant="schedule" />
         ) : visibleRows.length === 0 ? (
-          <p className="raspored-empty">Nema termina za ovaj filter.</p>
+          <p className="raspored-empty">{t("schedule.emptyFilter")}</p>
         ) : (
           <ul className="raspored-list">
             {visibleRows.map((row) => {
@@ -353,7 +355,9 @@ export default function SchedulePage({
                   type="button"
                   className="raspored-row-button raspored-row-open"
                   onClick={() => setSelectedEventId(row.id)}
-                  aria-label={`Otvori termin ${row.date || ""} ${row.city || ""}`.trim()}
+                  aria-label={t("schedule.openEvent", {
+                    label: `${row.date || ""} ${row.city || ""}`.trim(),
+                  })}
                 >
                   <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
                     <span className="raspored-date-day">{dateParts.day}</span>
@@ -376,8 +380,8 @@ export default function SchedulePage({
                 <div className="raspored-actions">
                   <span
                     className={`raspored-fee-mark ${feeMarked ? "is-set" : "is-unset"}`}
-                    aria-label={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
-                    title={feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
+                    aria-label={feeMarked ? t("schedule.feeSet") : t("schedule.feeUnset")}
+                    title={feeMarked ? t("schedule.feeSet") : t("schedule.feeUnset")}
                   >
                     <MoneyIcon />
                   </span>
@@ -395,29 +399,26 @@ export default function SchedulePage({
       </FadeScroll>
 
       {filter === "all" && filteredRows.length > ALL_PAGE_SIZE ? (
-        <div className="raspored-pagination" aria-label="Stranice">
+        <div className="raspored-pagination" aria-label={t("schedule.pages")}>
           <button
             type="button"
             className="finansije-year-btn finansije-page-btn"
             disabled={safePage <= 0}
             onClick={() => setListPage((page) => Math.max(0, page - 1))}
-            aria-label="Prethodna stranica"
+            aria-label={t("schedule.prevPage")}
           >
             <PageChevronLeftIcon />
           </button>
           <span className="raspored-pagination-label">
             {safePage + 1} / {totalPages}
-            <small>
-              {" "}
-              ({filteredRows.length} datuma)
-            </small>
+            <small> {t("schedule.dateCount", { count: filteredRows.length })}</small>
           </span>
           <button
             type="button"
             className="finansije-year-btn finansije-page-btn"
             disabled={safePage >= totalPages - 1}
             onClick={() => setListPage((page) => Math.min(totalPages - 1, page + 1))}
-            aria-label="Sledeća stranica"
+            aria-label={t("schedule.nextPage")}
           >
             <PageChevronRightIcon />
           </button>
@@ -433,24 +434,26 @@ export default function SchedulePage({
             <FadeScroll>
             <div className="panel-heading compact">
               <div>
-                <h2 id="addTerminTitle">Novi termin</h2>
+                <h2 id="addTerminTitle">{t("schedule.add")}</h2>
               </div>
             </div>
 
             <form className="termin-form termin-form-tactile" onSubmit={submitForm}>
               <fieldset className="termin-form-section termin-form-full">
-                <legend>Datum</legend>
+                <legend>{t("schedule.date")}</legend>
                 <DateMonthPicker value={form.date} onChange={(date) => updateForm("date", date)} />
               </fieldset>
 
               <fieldset className="termin-form-section termin-form-full">
-                <legend>Bend</legend>
-                <div className="termin-band-grid" role="group" aria-label="Izaberi bend">
+                <legend>{t("schedule.band")}</legend>
+                <div className="termin-band-grid" role="group" aria-label={t("schedule.selectBand")}>
                   {bands.map((band) => {
                     const selected = form.bandId === band.id;
                     const color = resolveBandColor(band, band.id);
                     const label =
-                      band.kind === "personal" ? `${band.name} (lično)` : band.name;
+                      band.kind === "personal"
+                        ? `${band.name} ${t("event.personalSuffix")}`
+                        : band.name;
                     return (
                       <button
                         key={band.id}
@@ -475,8 +478,8 @@ export default function SchedulePage({
               </fieldset>
 
               <fieldset className="termin-form-section termin-form-full">
-                <legend>Mesto</legend>
-                <div className="termin-city-grid" role="group" aria-label="Uobičajena mesta">
+                <legend>{t("schedule.city")}</legend>
+                <div className="termin-city-grid" role="group" aria-label={t("schedule.commonPlaces")}>
                   {QUICK_CREATE_CITIES.map((city) => {
                     const selected = form.city.trim() === city.name;
                     return (
@@ -495,12 +498,12 @@ export default function SchedulePage({
                   })}
                 </div>
                 <label className="termin-city-other" htmlFor="terminCity">
-                  <span className="sr-only">Drugo mesto</span>
+                  <span className="sr-only">{t("schedule.otherCityLabel")}</span>
                   <input
                     id="terminCity"
                     name="terminCity"
                     type="text"
-                    placeholder="Drugo mesto…"
+                    placeholder={t("schedule.otherCity")}
                     value={form.city}
                     onChange={(event) => updateForm("city", event.target.value)}
                     autoComplete="address-level2"
@@ -512,13 +515,13 @@ export default function SchedulePage({
 
               <div className="termin-form-actions termin-form-full termin-form-actions-stack">
                 <button type="submit" disabled={saving}>
-                  {saving ? "Čuvam…" : "Sačuvaj termin"}
+                  {saving ? t("common.saving") : t("schedule.saveEvent")}
                 </button>
                 <button type="button" className="termin-form-secondary" disabled={saving} onClick={submitFullDetails}>
-                  Unesi kompletne detalje
+                  {t("schedule.fullDetails")}
                 </button>
                 <button type="button" className="termin-form-ghost" onClick={requestCloseForm} disabled={saving}>
-                  Otkaži
+                  {t("common.cancel")}
                 </button>
               </div>
             </form>
@@ -539,12 +542,12 @@ export default function SchedulePage({
             <FadeScroll>
             <div className="panel-heading compact">
               <div>
-                <h2 id="createBandTitle">Novi bend</h2>
+                <h2 id="createBandTitle">{t("schedule.createBand")}</h2>
               </div>
             </div>
             <form className="termin-form" onSubmit={submitCreateBand}>
               <label htmlFor="createBandName" className="termin-form-full">
-                Ime benda
+                {t("schedule.createBandName")}
                 <input
                   id="createBandName"
                   name="createBandName"
@@ -552,7 +555,7 @@ export default function SchedulePage({
                   autoComplete="off"
                   autoFocus
                   maxLength={80}
-                  placeholder="npr. Chabar"
+                  placeholder={t("schedule.createBandPlaceholder")}
                   value={createBandName}
                   onChange={(event) => setCreateBandName(event.target.value)}
                   required
@@ -560,8 +563,8 @@ export default function SchedulePage({
               </label>
               <p className="settings-note termin-form-full">
                 {canCreateBand
-                  ? `Grupni bend · ti si vlasnik · ${ownedGroupBands}/${ownerLimit} zauzeto`
-                  : `Dostignut limit (${ownerLimit}). Zatraži grant za više benda.`}
+                  ? t("schedule.createBandNote", { owned: ownedGroupBands, limit: ownerLimit })
+                  : t("schedule.createBandLimit", { limit: ownerLimit })}
               </p>
               <div className="termin-form-actions termin-form-full">
                 <button
@@ -570,10 +573,10 @@ export default function SchedulePage({
                   disabled={createBandBusy}
                   onClick={() => setCreateBandOpen(false)}
                 >
-                  Otkaži
+                  {t("common.cancel")}
                 </button>
                 <button type="submit" disabled={createBandBusy || !createBandName.trim() || !canCreateBand}>
-                  {createBandBusy ? "…" : "Kreiraj"}
+                  {createBandBusy ? "…" : t("schedule.create")}
                 </button>
               </div>
             </form>
@@ -591,6 +594,7 @@ function isFinancialOnlyEntry(event) {
 }
 
 function DateRowMenu({ feeMarked, locked, onDelete }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const idleTimerRef = useRef(0);
@@ -652,8 +656,8 @@ function DateRowMenu({ feeMarked, locked, onDelete }) {
       <button
         type="button"
         className={`date-row-menu-trigger ${open ? "is-open" : ""}`}
-        aria-label="Više radnji za termin"
-        title="Više"
+        aria-label={t("schedule.moreActions")}
+        title={t("schedule.more")}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
@@ -665,20 +669,20 @@ function DateRowMenu({ feeMarked, locked, onDelete }) {
         <MoreDotsIcon />
       </button>
       {open ? (
-        <ul className="date-row-menu-list" id={menuId} role="menu" aria-label="Radnje termina">
+        <ul className="date-row-menu-list" id={menuId} role="menu" aria-label={t("schedule.eventActions")}>
           <li role="none">
             <div
               className={`date-row-menu-item is-status ${feeMarked ? "is-fee-set" : "is-fee-unset"}`}
               role="menuitem"
               aria-disabled="true"
             >
-              {feeMarked ? "Honorar postavljen" : "Honorar nije postavljen"}
+              {feeMarked ? t("schedule.feeSet") : t("schedule.feeUnset")}
             </div>
           </li>
           {locked ? (
             <li role="none">
               <div className="date-row-menu-item is-status" role="menuitem" aria-disabled="true">
-                Prošli termin — zaključan
+                {t("schedule.pastLocked")}
               </div>
             </li>
           ) : (
@@ -693,7 +697,7 @@ function DateRowMenu({ feeMarked, locked, onDelete }) {
                   onDelete?.();
                 }}
               >
-                Obriši termin
+                {t("schedule.deleteEvent")}
               </button>
             </li>
           )}

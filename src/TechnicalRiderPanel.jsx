@@ -2,17 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "./api.js";
 import FieldSelect from "./FieldSelect.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 import { MIXING_CONSOLE_GROUPS } from "./mixingConsoles.js";
 import { reorderArray, useTechChannelDrag } from "./useTechChannelDrag.js";
 import {
   emptyTechChannel,
   HARDWARE_PRESETS,
+  OUTPUT_GEAR_PRESETS,
   suggestGearForSource,
 } from "./techRiderPresets.js";
 
 const SAVE_DEBOUNCE_MS = 700;
 const TECH_RIDER_DESKTOP_MQ = "(min-width: 860px)";
 const HARDWARE_BASE_OPTIONS = HARDWARE_PRESETS.map((item) => ({ id: item, label: item }));
+const OUTPUT_GEAR_BASE_OPTIONS = OUTPUT_GEAR_PRESETS.map((item) => ({ id: item, label: item }));
 /** Soft cache so remounting the panel does not blank-wait on the same event. */
 const techRiderBundleCache = new Map();
 
@@ -75,6 +78,7 @@ function bundleFromCache(eventId, bandId) {
 }
 
 export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false, showToast }) {
+  const t = useT();
   const cachedBundle = bundleFromCache(eventId, bandId);
   const [mode, setMode] = useState("input");
   const [inputs, setInputs] = useState(() =>
@@ -96,7 +100,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   const [busyId, setBusyId] = useState("");
   const [drawerChannel, setDrawerChannel] = useState(null);
   const [drawerDraft, setDrawerDraft] = useState(null);
-  const [mobileMenuChannelId, setMobileMenuChannelId] = useState(null);
+  const [menuChannelId, setMenuChannelId] = useState(null);
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia(TECH_RIDER_DESKTOP_MQ).matches : true,
   );
@@ -160,7 +164,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         });
         applyBundle(data);
       } catch (requestError) {
-        showToast?.(requestError.message || "Redosled nije sačuvan", "error");
+        showToast?.(requestError.message || t("tech.reorderFail"), "error");
         try {
           const data = await api(`/api/events/${eventId}/tech-rider`, { bandId });
           applyBundle(data);
@@ -171,7 +175,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         setBusyId("");
       }
     },
-    [readOnly, eventId, bandId, mode, showToast],
+    [readOnly, eventId, bandId, mode, showToast, t],
   );
 
   const { dragEnabled, draggingId, dropIndex, onHandlePointerDown } = useTechChannelDrag({
@@ -226,7 +230,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       if (!eventId || !bandId) {
         if (!cancelled) {
           setLoading(false);
-          setError("Nedostaje bend za ovaj termin.");
+          setError(t("common.missingBand"));
         }
         return;
       }
@@ -247,7 +251,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         applyBundle(data);
       } catch (requestError) {
         if (!cancelled && !cached) {
-          setError(requestError.message || "Rider nije učitan.");
+          setError(requestError.message || t("tech.loadFail"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -261,7 +265,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       }
       saveTimersRef.current.clear();
     };
-  }, [eventId, bandId]);
+  }, [eventId, bandId, t]);
 
   function getChannel(id, kind) {
     const list = kind === "output" ? outputsRef.current : inputsRef.current;
@@ -302,7 +306,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           });
         }
       } catch (requestError) {
-        showToast?.(requestError.message || "Kanal nije sačuvan", "error");
+        showToast?.(requestError.message || t("tech.saveFail"), "error");
       } finally {
         if (saveInFlightRef.current.get(key) === request) {
           saveInFlightRef.current.delete(key);
@@ -387,7 +391,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       setLimits(data.limits || { inputMax: 0, outputMax: 0 });
     } catch (requestError) {
       setConsoleIds(previousIds);
-      showToast?.(requestError.message || "Konzole nisu sačuvane", "error");
+      showToast?.(requestError.message || t("tech.consolesFail"), "error");
     }
   }
 
@@ -401,14 +405,14 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   async function addChannel() {
     if (readOnly || !eventId || !bandId) return;
     if (!consoleIds.length) {
-      showToast?.("Izaberi mixing konzolu pre dodavanja kanala.", "error");
+      showToast?.(t("tech.pickConsoleBeforeAdd"), "error");
       return;
     }
     if (atChannelLimit) {
       showToast?.(
         mode === "output"
-          ? `Maksimum ${limits.outputMax} izlaza za izabrane konzole.`
-          : `Maksimum ${limits.inputMax} ulaza za izabrane konzole.`,
+          ? t("tech.outputLimit", { max: limits.outputMax })
+          : t("tech.inputLimit", { max: limits.inputMax }),
         "error",
       );
       return;
@@ -436,9 +440,9 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           return next;
         });
       }
-      showToast?.(mode === "output" ? "Output dodat" : "Input dodat");
+      showToast?.(mode === "output" ? t("tech.outputAdded") : t("tech.inputAdded"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Kanal nije dodat", "error");
+      showToast?.(requestError.message || t("tech.addFail"), "error");
     } finally {
       setBusyId("");
     }
@@ -474,9 +478,9 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           return next;
         });
       }
-      showToast?.("Kanal obrisan");
+      showToast?.(t("tech.channelDeleted"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Brisanje nije uspelo", "error");
+      showToast?.(requestError.message || t("tech.deleteFail"), "error");
     } finally {
       setBusyId("");
     }
@@ -490,7 +494,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   function closeDrawer() {
     setDrawerChannel(null);
     setDrawerDraft(null);
-    setMobileMenuChannelId(null);
+    setMenuChannelId(null);
   }
 
   async function saveDrawer() {
@@ -500,7 +504,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   }
 
   if (loading) {
-    return <p className="tech-rider-status">Učitavam technical rider…</p>;
+    return <p className="tech-rider-status">{t("tech.loading")}</p>;
   }
 
   if (error) {
@@ -510,7 +514,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   return (
     <div className="tech-rider">
       <header className="tech-rider-head">
-        <h3 className="tech-rider-title">Technical rider</h3>
+        <h3 className="tech-rider-title">{t("tech.title")}</h3>
         {readOnly ? null : (
           <button
             type="button"
@@ -518,14 +522,14 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
             disabled={busyId === "add" || !canAddChannel}
             title={
               !consoleIds.length
-                ? "Izaberi mixing konzolu u stats traci"
+                ? t("tech.pickConsole")
                 : atChannelLimit
-                  ? `Maksimum ${activeLimit} kanala za izabrane konzole`
-                  : "+ Dodaj kanal"
+                  ? t("tech.channelLimit", { max: activeLimit })
+                  : t("tech.addChannel")
             }
             onClick={addChannel}
           >
-            {busyId === "add" ? "…" : "+ Add channel"}
+            {busyId === "add" ? "…" : t("tech.addChannel")}
           </button>
         )}
       </header>
@@ -539,7 +543,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         />
       </div>
 
-      <div className="tech-rider-mode" role="tablist" aria-label="Patch mode">
+      <div className="tech-rider-mode" role="tablist" aria-label={t("tech.patchMode")}>
         <button
           type="button"
           role="tab"
@@ -547,7 +551,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           aria-selected={mode === "input"}
           onClick={() => setMode("input")}
         >
-          Input list ({stats.inputCount})
+          {t("tech.inputList", { count: stats.inputCount })}
         </button>
         <button
           type="button"
@@ -556,49 +560,49 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           aria-selected={mode === "output"}
           onClick={() => setMode("output")}
         >
-          Output / monitor ({stats.outputCount})
+          {t("tech.outputList", { count: stats.outputCount })}
         </button>
       </div>
 
       <label className="tech-rider-search">
-        <span className="sr-only">Pretraga kanala</span>
+        <span className="sr-only">{t("tech.search")}</span>
         <input
           id="tech-channel-search"
           name="tech-channel-search"
           type="search"
           autoComplete="off"
-          placeholder="Search gear / source…"
+          placeholder={t("tech.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </label>
 
       {readOnly ? (
-        <p className="tech-rider-locknote">Prošli termin — rider je samo za pregled.</p>
+        <p className="tech-rider-locknote">{t("tech.locknote")}</p>
       ) : null}
 
       {isDesktopLayout ? (
-      <div className="tech-rider-desktop">
+      <div className={`tech-rider-desktop ${mode === "output" ? "is-output-mode" : ""}`}>
         <table className="tech-rider-table">
           <thead>
             <tr>
-              <th>CH</th>
-              <th>{mode === "output" ? "Destination" : "Source"}</th>
-              <th>Gear</th>
-              <th>Hardware</th>
+              <th>{t("tech.col.ch")}</th>
+              <th>{mode === "output" ? t("tech.col.destination") : t("tech.col.source")}</th>
+              <th>{t("tech.col.gear")}</th>
+              {mode === "input" ? <th>{t("tech.col.hardware")}</th> : null}
               {mode === "input" ? (
                 <>
-                  <th>+48V</th>
-                  <th>Pad</th>
+                  <th>{t("tech.col.phantom")}</th>
+                  <th>{t("tech.col.pad")}</th>
                 </>
               ) : (
                 <>
-                  <th>Stereo</th>
-                  <th>Level</th>
+                  <th>{t("tech.col.stereo")}</th>
+                  <th>{t("tech.col.level")}</th>
                 </>
               )}
-              <th>Empty</th>
-              <th aria-label="Akcije" />
+              <th>{t("tech.col.empty")}</th>
+              <th aria-label={t("common.actions")} />
             </tr>
           </thead>
           <tbody>
@@ -627,7 +631,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                     </td>
                     <td>
                       {channel.isEmpty ? (
-                        <span className="tech-rider-empty-badge">EMPTY</span>
+                        <span className="tech-rider-empty-badge">{t("tech.emptyBadge")}</span>
                       ) : (
                         <input
                           className="tech-rider-cell-input"
@@ -642,32 +646,45 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                       )}
                     </td>
                     <td>
-                      <input
-                        className="tech-rider-cell-input"
-                        name={`tech-${channel.id}-gear`}
-                        autoComplete="off"
-                        value={channel.isEmpty ? "" : channel.gear}
-                        readOnly={fieldsLocked}
-                        placeholder={channel.isEmpty ? "—" : "Mic / DI"}
-                        onChange={(e) => updateChannel(channel.id, channel.kind, { gear: e.target.value })}
-                        onBlur={() => flushSave(channel.id, channel.kind)}
-                      />
+                      {mode === "output" ? (
+                        <OutputGearSelect
+                          value={channel.isEmpty ? "" : channel.gear}
+                          disabled={fieldsLocked}
+                          onChange={(next) => {
+                            updateChannel(channel.id, channel.kind, { gear: next });
+                            flushSave(channel.id, channel.kind);
+                          }}
+                        />
+                      ) : (
+                        <input
+                          className="tech-rider-cell-input"
+                          name={`tech-${channel.id}-gear`}
+                          autoComplete="off"
+                          value={channel.isEmpty ? "" : channel.gear}
+                          readOnly={fieldsLocked}
+                          placeholder={channel.isEmpty ? "—" : "Mic / DI"}
+                          onChange={(e) => updateChannel(channel.id, channel.kind, { gear: e.target.value })}
+                          onBlur={() => flushSave(channel.id, channel.kind)}
+                        />
+                      )}
                     </td>
-                    <td>
-                      <HardwareSelect
-                        value={channel.isEmpty ? "" : channel.hardware}
-                        disabled={fieldsLocked}
-                        onChange={(next) => {
-                          updateChannel(channel.id, channel.kind, { hardware: next });
-                          flushSave(channel.id, channel.kind);
-                        }}
-                      />
-                    </td>
+                    {mode === "input" ? (
+                      <td>
+                        <HardwareSelect
+                          value={channel.isEmpty ? "" : channel.hardware}
+                          disabled={fieldsLocked}
+                          onChange={(next) => {
+                            updateChannel(channel.id, channel.kind, { hardware: next });
+                            flushSave(channel.id, channel.kind);
+                          }}
+                        />
+                      </td>
+                    ) : null}
                     {mode === "input" ? (
                       <>
                         <td>
                           <ToggleButton
-                            label="+48V"
+                            label={t("tech.col.phantom")}
                             active={channel.phantom48v}
                             tone="phantom"
                             disabled={fieldsLocked}
@@ -676,7 +693,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                         </td>
                         <td>
                           <ToggleButton
-                            label="Pad"
+                            label={t("tech.col.pad")}
                             active={channel.pad}
                             tone="pad"
                             disabled={fieldsLocked}
@@ -688,7 +705,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                       <>
                         <td>
                           <ToggleButton
-                            label="Stereo"
+                            label={t("tech.col.stereo")}
                             active={channel.stereo}
                             tone="output"
                             disabled={fieldsLocked}
@@ -724,7 +741,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                     )}
                     <td>
                       <ToggleButton
-                        label="Empty"
+                        label={t("tech.col.empty")}
                         active={channel.isEmpty}
                         tone="empty"
                         disabled={readOnly}
@@ -732,11 +749,30 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                       />
                     </td>
                     <td className="tech-rider-actions">
-                      {readOnly ? null : (
+                      {readOnly ? null : mode === "output" ? (
+                        <ChannelActionsMenu
+                          channel={channel}
+                          mode={mode}
+                          readOnly={readOnly}
+                          rowActionsBusy={rowActionsBusy}
+                          compact
+                          showFlags={false}
+                          showDelete={false}
+                          isOpen={menuChannelId === channel.id}
+                          onOpen={() => setMenuChannelId(channel.id)}
+                          onClose={() => setMenuChannelId(null)}
+                          onEdit={() => openDrawer(channel)}
+                          onToggleEmpty={() => toggleEmpty(channel)}
+                          onToggle48={() => saveChannel(channel, { phantom48v: !channel.phantom48v })}
+                          onTogglePad={() => saveChannel(channel, { pad: !channel.pad })}
+                          onToggleStereo={() => saveChannel(channel, { stereo: !channel.stereo })}
+                          onDelete={() => removeChannel(channel)}
+                        />
+                      ) : (
                         <button
                           type="button"
                           className="tech-rider-icon-btn tech-rider-icon-btn-danger"
-                          aria-label="Obriši kanal"
+                          aria-label={t("tech.deleteChannel")}
                           disabled={rowActionsBusy}
                           onClick={() => removeChannel(channel)}
                         >
@@ -749,8 +785,8 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
               })
             ) : (
               <tr>
-                <td colSpan={8} className="tech-rider-empty-row">
-                  {search.trim() ? "Nema rezultata pretrage." : "Nema kanala — dodaj prvi input ili output."}
+                <td colSpan={mode === "output" ? 7 : 8} className="tech-rider-empty-row">
+                  {search.trim() ? t("tech.noSearch") : t("tech.noChannels")}
                 </td>
               </tr>
             )}
@@ -758,7 +794,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         </table>
       </div>
       ) : (
-      <ul className="tech-rider-mobile">
+      <ul className={`tech-rider-mobile ${mode === "output" ? "is-output-mode" : ""}`}>
         {filteredChannels.length ? (
           filteredChannels.map((channel) => {
             const index = channelIndexById.get(channel.id) ?? 0;
@@ -772,7 +808,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                 data-tech-channel-kind={channel.kind}
                 data-channel-index={index}
                 data-channel-id={channel.id}
-                className={`tech-rider-strip ${channelRowStateClass(channel, index)}`}
+                className={`tech-rider-strip ${mode === "output" ? "is-output" : ""} ${channelRowStateClass(channel, index)}`}
               >
                 <ChannelDragHandle
                   label={chLabel}
@@ -781,9 +817,11 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                   onPointerDown={(event) => onHandlePointerDown(event, channel, index)}
                 />
                 <label className="tech-rider-strip-field tech-rider-strip-source">
-                  <span className="sr-only">{mode === "output" ? "Destination" : "Instrument / source"}</span>
+                  <span className="sr-only">
+                    {mode === "output" ? t("tech.col.destination") : t("tech.mobile.source")}
+                  </span>
                   {channel.isEmpty ? (
-                    <span className="tech-rider-empty-badge">EMPTY</span>
+                    <span className="tech-rider-empty-badge">{t("tech.emptyBadge")}</span>
                   ) : (
                     <input
                       className="tech-rider-cell-input"
@@ -798,38 +836,56 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
                   )}
                 </label>
                 <label className="tech-rider-strip-field tech-rider-strip-gear">
-                  <span className="sr-only">{mode === "output" ? "Receiver / wedge" : "Mic / DI / gear"}</span>
-                  <input
-                    className="tech-rider-cell-input"
-                    name={`tech-${channel.id}-gear`}
-                    autoComplete="off"
-                    value={channel.isEmpty ? "" : channel.gear}
-                    readOnly={fieldsLocked}
-                    placeholder={channel.isEmpty ? "—" : mode === "output" ? "IEM" : "SM57"}
-                    onChange={(e) => updateChannel(channel.id, channel.kind, { gear: e.target.value })}
-                    onBlur={() => flushSave(channel.id, channel.kind)}
-                  />
+                  <span className="sr-only">
+                    {mode === "output" ? t("tech.mobile.destinationGear") : t("tech.mobile.inputGear")}
+                  </span>
+                  {mode === "output" ? (
+                    <OutputGearSelect
+                      value={channel.isEmpty ? "" : channel.gear}
+                      disabled={fieldsLocked}
+                      compact
+                      onChange={(next) => {
+                        updateChannel(channel.id, channel.kind, { gear: next });
+                        flushSave(channel.id, channel.kind);
+                      }}
+                    />
+                  ) : (
+                    <input
+                      className="tech-rider-cell-input"
+                      name={`tech-${channel.id}-gear`}
+                      autoComplete="off"
+                      value={channel.isEmpty ? "" : channel.gear}
+                      readOnly={fieldsLocked}
+                      placeholder={channel.isEmpty ? "—" : "SM57"}
+                      onChange={(e) => updateChannel(channel.id, channel.kind, { gear: e.target.value })}
+                      onBlur={() => flushSave(channel.id, channel.kind)}
+                    />
+                  )}
                 </label>
-                <label className="tech-rider-strip-field tech-rider-strip-hardware">
-                  <span className="sr-only">Hardware / stand</span>
-                  <HardwareSelect
-                    value={channel.isEmpty ? "" : channel.hardware}
-                    disabled={fieldsLocked}
-                    compact
-                    onChange={(next) => {
-                      updateChannel(channel.id, channel.kind, { hardware: next });
-                      flushSave(channel.id, channel.kind);
-                    }}
-                  />
-                </label>
-                <MobileStripMenu
+                {mode === "input" ? (
+                  <label className="tech-rider-strip-field tech-rider-strip-hardware">
+                    <span className="sr-only">{t("tech.col.hardware")}</span>
+                    <HardwareSelect
+                      value={channel.isEmpty ? "" : channel.hardware}
+                      disabled={fieldsLocked}
+                      compact
+                      onChange={(next) => {
+                        updateChannel(channel.id, channel.kind, { hardware: next });
+                        flushSave(channel.id, channel.kind);
+                      }}
+                    />
+                  </label>
+                ) : null}
+                <ChannelActionsMenu
                   channel={channel}
                   mode={mode}
                   readOnly={readOnly}
                   rowActionsBusy={rowActionsBusy}
-                  isOpen={mobileMenuChannelId === channel.id}
-                  onOpen={() => setMobileMenuChannelId(channel.id)}
-                  onClose={() => setMobileMenuChannelId(null)}
+                  showFlags={mode === "input"}
+                  showDelete={mode === "input"}
+                  isOpen={menuChannelId === channel.id}
+                  onOpen={() => setMenuChannelId(channel.id)}
+                  onClose={() => setMenuChannelId(null)}
                   onEdit={() => openDrawer(channel)}
                   onToggleEmpty={() => toggleEmpty(channel)}
                   onToggle48={() => saveChannel(channel, { phantom48v: !channel.phantom48v })}
@@ -842,7 +898,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           })
         ) : (
           <li className="tech-rider-strip tech-rider-strip-empty">
-            {search.trim() ? "Nema rezultata pretrage." : "Nema kanala — dodaj prvi input ili output."}
+            {search.trim() ? t("tech.noSearch") : t("tech.noChannels")}
           </li>
         )}
       </ul>
@@ -855,14 +911,14 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
           disabled={busyId === "add" || !canAddChannel}
           title={
             !consoleIds.length
-              ? "Izaberi mixing konzolu u stats traci"
+              ? t("tech.pickConsole")
               : atChannelLimit
-                ? `Maksimum ${activeLimit} kanala za izabrane konzole`
-                : "+ Dodaj kanal"
+                ? t("tech.channelLimit", { max: activeLimit })
+                : t("tech.addChannel")
           }
           onClick={addChannel}
         >
-          {busyId === "add" ? "…" : "+ Add channel"}
+          {busyId === "add" ? "…" : t("tech.addChannel")}
         </button>
       )}
 
@@ -887,6 +943,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
 }
 
 function ConsoleMultiSelect({ groups, selectedIds, readOnly = false, onToggle }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
   const rootRef = useRef(null);
@@ -945,7 +1002,7 @@ function ConsoleMultiSelect({ groups, selectedIds, readOnly = false, onToggle })
       className="tech-rider-console-select-menu"
       role="listbox"
       aria-multiselectable="true"
-      aria-label="Mixing konzole"
+      aria-label={t("tech.consolesAria")}
       style={{
         top: `${menuPos.top}px`,
         left: `${menuPos.left}px`,
@@ -990,7 +1047,7 @@ function ConsoleMultiSelect({ groups, selectedIds, readOnly = false, onToggle })
         className="tech-rider-console-select-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Console"
+        aria-label={t("tech.console")}
         disabled={readOnly}
         onClick={() => {
           if (readOnly) return;
@@ -1010,7 +1067,7 @@ function ConsoleMultiSelect({ groups, selectedIds, readOnly = false, onToggle })
           });
         }}
       >
-        <span className="tech-rider-console-select-label">Console</span>
+        <span className="tech-rider-console-select-label">{t("tech.console")}</span>
         <span className={`tech-rider-console-select-value ${selectedIds.length ? "" : "is-placeholder"}`}>
           {summary}
         </span>
@@ -1045,6 +1102,7 @@ function ConsoleCheckIcon() {
 }
 
 function HardwareSelect({ value, disabled = false, compact = false, onChange }) {
+  const t = useT();
   const current = String(value || "");
   const options = useMemo(() => {
     if (!current) return HARDWARE_BASE_OPTIONS;
@@ -1052,13 +1110,13 @@ function HardwareSelect({ value, disabled = false, compact = false, onChange }) 
     if (!HARDWARE_PRESETS.includes(current)) {
       items.unshift({ id: current, label: current });
     }
-    items.unshift({ id: "__clear__", label: "Clear", variant: "clear" });
+    items.unshift({ id: "__clear__", label: t("field.clear"), variant: "clear" });
     return items;
-  }, [current]);
+  }, [current, t]);
 
   return (
     <FieldSelect
-      label="Hardware"
+      label={t("tech.col.hardware")}
       value={current}
       options={options}
       placeholder=""
@@ -1072,7 +1130,37 @@ function HardwareSelect({ value, disabled = false, compact = false, onChange }) 
   );
 }
 
+function OutputGearSelect({ value, disabled = false, compact = false, onChange }) {
+  const t = useT();
+  const current = String(value || "");
+  const options = useMemo(() => {
+    if (!current) return OUTPUT_GEAR_BASE_OPTIONS;
+    const items = [...OUTPUT_GEAR_BASE_OPTIONS];
+    if (!OUTPUT_GEAR_PRESETS.includes(current)) {
+      items.unshift({ id: current, label: current });
+    }
+    items.unshift({ id: "__clear__", label: t("field.clear"), variant: "clear" });
+    return items;
+  }, [current, t]);
+
+  return (
+    <FieldSelect
+      label={t("tech.col.gear")}
+      value={current}
+      options={options}
+      placeholder=""
+      disabled={disabled}
+      portal
+      portalAlign="end"
+      className={`tech-rider-hardware-field tech-rider-output-gear-field ${compact ? "is-compact" : ""}`}
+      listClassName="tech-rider-hardware-menu"
+      onChange={(next) => onChange(next === "__clear__" ? "" : String(next ?? ""))}
+    />
+  );
+}
+
 function GearPresetSelect({ mode, sourceLabel, value, disabled = false, onChange, name }) {
+  const t = useT();
   const suggestion = useMemo(
     () => suggestGearForSource(sourceLabel, mode === "output" ? "output" : "input"),
     [sourceLabel, mode],
@@ -1087,10 +1175,10 @@ function GearPresetSelect({ mode, sourceLabel, value, disabled = false, onChange
       name={name || "tech-gear-preset"}
       value={current}
       disabled={disabled}
-      aria-label="Gear"
+      aria-label={t("tech.col.gear")}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">Gear</option>
+      <option value="">{t("tech.col.gear")}</option>
       <optgroup label={suggestion.groupLabel}>
         {suggestion.options.map((item) => (
           <option key={item} value={item}>
@@ -1114,6 +1202,7 @@ function ChannelEditDrawer({
   onClose,
   onSave,
 }) {
+  const t = useT();
   const patchHidden = Boolean(draft.isEmpty);
 
   return (
@@ -1121,16 +1210,16 @@ function ChannelEditDrawer({
       <div
         className={`tech-rider-drawer ${draft.isEmpty ? "is-empty" : ""}`}
         role="dialog"
-        aria-label={`Edit ${chLabel}`}
+        aria-label={t("tech.drawer.editAria", { ch: chLabel })}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="tech-rider-drawer-handle" aria-hidden="true" />
         <header className="tech-rider-drawer-head">
           <div className="tech-rider-drawer-title-block">
             <span className="tech-rider-drawer-ch">{chLabel}</span>
-            <h4>{mode === "output" ? "Output" : "Channel"}</h4>
+            <h4>{mode === "output" ? t("tech.drawer.output") : t("tech.drawer.channel")}</h4>
           </div>
-          <button type="button" className="tech-rider-icon-btn" aria-label="Zatvori" onClick={onClose}>
+          <button type="button" className="tech-rider-icon-btn" aria-label={t("common.close")} onClick={onClose}>
             ×
           </button>
         </header>
@@ -1139,10 +1228,10 @@ function ChannelEditDrawer({
           <section className="tech-rider-drawer-card">
             <div className="tech-rider-drawer-card-head">
               <span className="tech-rider-drawer-label">
-                {mode === "output" ? "Destination" : "Source"}
+                {mode === "output" ? t("tech.drawer.destination") : t("tech.drawer.source")}
               </span>
               <ToggleButton
-                label="Empty"
+                label={t("tech.col.empty")}
                 active={Boolean(draft.isEmpty)}
                 tone="empty"
                 compact
@@ -1173,7 +1262,7 @@ function ChannelEditDrawer({
                   {mode === "input" ? (
                     <>
                       <ToggleButton
-                        label="+48V"
+                        label={t("tech.col.phantom")}
                         active={Boolean(draft.phantom48v)}
                         tone="phantom"
                         compact
@@ -1186,7 +1275,7 @@ function ChannelEditDrawer({
                         }
                       />
                       <ToggleButton
-                        label="Pad"
+                        label={t("tech.col.pad")}
                         active={Boolean(draft.pad)}
                         tone="pad"
                         compact
@@ -1202,7 +1291,7 @@ function ChannelEditDrawer({
                   ) : (
                     <>
                       <ToggleButton
-                        label="Stereo"
+                        label={t("tech.col.stereo")}
                         active={Boolean(draft.stereo)}
                         tone="output"
                         compact
@@ -1223,7 +1312,7 @@ function ChannelEditDrawer({
                         value={draft.levelDb ?? ""}
                         disabled={readOnly}
                         placeholder="dB"
-                        aria-label="Level"
+                        aria-label={t("tech.drawer.levelAria")}
                         onChange={(e) =>
                           onDraftChange((current) => ({ ...current, levelDb: e.target.value }))
                         }
@@ -1234,40 +1323,52 @@ function ChannelEditDrawer({
               </section>
 
               <section className="tech-rider-drawer-card">
-                <span className="tech-rider-drawer-label">Gear</span>
-                <GearPresetSelect
-                  mode={mode}
-                  sourceLabel={draft.label}
-                  value={draft.gear}
-                  disabled={readOnly}
-                  name={`tech-drawer-${draft.id}-gear-preset`}
-                  onChange={(next) => onDraftChange((current) => ({ ...current, gear: next }))}
-                />
-                <input
-                  className="tech-rider-drawer-input"
-                  name={`tech-drawer-${draft.id}-gear`}
-                  autoComplete="off"
-                  value={draft.gear}
-                  disabled={readOnly}
-                  onChange={(e) => onDraftChange((current) => ({ ...current, gear: e.target.value }))}
-                />
+                <span className="tech-rider-drawer-label">{t("tech.drawer.gear")}</span>
+                {mode === "output" ? (
+                  <OutputGearSelect
+                    value={draft.gear}
+                    disabled={readOnly}
+                    onChange={(next) => onDraftChange((current) => ({ ...current, gear: next }))}
+                  />
+                ) : (
+                  <>
+                    <GearPresetSelect
+                      mode={mode}
+                      sourceLabel={draft.label}
+                      value={draft.gear}
+                      disabled={readOnly}
+                      name={`tech-drawer-${draft.id}-gear-preset`}
+                      onChange={(next) => onDraftChange((current) => ({ ...current, gear: next }))}
+                    />
+                    <input
+                      className="tech-rider-drawer-input"
+                      name={`tech-drawer-${draft.id}-gear`}
+                      autoComplete="off"
+                      value={draft.gear}
+                      disabled={readOnly}
+                      onChange={(e) => onDraftChange((current) => ({ ...current, gear: e.target.value }))}
+                    />
+                  </>
+                )}
               </section>
 
-              <section className="tech-rider-drawer-card">
-                <span className="tech-rider-drawer-label">Hardware</span>
-                <HardwareSelect
-                  value={draft.hardware}
-                  disabled={readOnly}
-                  onChange={(next) => onDraftChange((current) => ({ ...current, hardware: next }))}
-                />
-              </section>
+              {mode === "input" ? (
+                <section className="tech-rider-drawer-card">
+                  <span className="tech-rider-drawer-label">{t("tech.drawer.hardware")}</span>
+                  <HardwareSelect
+                    value={draft.hardware}
+                    disabled={readOnly}
+                    onChange={(next) => onDraftChange((current) => ({ ...current, hardware: next }))}
+                  />
+                </section>
+              ) : null}
             </>
           )}
         </div>
 
         <footer className="tech-rider-drawer-foot">
           <button type="button" className="tech-rider-drawer-save" disabled={busy || readOnly} onClick={onSave}>
-            Save
+            {t("common.save")}
           </button>
         </footer>
       </div>
@@ -1289,7 +1390,7 @@ function ChannelDragHandle({ label, dragEnabled, isDragging, onPointerDown }) {
   );
 }
 
-function MobileStripMenu({
+function ChannelActionsMenu({
   channel,
   mode,
   readOnly,
@@ -1303,7 +1404,11 @@ function MobileStripMenu({
   onTogglePad,
   onToggleStereo,
   onDelete,
+  showFlags = true,
+  showDelete = true,
+  compact = false,
 }) {
+  const t = useT();
   const wrapRef = useRef(null);
 
   useEffect(() => {
@@ -1328,15 +1433,16 @@ function MobileStripMenu({
   }, [isOpen, onClose]);
 
   const menuActive =
-    channel.isEmpty ||
-    (mode === "input" ? channel.phantom48v || channel.pad : channel.stereo);
+    showFlags &&
+    (channel.isEmpty ||
+      (mode === "input" ? channel.phantom48v || channel.pad : channel.stereo));
 
   return (
-    <div className="tech-rider-strip-menu-wrap" ref={wrapRef}>
+    <div className={`tech-rider-strip-menu-wrap ${compact ? "is-compact" : ""}`} ref={wrapRef}>
       <button
         type="button"
         className={`tech-rider-strip-menu-btn ${menuActive ? "has-active" : ""} ${channel.isEmpty ? "is-empty" : ""} ${isOpen ? "is-open" : ""}`}
-        aria-label="Channel options"
+        aria-label={t("tech.channelOptions")}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         disabled={rowActionsBusy}
@@ -1345,55 +1451,59 @@ function MobileStripMenu({
         <VerticalDotsIcon />
       </button>
       {isOpen ? (
-        <div className="tech-rider-strip-menu" role="menu" aria-label="Channel options">
-          <button
-            type="button"
-            role="menuitemcheckbox"
-            className={`tech-rider-strip-menu-item ${channel.isEmpty ? "is-on is-empty" : ""}`}
-            aria-checked={Boolean(channel.isEmpty)}
-            disabled={readOnly}
-            onClick={() => {
-              onToggleEmpty();
-              onClose();
-            }}
-          >
-            Empty
-          </button>
-          {mode === "input" ? (
+        <div className="tech-rider-strip-menu" role="menu" aria-label={t("tech.channelOptions")}>
+          {showFlags ? (
             <>
               <button
                 type="button"
                 role="menuitemcheckbox"
-                className={`tech-rider-strip-menu-item ${channel.phantom48v ? "is-on is-phantom" : ""}`}
-                aria-checked={channel.phantom48v}
-                disabled={readOnly || channel.isEmpty}
-                onClick={onToggle48}
+                className={`tech-rider-strip-menu-item ${channel.isEmpty ? "is-on is-empty" : ""}`}
+                aria-checked={Boolean(channel.isEmpty)}
+                disabled={readOnly}
+                onClick={() => {
+                  onToggleEmpty();
+                  onClose();
+                }}
               >
-                +48V
+                {t("tech.col.empty")}
               </button>
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                className={`tech-rider-strip-menu-item ${channel.pad ? "is-on is-pad" : ""}`}
-                aria-checked={channel.pad}
-                disabled={readOnly || channel.isEmpty}
-                onClick={onTogglePad}
-              >
-                Pad
-              </button>
+              {mode === "input" ? (
+                <>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    className={`tech-rider-strip-menu-item ${channel.phantom48v ? "is-on is-phantom" : ""}`}
+                    aria-checked={channel.phantom48v}
+                    disabled={readOnly || channel.isEmpty}
+                    onClick={onToggle48}
+                  >
+                    {t("tech.col.phantom")}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    className={`tech-rider-strip-menu-item ${channel.pad ? "is-on is-pad" : ""}`}
+                    aria-checked={channel.pad}
+                    disabled={readOnly || channel.isEmpty}
+                    onClick={onTogglePad}
+                  >
+                    {t("tech.col.pad")}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  className={`tech-rider-strip-menu-item ${channel.stereo ? "is-on is-output" : ""}`}
+                  aria-checked={channel.stereo}
+                  disabled={readOnly || channel.isEmpty}
+                  onClick={onToggleStereo}
+                >
+                  {t("tech.col.stereo")}
+                </button>
+              )}
             </>
-          ) : (
-            <button
-              type="button"
-              role="menuitemcheckbox"
-              className={`tech-rider-strip-menu-item ${channel.stereo ? "is-on is-output" : ""}`}
-              aria-checked={channel.stereo}
-              disabled={readOnly || channel.isEmpty}
-              onClick={onToggleStereo}
-            >
-              Stereo
-            </button>
-          )}
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -1403,9 +1513,9 @@ function MobileStripMenu({
               onClose();
             }}
           >
-            Edit channel
+            {t("tech.editChannel")}
           </button>
-          {readOnly ? null : (
+          {readOnly || !showDelete ? null : (
             <button
               type="button"
               role="menuitem"
@@ -1415,7 +1525,7 @@ function MobileStripMenu({
                 onClose();
               }}
             >
-              Obriši
+              {t("common.delete")}
             </button>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import FadeScroll from "./FadeScroll.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 /**
  * Labeled / form-style single-choice dropdown (replaces a native select).
@@ -13,7 +14,7 @@ export default function FieldSelect({
   options,
   onChange,
   className = "",
-  placeholder = "— Izaberi —",
+  placeholder,
   disabled = false,
   required = false,
   autoFocus = false,
@@ -21,6 +22,8 @@ export default function FieldSelect({
   portalAlign = "start",
   listClassName = "",
 }) {
+  const t = useT();
+  const resolvedPlaceholder = placeholder ?? t("field.choose");
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
   const rootRef = useRef(null);
@@ -194,7 +197,7 @@ export default function FieldSelect({
       >
         <span className={`field-select-value ${selected ? "" : "is-placeholder"}`.trim()}>
           {selected?.icon ? <span className="field-select-value-icon">{selected.icon}</span> : null}
-          <span>{selected?.label || placeholder}</span>
+          <span>{selected?.label || resolvedPlaceholder}</span>
         </span>
         <ChevronIcon />
       </button>

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import FadeScroll from "./FadeScroll.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 export default function UserMenu({
   email,
@@ -16,12 +17,13 @@ export default function UserMenu({
   onOpenSettings,
   onSignOut,
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState("menu");
   const [busyId, setBusyId] = useState("");
   const rootRef = useRef(null);
   const menuId = useId();
-  const label = displayName || email || "Nalog";
+  const label = displayName || email || t("menu.account");
   const initials = getInitials(displayName, email);
   const inviteCount = pendingInvites.length;
   const unreadNotifications = notifications.filter((item) => !item.readAt);
@@ -104,7 +106,9 @@ export default function UserMenu({
       <button
         type="button"
         className="user-avatar-btn"
-        aria-label={hasBadge ? `Nalog, ${badgeCount} obaveštenja` : "Nalog"}
+        aria-label={
+          hasBadge ? t("menu.accountNotices", { count: badgeCount }) : t("menu.account")
+        }
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
@@ -122,7 +126,7 @@ export default function UserMenu({
       </button>
 
       {open ? (
-        <div className="user-menu-panel" id={menuId} role="menu" aria-label="Nalog">
+        <div className="user-menu-panel" id={menuId} role="menu" aria-label={t("menu.account")}>
           {view === "invites" ? (
             <>
               <div className="user-menu-header user-menu-header-row">
@@ -130,15 +134,15 @@ export default function UserMenu({
                   type="button"
                   className="user-menu-back"
                   onClick={() => setView("menu")}
-                  aria-label="Nazad"
+                  aria-label={t("common.back")}
                 >
                   <BackIcon />
                 </button>
-                <p className="user-menu-name">Pozivnice</p>
+                <p className="user-menu-name">{t("menu.invites")}</p>
               </div>
 
               {pendingInvites.length === 0 ? (
-                <p className="user-menu-empty">Nema novih pozivnica.</p>
+                <p className="user-menu-empty">{t("menu.noInvites")}</p>
               ) : (
                 <FadeScroll className="fade-scroll-inset user-invite-scroll">
                   <ul className="user-invite-list">
@@ -146,7 +150,7 @@ export default function UserMenu({
                       <li key={invite.id} className="user-invite-row">
                         <p className="user-invite-copy">
                           <strong>{invite.bandName}</strong>
-                          <span>{invite.invitedByName} te poziva da se pridružiš</span>
+                          <span>{t("menu.inviteBody", { name: invite.invitedByName })}</span>
                         </p>
                         <div className="user-invite-actions">
                           <button
@@ -155,7 +159,7 @@ export default function UserMenu({
                             disabled={busyId === invite.id}
                             onClick={() => handleAccept(invite.id)}
                           >
-                            Prihvati
+                            {t("band.accept")}
                           </button>
                           <button
                             type="button"
@@ -163,7 +167,7 @@ export default function UserMenu({
                             disabled={busyId === invite.id}
                             onClick={() => handleDecline(invite.id)}
                           >
-                            Odbij
+                            {t("band.decline")}
                           </button>
                         </div>
                       </li>
@@ -179,11 +183,11 @@ export default function UserMenu({
                   type="button"
                   className="user-menu-back"
                   onClick={() => setView("menu")}
-                  aria-label="Nazad"
+                  aria-label={t("common.back")}
                 >
                   <BackIcon />
                 </button>
-                <p className="user-menu-name">Obaveštenja</p>
+                <p className="user-menu-name">{t("menu.notifications")}</p>
               </div>
 
               {noticeCount > 0 ? (
@@ -194,13 +198,13 @@ export default function UserMenu({
                     disabled={busyId === "all"}
                     onClick={handleMarkAllRead}
                   >
-                    Označi sve pročitano
+                    {t("menu.markAllRead")}
                   </button>
                 </div>
               ) : null}
 
               {notifications.length === 0 ? (
-                <p className="user-menu-empty">Nema obaveštenja.</p>
+                <p className="user-menu-empty">{t("menu.noNotifications")}</p>
               ) : (
                 <FadeScroll className="fade-scroll-inset user-invite-scroll">
                   <ul className="user-invite-list">
@@ -221,7 +225,7 @@ export default function UserMenu({
                               disabled={busyId === notice.id}
                               onClick={() => handleNoticeAction(notice)}
                             >
-                              {isNoticeViewable(notice) ? "Pogledaj" : "U redu"}
+                              {isNoticeViewable(notice) ? t("menu.view") : t("menu.ok")}
                             </button>
                           ) : null}
                         </div>
@@ -234,14 +238,16 @@ export default function UserMenu({
           ) : (
             <>
               <div className="user-menu-header">
-                <p className="user-menu-name">{displayName || email?.split("@")[0] || "Korisnik"}</p>
+                <p className="user-menu-name">
+                  {displayName || email?.split("@")[0] || t("menu.userFallback")}
+                </p>
                 {email ? <p className="user-menu-email">{email}</p> : null}
               </div>
 
               <ul className="user-menu-list">
                 <li>
                   <button type="button" className="user-menu-item" role="menuitem" disabled>
-                    Nalog
+                    {t("menu.account")}
                   </button>
                 </li>
                 <li>
@@ -251,7 +257,7 @@ export default function UserMenu({
                     role="menuitem"
                     onClick={() => setView("invites")}
                   >
-                    <span>Pozivnice</span>
+                    <span>{t("menu.invites")}</span>
                     {inviteCount ? <span className="user-menu-count">{inviteCount}</span> : null}
                   </button>
                 </li>
@@ -262,7 +268,7 @@ export default function UserMenu({
                     role="menuitem"
                     onClick={openNotices}
                   >
-                    <span>Obaveštenja</span>
+                    <span>{t("menu.notifications")}</span>
                     {noticeCount ? <span className="user-menu-count">{noticeCount}</span> : null}
                   </button>
                 </li>
@@ -276,7 +282,7 @@ export default function UserMenu({
                       onOpenSettings?.();
                     }}
                   >
-                    Podešavanja
+                    {t("menu.settings")}
                   </button>
                 </li>
               </ul>
@@ -292,7 +298,7 @@ export default function UserMenu({
                   await onSignOut();
                 }}
               >
-                Odjava
+                {t("menu.signOut")}
               </button>
             </>
           )}

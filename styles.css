@@ -5630,6 +5630,18 @@ button.date-row-menu-item.is-pay:focus-visible {
   opacity: 1;
 }
 
+.settings-lang-option {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  min-width: 2.35rem !important;
+  padding: 0 0.35rem !important;
+}
+
+.settings-lang-code {
+  line-height: 1;
+}
+
 .settings-field-compact {
   margin-top: 0.65rem;
 }
@@ -10088,6 +10100,27 @@ body.tech-rider-is-dragging .tech-rider-drag-handle.is-draggable {
   grid-template-columns: auto minmax(2.8rem, 1.45fr) minmax(2.5rem, 1.05fr) minmax(2.2rem, 0.95fr) auto;
   min-height: 0;
   padding: 0.08rem 0.12rem 0.08rem 0.08rem;
+}
+
+.tech-rider-strip.is-output {
+  grid-template-columns: auto minmax(2.8rem, 1.5fr) minmax(3.2rem, 1.2fr) auto;
+}
+
+.tech-rider-strip.is-output .tech-rider-strip-gear {
+  grid-column: 3;
+}
+
+.tech-rider-strip.is-output .tech-rider-strip-menu-wrap {
+  grid-column: 4;
+}
+
+.tech-rider-actions .tech-rider-strip-menu-wrap {
+  grid-column: auto;
+}
+
+.tech-rider-actions .tech-rider-strip-menu {
+  right: 0;
+  left: auto;
 }
 
 .tech-rider:has(.tech-rider-mode-btn.is-input.is-active) .tech-rider-strip:not(.tech-rider-strip-empty) {

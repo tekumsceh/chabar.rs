@@ -17,13 +17,14 @@ import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import PageHeader from "./PageHeader.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 
-const statusOptions = [
-  { id: "all", label: "Sve stavke" },
-  { id: "done", label: "Samo dospele" },
-  { id: "future", label: "Buduće" },
-  { id: "unpaid", label: "Dospele neplaćene" },
-  { id: "paid", label: "Plaćene" },
+const STATUS_OPTION_KEYS = [
+  { id: "all", labelKey: "report.statusAll" },
+  { id: "done", labelKey: "report.statusDone" },
+  { id: "future", labelKey: "report.statusFuture" },
+  { id: "unpaid", labelKey: "report.statusUnpaid" },
+  { id: "paid", labelKey: "report.statusPaid" },
 ];
 
 export default function ReportPage({
@@ -45,6 +46,7 @@ export default function ReportPage({
   onFocusEventConsumed,
   onBack,
 }) {
+  const t = useT();
   const search = searchQuery;
   const [statusFilter, setStatusFilter] = useState("all");
   /** desc = novo → staro (default); asc = staro → novo */
@@ -59,6 +61,11 @@ export default function ReportPage({
     setSelectedId(focusEventId);
     onFocusEventConsumed?.();
   }, [focusEventId, onFocusEventConsumed]);
+
+  const statusOptions = useMemo(
+    () => STATUS_OPTION_KEYS.map((item) => ({ id: item.id, label: t(item.labelKey) })),
+    [t],
+  );
 
   const DATES_PAGE_SIZE = 20;
 
@@ -199,10 +206,10 @@ export default function ReportPage({
 
   return (
     <div className="raspored finansije">
-      <PageHeader title="Novac" onBack={onBack} />
+      <PageHeader title={t("report.title")} onBack={onBack} />
 
       <header className="raspored-bar finansije-toolbar">
-        <div className="raspored-tools raspored-tools-start" aria-label="Filteri finansija">
+        <div className="raspored-tools raspored-tools-start" aria-label={t("report.filters")}>
           <BandFilterSelect
             bands={bands}
             activeBandId={activeBandId}
@@ -214,11 +221,9 @@ export default function ReportPage({
               type="button"
               className={`raspored-icon-btn finance-mode-btn ${financeMode === "band" ? "is-active-filter" : ""}`}
               aria-pressed={financeMode === "band"}
-              aria-label={financeMode === "band" ? "Bend mod uključen" : "Bend mod isključen"}
+              aria-label={financeMode === "band" ? t("report.bandModeOn") : t("report.bandModeOff")}
               title={
-                financeMode === "band"
-                  ? "Bend mod: svi članovi i zajednički troškovi"
-                  : "Član mod: samo tvoji iznosi — klik za bend mod"
+                financeMode === "band" ? t("report.bandModeTitleOn") : t("report.bandModeTitleOff")
               }
               onClick={() => onFinanceModeChange?.(financeMode === "band" ? "member" : "band")}
             >
@@ -227,7 +232,7 @@ export default function ReportPage({
           ) : null}
           {activeTab === "dates" ? (
             <MenuSelect
-              label="Status"
+              label={t("report.status")}
               icon={<StatusFilterIcon />}
               value={statusFilter}
               options={statusOptions}
@@ -237,12 +242,8 @@ export default function ReportPage({
           <button
             type="button"
             className={`raspored-icon-btn raspored-sort-btn ${dateSort === "asc" ? "is-asc" : "is-desc"}`}
-            aria-label={
-              dateSort === "desc"
-                ? "Sortiranje: od novijeg ka starijem — klik za obrnuto"
-                : "Sortiranje: od starijeg ka novijem — klik za obrnuto"
-            }
-            title={dateSort === "desc" ? "Novo → staro" : "Staro → novo"}
+            aria-label={dateSort === "desc" ? t("report.sortDescAria") : t("report.sortAscAria")}
+            title={dateSort === "desc" ? t("report.sortDesc") : t("report.sortAsc")}
             onClick={() => setDateSort((value) => (value === "desc" ? "asc" : "desc"))}
           >
             <SortArrowIcon />
@@ -251,10 +252,10 @@ export default function ReportPage({
 
         <div className="finansije-year-cluster">
           <label className="finansije-year-select-wrap">
-            <span className="sr-only">Godina</span>
+            <span className="sr-only">{t("report.year")}</span>
             <FieldSelect
               id="financeYear"
-              label="Godina"
+              label={t("report.year")}
               className="finansije-year-field"
               value={viewYear}
               options={yearOptions}
@@ -267,25 +268,25 @@ export default function ReportPage({
 
       <div className="finansije-year-meta-bar">
         <span className="finansije-year-meta">
-          {financeMode === "band" ? <em className="finansije-mode-tag">Bend mod</em> : null}
+          {financeMode === "band" ? <em className="finansije-mode-tag">{t("report.bandModeTag")}</em> : null}
           <span
             className="finansije-meta-item finansije-meta-owed"
-            title="Neplaćeno na održanim datumima (uplata ide redom po kalendaru, isti filteri)"
+            title={t("report.claimTitle")}
           >
-            <span className="finansije-meta-label">Potražuje</span>{" "}
+            <span className="finansije-meta-label">{t("report.claim")}</span>{" "}
             <strong>{formatEur(claimEur)}</strong>
           </span>
           <span className="finansije-meta-sep" aria-hidden="true">
             ·
           </span>
-          <span className="finansije-meta-item finansije-meta-expected" title="Samo budući datumi sa postavljenim iznosom">
-            <span className="finansije-meta-label">Očekivano</span>{" "}
+          <span className="finansije-meta-item finansije-meta-expected" title={t("report.expectedTitle")}>
+            <span className="finansije-meta-label">{t("report.expected")}</span>{" "}
             <strong>{formatEur(expectedEur)}</strong>
           </span>
         </span>
       </div>
 
-      <div className="finansije-tabs" role="tablist" aria-label="Finansije sekcije">
+      <div className="finansije-tabs" role="tablist" aria-label={t("report.tabs")}>
         <button
           type="button"
           role="tab"
@@ -293,7 +294,7 @@ export default function ReportPage({
           aria-selected={activeTab === "dates"}
           onClick={() => setActiveTab("dates")}
         >
-          Datumi
+          {t("report.tabDates")}
         </button>
         <button
           type="button"
@@ -302,21 +303,21 @@ export default function ReportPage({
           aria-selected={activeTab === "payments"}
           onClick={() => setActiveTab("payments")}
         >
-          Uplate
+          {t("report.tabPayments")}
         </button>
       </div>
 
       {activeTab === "dates" ? (
-        <section className="raspored-panel finansije-panel-full" aria-label="Datumi" role="tabpanel">
+        <section className="raspored-panel finansije-panel-full" aria-label={t("report.tabDates")} role="tabpanel">
           {loading && events.length === 0 ? (
             <RasporedSkeleton variant="finance" />
           ) : filteredRows.length === 0 ? (
-            <p className="raspored-empty">Nema stavki za {viewYear}.</p>
+            <p className="raspored-empty">{t("report.emptyYear", { year: viewYear })}</p>
           ) : (
             <ul className="raspored-list">
               {visibleRows.map((row) => {
                 const band = bandsById.get(row.bandId);
-                const bandLabel = financeBandLabel(band, row);
+                const bandLabel = financeBandLabel(band, row, t);
                 const color = resolveBandColor(band, row.bandId || bandLabel);
                 const dateParts = formatScheduleDateParts(row.date);
                 const amountTone = feeAmountTone(row);
@@ -331,7 +332,9 @@ export default function ReportPage({
                       type="button"
                       className="raspored-row-button raspored-row-open"
                       onClick={() => setSelectedId(row.id)}
-                      aria-label={`Detalj ${row.date || ""} ${row.city || ""} ${bandLabel}`.trim()}
+                      aria-label={t("report.detail", {
+                        label: `${row.date || ""} ${row.city || ""} ${bandLabel}`.trim(),
+                      })}
                     >
                       <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
                         <span className="raspored-date-day">{dateParts.day}</span>
@@ -347,7 +350,7 @@ export default function ReportPage({
                         className={`finansije-row-amount raspored-fee raspored-fee-${amountTone}`}
                         title={
                           row.hasDate
-                            ? `${payStatusLabel(row)} · ${formatEur(row.totalEur)}`
+                            ? `${payStatusLabel(row, t)} · ${formatEur(row.totalEur)}`
                             : undefined
                         }
                       >
@@ -364,11 +367,11 @@ export default function ReportPage({
           )}
         </section>
       ) : (
-        <section className="raspored-panel finansije-panel-full" aria-label="Uplate" role="tabpanel">
+        <section className="raspored-panel finansije-panel-full" aria-label={t("report.tabPayments")} role="tabpanel">
           {loading && payments.length === 0 ? (
             <RasporedSkeleton variant="pay" rows={5} />
           ) : visiblePayments.length === 0 ? (
-            <p className="raspored-empty">Nema uplata za {viewYear}.</p>
+            <p className="raspored-empty">{t("report.emptyPayments", { year: viewYear })}</p>
           ) : (
             <ul className="raspored-list">
               {visiblePayments.map((payment) => {
@@ -391,29 +394,26 @@ export default function ReportPage({
       )}
 
       {activeTab === "dates" && filteredRows.length > DATES_PAGE_SIZE ? (
-        <div className="raspored-pagination" aria-label="Stranice">
+        <div className="raspored-pagination" aria-label={t("report.pages")}>
           <button
             type="button"
             className="finansije-year-btn finansije-page-btn"
             disabled={safePage <= 0}
             onClick={() => setListPage((page) => Math.max(0, page - 1))}
-            aria-label="Prethodna stranica"
+            aria-label={t("report.prevPage")}
           >
             <ChevronLeftIcon />
           </button>
           <span className="raspored-pagination-label">
             {safePage + 1} / {totalPages}
-            <small>
-              {" "}
-              ({filteredRows.length} datuma · {viewYear})
-            </small>
+            <small> {t("report.dateCountYear", { count: filteredRows.length, year: viewYear })}</small>
           </span>
           <button
             type="button"
             className="finansije-year-btn finansije-page-btn"
             disabled={safePage >= totalPages - 1}
             onClick={() => setListPage((page) => Math.min(totalPages - 1, page + 1))}
-            aria-label="Sledeća stranica"
+            aria-label={t("report.nextPage")}
           >
             <ChevronRightIcon />
           </button>
@@ -435,6 +435,7 @@ export default function ReportPage({
 }
 
 function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = "", onClose }) {
+  const t = useT();
   const isBandMode = financeMode === "band";
   const name = band?.name || row.bandName || "";
   const color = resolveBandColor(band, row.bandId || name);
@@ -455,8 +456,8 @@ function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = 
       : row.paymentClass === "paid"
         ? 0
         : detailTotalEur;
-  const bandPay = bandPaymentNote(row, detailTotalEur, remaining);
-  const dateLabel = String(row.date || "").replace(/\.$/, "") || "Bez datuma";
+  const bandPay = bandPaymentNote(row, detailTotalEur, remaining, t);
+  const dateLabel = String(row.date || "").replace(/\.$/, "") || t("report.noDate");
 
   return (
     <div
@@ -474,7 +475,7 @@ function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = 
       >
         <header className="finance-detail-head">
           <div>
-            <p className="finance-detail-kicker">Finansije</p>
+            <p className="finance-detail-kicker">{t("report.financeDetail")}</p>
             <h2 id="financeDetailTitle">
               {dateLabel}
               {row.city ? ` — ${row.city}` : ""}
@@ -488,7 +489,7 @@ function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = 
               </p>
             ) : null}
           </div>
-          <button type="button" className="raspored-icon-btn" onClick={onClose} aria-label="Zatvori" title="Zatvori">
+          <button type="button" className="raspored-icon-btn" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
             <CloseIcon />
           </button>
         </header>
@@ -496,38 +497,38 @@ function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = 
         <FadeScroll viewportClassName="finance-detail-body">
           <section className="finance-detail-section">
             <p className={`finance-detail-status finance-detail-status-${row.paymentClass || "future"}`}>
-              {payStatusLabel(row)}
-              {row.done && remaining > 0 ? ` · ostaje ${formatEur(remaining)}` : null}
+              {payStatusLabel(row, t)}
+              {row.done && remaining > 0 ? t("report.remains", { amount: formatEur(remaining) }) : null}
             </p>
           </section>
 
           <section className="finance-detail-section">
-            <h3>{isBandMode ? "Obračun benda" : "Tvoj obračun"}</h3>
+            <h3>{isBandMode ? t("report.bandCalc") : t("report.myCalc")}</h3>
             <ul className="finance-detail-lines">
               {isBandMode ? (
                 memberWages.length ? (
                   memberWages.map((member) => (
                     <li key={member.id || member.name}>
-                      <span>{member.name || "Član"}</span>
+                      <span>{member.name || t("report.member")}</span>
                       <strong>{formatEur(numberish(member.priceEur))}</strong>
                     </li>
                   ))
                 ) : (
                   <li>
-                    <span>Honorari</span>
+                    <span>{t("finance.fees")}</span>
                     <strong>{formatEur(honorarTotal)}</strong>
                   </li>
                 )
               ) : (
                 <li>
-                  <span>Honorar</span>
+                  <span>{t("report.fee")}</span>
                   <strong>{formatEur(honorarTotal)}</strong>
                 </li>
               )}
               {expenseItems.map((item) => (
                 <li key={item.id || `${item.description}-${item.amount}-${item.payeeUserId || ""}`}>
                   <span>
-                    {item.description || "Trošak"}
+                    {item.description || t("report.expense")}
                     {isBandMode && item.payeeName ? (
                       <small className="finance-detail-payee"> · {item.payeeName}</small>
                     ) : null}
@@ -536,14 +537,14 @@ function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = 
                 </li>
               ))}
               {!expenseItems.length && honorarTotal <= 0 ? (
-                <li className="finance-detail-empty">Nema postavljenih iznosa.</li>
+                <li className="finance-detail-empty">{t("report.noAmounts")}</li>
               ) : null}
             </ul>
           </section>
 
           {row.done ? (
             <section className="finance-detail-section">
-              <h3>Uplata</h3>
+              <h3>{t("report.payment")}</h3>
               <p className={`finance-detail-paynote finance-detail-paynote-${bandPay.kind}`}>
                 {bandPay.text}
               </p>
@@ -553,7 +554,7 @@ function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = 
           <section className="finance-detail-section">
             <ul className="finance-detail-lines">
               <li className="is-total">
-                <span>Ukupno</span>
+                <span>{t("report.total")}</span>
                 <strong>{formatEur(detailTotalEur)}</strong>
               </li>
             </ul>
@@ -616,15 +617,15 @@ function formatNumberish(value) {
 }
 
 /** Short note: did the band receive money for this date (not a full payment ledger). */
-function bandPaymentNote(row, totalEur, remaining) {
+function bandPaymentNote(row, totalEur, remaining, t) {
   if (!row.done || row.paymentClass === "unpaid" || row.paymentClass === "future") {
-    return { kind: "none", text: "Nema uplata za ovaj datum." };
+    return { kind: "none", text: t("report.noPayments") };
   }
 
   if (row.paymentClass === "paid") {
     return {
       kind: "paid",
-      text: `Datum je plaćen — ${formatEur(totalEur)}.`,
+      text: t("report.paidFull", { amount: formatEur(totalEur) }),
     };
   }
 
@@ -632,11 +633,11 @@ function bandPaymentNote(row, totalEur, remaining) {
     const paid = Math.max(0, totalEur - remaining);
     return {
       kind: "partial",
-      text: `Datum je delimično plaćen — ${formatEur(paid)} od ${formatEur(totalEur)}.`,
+      text: t("report.paidPartial", { paid: formatEur(paid), total: formatEur(totalEur) }),
     };
   }
 
-  return { kind: "none", text: "Nema uplata za ovaj datum." };
+  return { kind: "none", text: t("report.noPayments") };
 }
 
 function yearFromDate(value, parsed) {
@@ -664,12 +665,12 @@ function matchesFilters(row, search, status) {
   return true;
 }
 
-function payStatusLabel(row) {
-  if (!row.done) return "Otvoreno";
-  if (row.paymentClass === "paid") return "Plaćeno";
-  if (row.paymentClass === "partial") return "Delimično";
-  if (row.paymentClass === "unpaid") return "Neplaćeno";
-  return "Otvoreno";
+function payStatusLabel(row, t) {
+  if (!row.done) return t("report.payOpen");
+  if (row.paymentClass === "paid") return t("report.payPaid");
+  if (row.paymentClass === "partial") return t("report.payPartial");
+  if (row.paymentClass === "unpaid") return t("report.payUnpaid");
+  return t("report.payOpen");
 }
 
 /** Amount color: paid green, partial yellow, held unpaid red, future/open brand. */
@@ -680,10 +681,10 @@ function feeAmountTone(row) {
   return "unpaid";
 }
 
-function financeBandLabel(band, row) {
+function financeBandLabel(band, row, t) {
   const name = band?.name || row.bandName || "";
   if (!name) return "";
-  if (band?.kind === "personal") return `${name} (lično)`;
+  if (band?.kind === "personal") return `${name} ${t("event.personalSuffix")}`;
   return name;
 }
 
@@ -696,6 +697,7 @@ function financeRemainingEur(row) {
 }
 
 function FinanceRowMenu({ row, onOpenDetail }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const idleTimerRef = useRef(0);
@@ -750,8 +752,8 @@ function FinanceRowMenu({ row, onOpenDetail }) {
       <button
         type="button"
         className={`date-row-menu-trigger ${open ? "is-open" : ""}`}
-        aria-label="Finansijske radnje"
-        title="Više"
+        aria-label={t("report.financeActions")}
+        title={t("schedule.more")}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
@@ -763,7 +765,7 @@ function FinanceRowMenu({ row, onOpenDetail }) {
         <MoreDotsIcon />
       </button>
       {open ? (
-        <ul className="date-row-menu-list" id={menuId} role="menu" aria-label="Finansijske radnje">
+        <ul className="date-row-menu-list" id={menuId} role="menu" aria-label={t("report.financeActions")}>
           {needsPay ? (
             <li role="none">
               <button
@@ -776,7 +778,7 @@ function FinanceRowMenu({ row, onOpenDetail }) {
                   onOpenDetail?.();
                 }}
               >
-                Plati ovaj datum
+                {t("report.payThisDate")}
                 <small>{formatEur(owed)}</small>
               </button>
             </li>
@@ -784,14 +786,14 @@ function FinanceRowMenu({ row, onOpenDetail }) {
           {!row.done ? (
             <li role="none">
               <div className="date-row-menu-item is-status" role="menuitem" aria-disabled="true">
-                Budući termin — nije dospelo
+                {t("report.futureNotDue")}
               </div>
             </li>
           ) : null}
           {row.done && row.paymentClass === "paid" ? (
             <li role="none">
               <div className="date-row-menu-item is-status is-fee-set" role="menuitem" aria-disabled="true">
-                Plaćeno
+                {t("report.payPaid")}
               </div>
             </li>
           ) : null}
@@ -806,7 +808,7 @@ function FinanceRowMenu({ row, onOpenDetail }) {
                 onOpenDetail?.();
               }}
             >
-              Detalj obračuna
+              {t("report.calcDetail")}
             </button>
           </li>
         </ul>

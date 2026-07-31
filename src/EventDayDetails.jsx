@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 export const DAY_TIME_FIELDS = [
-  { key: "gatheringTime", label: "Okupljanje" },
-  { key: "departureTime", label: "Polazak" },
-  { key: "lodgingArrivalTime", label: "Planirani dolazak u smeštaj" },
-  { key: "loadInTime", label: "Load-in" },
-  { key: "setUpTime", label: "Set up" },
-  { key: "soundcheckTime", label: "Soundcheck", hasDuration: true },
-  { key: "showStartTime", label: "Show start" },
-  { key: "showEndTime", label: "Show end" },
-  { key: "curfewTime", label: "Curfew" },
-  { key: "leaveTime", label: "Odlazak" },
+  { key: "gatheringTime", labelKey: "day.gathering" },
+  { key: "departureTime", labelKey: "day.departure" },
+  { key: "lodgingArrivalTime", labelKey: "day.lodgingArrival" },
+  { key: "loadInTime", labelKey: "day.loadIn" },
+  { key: "setUpTime", labelKey: "day.setUp" },
+  { key: "soundcheckTime", labelKey: "day.soundcheck", hasDuration: true },
+  { key: "showStartTime", labelKey: "day.showStart" },
+  { key: "showEndTime", labelKey: "day.showEnd" },
+  { key: "curfewTime", labelKey: "day.curfew" },
+  { key: "leaveTime", labelKey: "day.leave" },
 ];
 
 export const emptyDayDetails = {
@@ -67,6 +68,7 @@ export default function EventDayDetails({
   showToast,
   onSaved,
 }) {
+  const t = useT();
   const [form, setForm] = useState(emptyDayDetails);
   const [initial, setInitial] = useState(emptyDayDetails);
   const [loading, setLoading] = useState(Boolean(eventId && bandId));
@@ -79,7 +81,7 @@ export default function EventDayDetails({
       if (!eventId || !bandId) {
         if (!cancelled) {
           setLoading(false);
-          setError("Nedostaje bend za ovaj termin.");
+          setError(t("common.missingBand"));
         }
         return;
       }
@@ -93,7 +95,7 @@ export default function EventDayDetails({
         setInitial(next);
       } catch (requestError) {
         if (!cancelled) {
-          setError(requestError.message || "Detalji nisu učitani.");
+          setError(requestError.message || t("day.loadFail"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -103,7 +105,7 @@ export default function EventDayDetails({
     return () => {
       cancelled = true;
     };
-  }, [eventId, bandId]);
+  }, [eventId, bandId, t]);
 
   const dirty = DAY_TIME_FIELDS.some((field) => form[field.key] !== initial[field.key])
     || String(form.soundcheckDurationMin ?? "") !== String(initial.soundcheckDurationMin ?? "");
@@ -142,9 +144,9 @@ export default function EventDayDetails({
       setInitial(next);
       setError("");
       onSaved?.(next);
-      showToast?.("Detalji sačuvani");
+      showToast?.(t("day.saved"));
     } catch (requestError) {
-      showToast?.(requestError.message || "Čuvanje nije uspelo", "error");
+      showToast?.(requestError.message || t("day.saveFail"), "error");
     } finally {
       setSaving(false);
     }
@@ -156,22 +158,20 @@ export default function EventDayDetails({
 
   return (
     <form className={`event-day-details ${readOnly ? "is-readonly" : ""}`} onSubmit={save}>
-      {loading ? <p className="event-finance-status">Učitavam detalje…</p> : null}
+      {loading ? <p className="event-finance-status">{t("day.loading")}</p> : null}
       {error ? <p className="event-finance-status is-error">{error}</p> : null}
       {readOnly ? (
-        <p className="event-finance-status event-day-details-locknote">
-          Prošli termin — detalji su zaključani (samo pregled).
-        </p>
+        <p className="event-finance-status event-day-details-locknote">{t("day.locked")}</p>
       ) : null}
 
-      <ul className="event-day-details-list" aria-label="Vremenski raspored dana">
+      <ul className="event-day-details-list" aria-label={t("day.scheduleAria")}>
         {DAY_TIME_FIELDS.map((field) => (
           <li
             key={field.key}
             className={`event-day-details-row ${field.hasDuration ? "has-duration" : ""}`}
           >
             <label className="event-day-details-label" htmlFor={`day-${field.key}`}>
-              {field.label}
+              {t(field.labelKey)}
             </label>
             <div className="event-day-details-controls">
               <input
@@ -183,7 +183,7 @@ export default function EventDayDetails({
               />
               {field.hasDuration ? (
                 <label className="event-day-details-duration" htmlFor="day-soundcheck-duration">
-                  <span className="sr-only">Trajanje soundcheck-a (minuti)</span>
+                  <span className="sr-only">{t("day.soundcheckDuration")}</span>
                   <input
                     id="day-soundcheck-duration"
                     type="number"
@@ -207,10 +207,10 @@ export default function EventDayDetails({
       {!readOnly ? (
         <div className="event-day-details-actions">
           <button type="button" className="danger" onClick={cancel} disabled={saving || loading || !dirty}>
-            Otkaži
+            {t("common.cancel")}
           </button>
           <button type="submit" disabled={saving || loading || !dirty}>
-            {saving ? "Čuvam..." : "Sačuvaj"}
+            {saving ? t("common.saving") : t("common.save")}
           </button>
         </div>
       ) : null}

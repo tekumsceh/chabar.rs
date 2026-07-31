@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import FadeScroll from "./FadeScroll.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 const ConfirmContext = createContext(null);
 
@@ -10,6 +11,7 @@ const ConfirmContext = createContext(null);
  *   await alert({ title, message });
  */
 export function ConfirmProvider({ children }) {
+  const t = useT();
   const [dialog, setDialog] = useState(null);
   const resolverRef = useRef(null);
   const titleId = useId();
@@ -29,14 +31,14 @@ export function ConfirmProvider({ children }) {
       resolverRef.current = resolve;
       setDialog({
         mode: "confirm",
-        title: options.title || "Potvrda",
+        title: options.title || t("confirm.title"),
         message: options.message || "",
-        confirmLabel: options.confirmLabel || "Potvrdi",
-        cancelLabel: options.cancelLabel || "Otkaži",
+        confirmLabel: options.confirmLabel || t("confirm.ok"),
+        cancelLabel: options.cancelLabel || t("confirm.cancel"),
         danger: Boolean(options.danger),
       });
     });
-  }, []);
+  }, [t]);
 
   const alert = useCallback((options = {}) => {
     return new Promise((resolve) => {
@@ -44,14 +46,14 @@ export function ConfirmProvider({ children }) {
       resolverRef.current = () => resolve();
       setDialog({
         mode: "alert",
-        title: options.title || "Obaveštenje",
+        title: options.title || t("alert.title"),
         message: options.message || "",
-        confirmLabel: options.confirmLabel || "U redu",
+        confirmLabel: options.confirmLabel || t("alert.ok"),
         cancelLabel: "",
         danger: false,
       });
     });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!dialog) return undefined;

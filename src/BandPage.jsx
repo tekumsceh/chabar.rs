@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { useConfirm } from "./confirmDialog.jsx";
-import { bandRoleLabel } from "../shared/roles.js";
+import { useT } from "./i18n/I18nProvider.jsx";
 import { parseDate, sameMonth, startOfToday } from "./calculations.js";
 import { joinUrlForToken, qrImageUrlForJoin } from "./joinLink.js";
 import FadeScroll from "./FadeScroll.jsx";
@@ -10,6 +10,10 @@ import FadeScroll from "./FadeScroll.jsx";
 const WEEKDAYS = ["P", "U", "S", "Č", "P", "S", "N"];
 const SIDE_RATIO = 0.88;
 const OPEN_THRESHOLD = 0.32;
+
+function bandRoleT(t, role) {
+  return t(`band.role.${role}`);
+}
 
 /**
  * Band home — calendar on the main pane;
@@ -26,6 +30,7 @@ export default function BandPage({
   onBandsChanged,
   showToast,
 }) {
+  const t = useT();
   const { confirm } = useConfirm();
   const isAllBands = activeBandId === allBandsId || !activeBandId;
 
@@ -283,7 +288,7 @@ export default function BandPage({
       } catch (error) {
         if (!cancelled) {
           setShareUrl("");
-          showToast?.(error.message || "Link nije učitan", "error");
+          showToast?.(error.message || t("band.linkNotLoaded"), "error");
         }
       } finally {
         if (!cancelled) setShareBusy(false);
@@ -298,19 +303,19 @@ export default function BandPage({
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      showToast?.("Link kopiran");
+      showToast?.(t("toast.copied"));
     } catch {
-      showToast?.("Kopiranje nije uspelo", "error");
+      showToast?.(t("toast.copyFail"), "error");
     }
   }
 
   async function rotateShareLink() {
     if (!manageBandId || shareBusy) return;
     const ok = await confirm({
-      title: "Novi link?",
-      message: "Stari link i QR prestaju da važe. Nastaviti?",
-      confirmLabel: "Generiši novi",
-      cancelLabel: "Otkaži",
+      title: t("band.confirmNewLink"),
+      message: t("band.confirmNewLinkMessage"),
+      confirmLabel: t("band.generateNew"),
+      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (!ok) return;
@@ -322,9 +327,9 @@ export default function BandPage({
       });
       setShareUrl(joinUrlForToken(data.token));
       setQrOpen(false);
-      showToast?.("Novi link je spreman");
+      showToast?.(t("band.newLinkReady"));
     } catch (error) {
-      showToast?.(error.message || "Link nije obnovljen", "error");
+      showToast?.(error.message || t("band.linkNotRotated"), "error");
     } finally {
       setShareBusy(false);
     }
@@ -418,11 +423,11 @@ export default function BandPage({
       if (result.status === "invited") {
         showToast?.(
           result.registered
-            ? `Pozivnica poslata: ${result.email} (čeka potvrdu)`
-            : `Pozivnica sačuvana: ${result.email}`,
+            ? t("band.inviteSentRegistered", { email: result.email })
+            : t("band.inviteSaved", { email: result.email }),
         );
       } else {
-        showToast?.(`Pozivnica: ${result.email}`);
+        showToast?.(t("band.inviteGeneric", { email: result.email }));
       }
       setQuery("");
       setSearchResults([]);
@@ -432,7 +437,7 @@ export default function BandPage({
       setCalendarEvents(data.events || []);
       await onBandsChanged?.();
     } catch (error) {
-      showToast?.(error.message || "Dodavanje nije uspelo", "error");
+      showToast?.(error.message || t("band.addFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -458,7 +463,7 @@ export default function BandPage({
       return;
     }
 
-    showToast?.("Izaberi korisnika iz liste ili unesi email za pozivnicu.", "error");
+    showToast?.(t("band.pickUserOrEmail"), "error");
   }
 
   async function handlePickUser(user) {
@@ -475,12 +480,12 @@ export default function BandPage({
         bandId: activeBandId,
         body: { memberRole },
       });
-      showToast?.(`${member.name}: ${bandRoleLabel(memberRole)}`);
+      showToast?.(t("band.roleChanged", { name: member.name, role: bandRoleT(t, memberRole) }));
       const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
       setDetail(data);
       await onBandsChanged?.();
     } catch (error) {
-      showToast?.(error.message || "Uloga nije promenjena", "error");
+      showToast?.(error.message || t("band.roleNotChanged"), "error");
     } finally {
       setBusy(false);
     }
@@ -497,11 +502,13 @@ export default function BandPage({
         bandId: activeBandId,
         body: { canInvite: next },
       });
-      showToast?.(next ? `${member.name}: može pozivati` : `${member.name}: bez pozivnica`);
+      showToast?.(
+        next ? t("band.canInviteOn", { name: member.name }) : t("band.canInviteOff", { name: member.name }),
+      );
       const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
       setDetail(data);
     } catch (error) {
-      showToast?.(error.message || "Dozvola nije promenjena", "error");
+      showToast?.(error.message || t("band.invitePermNotChanged"), "error");
     } finally {
       setBusy(false);
     }
@@ -512,10 +519,10 @@ export default function BandPage({
     if (member.memberRole === "owner") return;
     if (isLead && member.memberRole !== "member") return;
     const ok = await confirm({
-      title: "Ukloniti člana?",
-      message: `${member.name} će biti uklonjen/a iz benda.`,
-      confirmLabel: "Ukloni",
-      cancelLabel: "Otkaži",
+      title: t("band.confirmKick"),
+      message: t("band.confirmKickMessage", { name: member.name }),
+      confirmLabel: t("band.kick"),
+      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (!ok) return;
@@ -525,13 +532,13 @@ export default function BandPage({
         method: "DELETE",
         bandId: activeBandId,
       });
-      showToast?.(`Uklonjen/a: ${member.name}`);
+      showToast?.(t("band.removed", { name: member.name }));
       const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
       setDetail(data);
       setCalendarEvents(data.events || []);
       await onBandsChanged?.();
     } catch (error) {
-      showToast?.(error.message || "Uklanjanje nije uspelo", "error");
+      showToast?.(error.message || t("band.removeFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -540,10 +547,10 @@ export default function BandPage({
   async function handleTransfer(member) {
     if (!activeBandId || isAllBands || busy || !canTransfer) return;
     const ok = await confirm({
-      title: "Preneti vlasništvo?",
-      message: `Preneti vlasništvo na ${member.name}?\nTi postaješ lead. Ovo ne možeš poništiti sam/a.`,
-      confirmLabel: "Prenesi",
-      cancelLabel: "Otkaži",
+      title: t("band.confirmTransfer"),
+      message: t("band.confirmTransferMessage", { name: member.name }),
+      confirmLabel: t("band.transferBtn"),
+      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (!ok) return;
@@ -554,13 +561,13 @@ export default function BandPage({
         bandId: activeBandId,
         body: { userId: member.id },
       });
-      showToast?.(`Vlasništvo: ${member.name}`);
+      showToast?.(t("band.ownershipTransferred", { name: member.name }));
       setManagePanel("");
       await onBandsChanged?.();
       const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
       setDetail(data);
     } catch (error) {
-      showToast?.(error.message || "Prenos nije uspeo", "error");
+      showToast?.(error.message || t("band.transferFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -568,36 +575,38 @@ export default function BandPage({
 
   async function handleDeleteBand() {
     if (!activeBandId || isAllBands || busy || !canDelete) return;
-    const name = band?.name || "ovaj bend";
+    const name = band?.name || t("band.thisBand");
     const ok = await confirm({
-      title: "Obrisati bend?",
-      message: `Trajno obrisati bend „${name}“?\nTermini i članstva nestaju. Nema povratka.`,
-      confirmLabel: "Obriši bend",
-      cancelLabel: "Otkaži",
+      title: t("band.confirmDelete"),
+      message: t("band.confirmDeleteMessage", { name }),
+      confirmLabel: t("band.delete"),
+      cancelLabel: t("common.cancel"),
       danger: true,
     });
     if (!ok) return;
     setBusy(true);
     try {
       await api(`/api/bands/${activeBandId}`, { method: "DELETE", bandId: activeBandId });
-      showToast?.(`Obrisan bend: ${name}`);
+      showToast?.(t("band.deleted", { name }));
       setManagePanel("");
       await onBandsChanged?.();
       onBandChange?.(allBandsId);
       onBack?.();
     } catch (error) {
-      showToast?.(error.message || "Brisanje nije uspelo", "error");
+      showToast?.(error.message || t("band.deleteFailed"), "error");
     } finally {
       setBusy(false);
     }
   }
 
-  const title = isAllBands ? "Svi bendovi" : band?.name || "Bend";
+  const title = isAllBands ? t("common.allBands") : band?.name || t("band.title");
   const subtitle = isAllBands
-    ? "Kalendar svih termina"
+    ? t("band.calendarAll")
     : band?.kind === "personal"
-      ? "Lični prostor"
-      : `${members.length} ${members.length === 1 ? "član" : "članova"}`;
+      ? t("band.personalSpace")
+      : t(members.length === 1 ? "band.memberCountOne" : "band.memberCountMany", {
+          count: members.length,
+        });
 
   return (
     <section
@@ -617,13 +626,13 @@ export default function BandPage({
             <button
               type="button"
               className="band-home-back"
-              aria-label="Nazad na raspored"
-              title="Nazad na raspored"
+              aria-label={t("band.backToSchedule")}
+              title={t("band.backToSchedule")}
               onClick={() => onBack?.()}
             >
               <ChevronLeftIcon />
             </button>
-            <button type="button" className="band-home-title-tap" onClick={openSide} aria-label="Otvori info benda">
+            <button type="button" className="band-home-title-tap" onClick={openSide} aria-label={t("band.openInfo")}>
               <div className="band-home-title-wrap">
                 <h2 className="band-home-title">{title}</h2>
                 <p className="band-home-sub">{subtitle}</p>
@@ -632,21 +641,21 @@ export default function BandPage({
             <button
               type="button"
               className="band-home-info"
-              aria-label="Više o bendu"
-              title="Više"
+              aria-label={t("band.moreAbout")}
+              title={t("band.more")}
               onClick={openSide}
             >
               <InfoIcon />
             </button>
           </header>
 
-          <div className="band-cal" aria-label="Kalendar benda">
+          <div className="band-cal" aria-label={t("band.calendar")}>
             <div className="band-cal-nav">
               <button
                 type="button"
                 className="band-cal-nav-btn"
-                aria-label="Prethodni mesec"
-                title="Prethodni mesec"
+                aria-label={t("band.prevMonth")}
+                title={t("band.prevMonth")}
                 onClick={() => setCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
               >
                 <ChevronLeftIcon />
@@ -655,8 +664,8 @@ export default function BandPage({
               <button
                 type="button"
                 className="band-cal-nav-btn"
-                aria-label="Sledeći mesec"
-                title="Sledeći mesec"
+                aria-label={t("band.nextMonth")}
+                title={t("band.nextMonth")}
                 onClick={() => setCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
               >
                 <ChevronRightIcon />
@@ -716,10 +725,10 @@ export default function BandPage({
             </div>
           </div>
 
-          {isAllBands ? <p className="band-home-note">Izaberi bend za članove i alate.</p> : null}
+          {isAllBands ? <p className="band-home-note">{t("band.selectForTools")}</p> : null}
           {!isAllBands ? (
             <p className="band-home-swipe-hint" aria-hidden="true">
-              ← prevuci za više
+              {t("band.swipeHint")}
             </p>
           ) : null}
         </div>
@@ -731,12 +740,12 @@ export default function BandPage({
           id="band-home-side"
         >
           <header className="band-home-side-top">
-            <button type="button" className="band-home-back" onClick={closeSide} aria-label="Zatvori">
+            <button type="button" className="band-home-back" onClick={closeSide} aria-label={t("common.close")}>
               <ChevronLeftIcon />
             </button>
             <div className="band-home-title-wrap">
-              <h2 className="band-home-title">Više</h2>
-              <p className="band-home-sub">prevuci desno da zatvoriš</p>
+              <h2 className="band-home-title">{t("band.more")}</h2>
+              <p className="band-home-sub">{t("band.closeSwipe")}</p>
             </div>
           </header>
 
@@ -752,14 +761,14 @@ export default function BandPage({
             <div className="band-accordion" role="list">
               <BandAccordionSection
                 id="members"
-                title={`Članovi${members.length ? ` · ${members.length}` : ""}`}
+                title={`${t("band.members")}${members.length ? ` · ${members.length}` : ""}`}
                 open={sideSection === "members"}
                 onToggle={toggleSideSection}
               >
                 {isAllBands ? (
-                  <p className="band-home-note">Izaberi bend da vidiš članove.</p>
+                  <p className="band-home-note">{t("band.selectForMembers")}</p>
                 ) : band?.kind === "personal" ? (
-                  <p className="band-home-note">Lični prostor — nema liste članova.</p>
+                  <p className="band-home-note">{t("band.personalNoMembers")}</p>
                 ) : (
                   <ul className="band-home-side-members">
                     {members.map((member) => (
@@ -771,7 +780,7 @@ export default function BandPage({
                           <strong>{member.name}</strong>
                           {member.email ? <small>{member.email}</small> : null}
                         </span>
-                        <span className="band-home-side-role">{bandRoleLabel(member.memberRole)}</span>
+                        <span className="band-home-side-role">{bandRoleT(t, member.memberRole)}</span>
                       </li>
                     ))}
                     {invites.map((invite) => (
@@ -781,13 +790,13 @@ export default function BandPage({
                         </span>
                         <span className="band-home-side-member-text">
                           <strong>{invite.email}</strong>
-                          <small>čeka potvrdu</small>
+                          <small>{t("band.awaitingConfirm")}</small>
                         </span>
-                        <span className="band-home-side-role">pozivnica</span>
+                        <span className="band-home-side-role">{t("band.inviteBadge")}</span>
                       </li>
                     ))}
                     {!members.length && !invites.length ? (
-                      <li className="band-home-side-empty">Nema učitanih članova.</li>
+                      <li className="band-home-side-empty">{t("band.noMembersLoaded")}</li>
                     ) : null}
                   </ul>
                 )}
@@ -795,14 +804,14 @@ export default function BandPage({
 
               <BandAccordionSection
                 id="manage"
-                title="Upravljanje"
+                title={t("band.manage")}
                 open={sideSection === "manage"}
                 onToggle={toggleSideSection}
               >
                 {isAllBands ? (
-                  <p className="band-home-note">Izaberi bend za upravljanje članovima.</p>
+                  <p className="band-home-note">{t("band.selectForManage")}</p>
                 ) : band?.kind === "personal" ? (
-                  <p className="band-home-note">Lični prostor — nema upravljanja članovima.</p>
+                  <p className="band-home-note">{t("band.personalNoManage")}</p>
                 ) : (
                   <>
                     <div className="band-share-actions band-manage-actions">
@@ -812,8 +821,8 @@ export default function BandPage({
                         disabled={!canInvite}
                         onClick={() => toggleManagePanel("invite")}
                       >
-                        Pozovi člana
-                        <small>{canInvite ? "Pošalji pozivnicu" : "Nemaš dozvolu"}</small>
+                        {t("band.inviteMember")}
+                        <small>{canInvite ? t("band.sendInvite") : t("band.noPermission")}</small>
                       </button>
                       <button
                         type="button"
@@ -821,8 +830,8 @@ export default function BandPage({
                         disabled={!canKick}
                         onClick={() => toggleManagePanel("kick")}
                       >
-                        Ukloni člana
-                        <small>{canKick ? "Iz benda" : "Samo vlasnik / lead"}</small>
+                        {t("band.removeMember")}
+                        <small>{canKick ? t("band.fromBand") : t("band.ownerLeadOnly")}</small>
                       </button>
                       <button
                         type="button"
@@ -830,8 +839,8 @@ export default function BandPage({
                         disabled={!canAssignRoles}
                         onClick={() => toggleManagePanel("roles")}
                       >
-                        Uloge i pozivnice
-                        <small>{canAssignRoles ? "Lead, član, saradnik" : "Samo vlasnik / lead"}</small>
+                        {t("band.rolesAndInvites")}
+                        <small>{canAssignRoles ? t("band.rolesHint") : t("band.ownerLeadOnly")}</small>
                       </button>
                       {canTransfer ? (
                         <button
@@ -839,8 +848,8 @@ export default function BandPage({
                           className={`band-home-side-action ${managePanel === "transfer" ? "is-active" : ""}`}
                           onClick={() => toggleManagePanel("transfer")}
                         >
-                          Prenesi vlasništvo
-                          <small>Ti postaješ lead</small>
+                          {t("band.transfer")}
+                          <small>{t("band.transferYouLead")}</small>
                         </button>
                       ) : null}
                       {canDelete ? (
@@ -849,8 +858,8 @@ export default function BandPage({
                           className={`band-home-side-action band-home-side-action-danger ${managePanel === "delete" ? "is-active" : ""}`}
                           onClick={() => toggleManagePanel("delete")}
                         >
-                          Obriši bend
-                          <small>Trajno — termini nestaju</small>
+                          {t("band.delete")}
+                          <small>{t("band.deletePermanent")}</small>
                         </button>
                       ) : null}
                     </div>
@@ -858,7 +867,7 @@ export default function BandPage({
                     {managePanel === "invite" && canInvite ? (
                       <form className="band-add-form band-manage-panel" onSubmit={handleAddMember}>
                         <label className="band-add-label" htmlFor="band-add-search">
-                          Traži člana
+                          {t("band.searchMemberLabel")}
                         </label>
                         <div className="band-add-row">
                           <input
@@ -866,23 +875,21 @@ export default function BandPage({
                             type="search"
                             autoComplete="off"
                             autoFocus
-                            placeholder="Ime ili email…"
+                            placeholder={t("band.searchMember")}
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                           />
                           <button type="submit" className="band-add-submit" disabled={busy || !query.trim()}>
-                            {busy ? "…" : "Pozovi"}
+                            {busy ? "…" : t("band.invite")}
                           </button>
                         </div>
                         <FadeScroll className="fade-scroll-inset band-user-results-scroll">
-                          <ul className="band-user-results" role="listbox" aria-label="Registrovani korisnici">
+                          <ul className="band-user-results" role="listbox" aria-label={t("band.registeredUsers")}>
                             {searching && searchResults.length === 0 ? (
-                              <li className="band-user-empty">Učitavam…</li>
+                              <li className="band-user-empty">{t("common.loading")}</li>
                             ) : null}
                             {!searching && searchResults.length === 0 ? (
-                              <li className="band-user-empty">
-                                Nema drugih registrovanih. Unesi email i pritisni Pozovi.
-                              </li>
+                              <li className="band-user-empty">{t("band.noOtherUsers")}</li>
                             ) : null}
                             {searchResults.map((user) => (
                               <li key={user.id}>
@@ -900,14 +907,14 @@ export default function BandPage({
                             ))}
                           </ul>
                         </FadeScroll>
-                        <p className="band-add-hint">Šalje se pozivnica — ulaze tek kad potvrde.</p>
+                        <p className="band-add-hint">{t("band.inviteHint")}</p>
                       </form>
                     ) : null}
 
                     {managePanel === "kick" && canKick ? (
-                      <div className="band-role-panel band-manage-panel" aria-label="Ukloni člana">
+                      <div className="band-role-panel band-manage-panel" aria-label={t("band.removeMember")}>
                         <p className="band-add-hint">
-                          {isOwner ? "Ukloni lead ili člana." : "Lead može ukloniti samo obične članove."}
+                          {isOwner ? t("band.kickHintOwner") : t("band.kickHintLead")}
                         </p>
                         <ul className="band-member-list">
                           {members
@@ -926,7 +933,7 @@ export default function BandPage({
                                   disabled={busy}
                                   onClick={() => handleKick(member)}
                                 >
-                                  Ukloni
+                                  {t("band.kick")}
                                 </button>
                               </li>
                             ))}
@@ -937,17 +944,15 @@ export default function BandPage({
                             return false;
                           return true;
                         }) ? (
-                          <p className="band-home-note">Nema članova za uklanjanje.</p>
+                          <p className="band-home-note">{t("band.noMembersToKick")}</p>
                         ) : null}
                       </div>
                     ) : null}
 
                     {managePanel === "roles" && canAssignRoles ? (
-                      <div className="band-role-panel band-manage-panel" aria-label="Uloge članova">
+                      <div className="band-role-panel band-manage-panel" aria-label={t("band.rolesPanel")}>
                         <p className="band-add-hint">
-                          {isOwner
-                            ? "Postavi lead / člana / saradnika. Saradnik vidi samo datume na koje ga dodaš."
-                            : "Lead može unaprediti člana u lead ili postaviti saradnika. Saradnik vidi samo dodele datume."}
+                          {isOwner ? t("band.rolesHintOwner") : t("band.rolesHintLead")}
                         </p>
                         <ul className="band-member-list">
                           {members
@@ -964,7 +969,7 @@ export default function BandPage({
                                 <li key={member.id} className="band-member-row band-role-row band-role-row-stack">
                                   <div className="band-role-row-top">
                                     <span className="band-member-name">{member.name}</span>
-                                    <span className="band-member-role">{bandRoleLabel(member.memberRole)}</span>
+                                    <span className="band-member-role">{bandRoleT(t, member.memberRole)}</span>
                                   </div>
                                   <div className="band-role-actions">
                                     <button
@@ -973,7 +978,7 @@ export default function BandPage({
                                       disabled={busy || member.memberRole === "lead" || !leadCanTouch}
                                       onClick={() => handleSetRole(member, "lead")}
                                     >
-                                      lead
+                                      {t("band.role.lead")}
                                     </button>
                                     <button
                                       type="button"
@@ -985,25 +990,25 @@ export default function BandPage({
                                       }
                                       onClick={() => handleSetRole(member, "member")}
                                     >
-                                      član
+                                      {t("band.role.member")}
                                     </button>
                                     <button
                                       type="button"
                                       className={member.memberRole === "saradnik" ? "is-active" : ""}
                                       disabled={busy || member.memberRole === "saradnik" || !canSetSaradnik}
                                       onClick={() => handleSetRole(member, "saradnik")}
-                                      title="Vidi samo datume na koje je dodeljen"
+                                      title={t("band.saradnikTitle")}
                                     >
-                                      saradnik
+                                      {t("band.role.saradnik")}
                                     </button>
                                     <button
                                       type="button"
                                       className={member.canInvite ? "is-active" : ""}
                                       disabled={busy || !canToggleInvite}
-                                      title="Dozvola za slanje pozivnica"
+                                      title={t("band.invitePermTitle")}
                                       onClick={() => handleToggleInvite(member)}
                                     >
-                                      poziv
+                                      {t("band.inviteShort")}
                                     </button>
                                   </div>
                                 </li>
@@ -1011,16 +1016,14 @@ export default function BandPage({
                             })}
                         </ul>
                         {!members.some((member) => member.memberRole !== "owner") ? (
-                          <p className="band-home-note">Nema drugih članova.</p>
+                          <p className="band-home-note">{t("band.noOtherMembers")}</p>
                         ) : null}
                       </div>
                     ) : null}
 
                     {managePanel === "transfer" && canTransfer ? (
-                      <div className="band-role-panel band-manage-panel" aria-label="Prenos vlasništva">
-                        <p className="band-add-hint">
-                          Prenesi vlasništvo na postojećeg člana. Ti postaješ lead.
-                        </p>
+                      <div className="band-role-panel band-manage-panel" aria-label={t("band.transferPanel")}>
+                        <p className="band-add-hint">{t("band.transferHint")}</p>
                         <ul className="band-member-list">
                           {members
                             .filter((member) => member.memberRole !== "owner")
@@ -1033,22 +1036,22 @@ export default function BandPage({
                                   disabled={busy}
                                   onClick={() => handleTransfer(member)}
                                 >
-                                  Prenesi
+                                  {t("band.transferBtn")}
                                 </button>
                               </li>
                             ))}
                         </ul>
                         {!members.some((member) => member.memberRole !== "owner") ? (
-                          <p className="band-home-note">Nema člana za prenos — prvo pozovi nekoga.</p>
+                          <p className="band-home-note">{t("band.noTransferTarget")}</p>
                         ) : null}
                       </div>
                     ) : null}
 
                     {managePanel === "delete" && canDelete ? (
-                      <div className="band-role-panel band-manage-panel band-danger-zone" aria-label="Brisanje benda">
-                        <p className="band-add-hint">Brisanje je trajno (termini + članstva).</p>
+                      <div className="band-role-panel band-manage-panel band-danger-zone" aria-label={t("band.deleteZone")}>
+                        <p className="band-add-hint">{t("band.deleteHint")}</p>
                         <button type="button" className="band-delete-btn" disabled={busy} onClick={handleDeleteBand}>
-                          Obriši bend
+                          {t("band.delete")}
                         </button>
                       </div>
                     ) : null}
@@ -1058,55 +1061,52 @@ export default function BandPage({
 
               <BandAccordionSection
                 id="media"
-                title="Mediji"
+                title={t("band.media")}
                 open={sideSection === "media"}
                 onToggle={toggleSideSection}
               >
-                <p className="band-home-note">Uskoro — foto, snimci i deljeni fajlovi benda.</p>
+                <p className="band-home-note">{t("band.mediaSoon")}</p>
               </BandAccordionSection>
 
               <BandAccordionSection
                 id="notifications"
-                title="Obaveštenja"
+                title={t("band.notifications")}
                 open={sideSection === "notifications"}
                 onToggle={toggleSideSection}
               >
-                <p className="band-home-note">Uskoro — kako bend šalje podsetnike i novosti.</p>
+                <p className="band-home-note">{t("band.notificationsSoon")}</p>
               </BandAccordionSection>
 
               <BandAccordionSection
                 id="sharing"
-                title="Deljenje"
+                title={t("band.sharing")}
                 open={sideSection === "sharing"}
                 onToggle={toggleSideSection}
               >
                 {isAllBands ? (
-                  <p className="band-home-note">Izaberi bend da deliš pozivnicu.</p>
+                  <p className="band-home-note">{t("band.selectForShare")}</p>
                 ) : band?.kind === "personal" ? (
-                  <p className="band-home-note">Lični prostor — nema link za deljenje.</p>
+                  <p className="band-home-note">{t("band.personalNoShare")}</p>
                 ) : !canInvite ? (
-                  <p className="band-home-note">Nemaš dozvolu za deljenje pozivnice u ovom bendu.</p>
+                  <p className="band-home-note">{t("band.noSharePermission")}</p>
                 ) : (
                   <div className="band-share">
-                    <p className="band-home-note">
-                      Ko otvori link (ili skenira QR) i prijavi se / napravi nalog, automatski ulazi u bend
-                      kao član.
-                    </p>
+                    <p className="band-home-note">{t("band.shareHint")}</p>
                     <label className="band-share-field">
-                      <span>Pozivni link</span>
+                      <span>{t("band.inviteLink")}</span>
                       <input
                         id="band-share-url"
                         name="band-share-url"
                         type="text"
                         readOnly
                         autoComplete="off"
-                        value={shareBusy && !shareUrl ? "Učitavam…" : shareUrl}
+                        value={shareBusy && !shareUrl ? t("band.loadingShare") : shareUrl}
                       />
                     </label>
                     <div className="band-share-actions">
                       <button type="button" className="band-home-side-action" disabled={!shareUrl || shareBusy} onClick={copyShareLink}>
-                        Kopiraj link
-                        <small>Viber, SMS, email…</small>
+                        {t("band.copyLink")}
+                        <small>{t("band.copyLinkHint")}</small>
                       </button>
                       <button
                         type="button"
@@ -1114,8 +1114,8 @@ export default function BandPage({
                         disabled={!shareUrl || shareBusy}
                         onClick={() => setQrOpen((open) => !open)}
                       >
-                        {qrOpen ? "Sakrij QR" : "Generiši QR kod"}
-                        <small>isti link, za skeniranje</small>
+                        {qrOpen ? t("band.hideQr") : t("band.showQr")}
+                        <small>{t("band.qrSameLink")}</small>
                       </button>
                       <button
                         type="button"
@@ -1123,14 +1123,14 @@ export default function BandPage({
                         disabled={shareBusy}
                         onClick={rotateShareLink}
                       >
-                        Novi link
-                        <small>stari prestaje da važi</small>
+                        {t("band.newLink")}
+                        <small>{t("band.oldLinkInvalid")}</small>
                       </button>
                     </div>
                     {qrOpen && shareUrl ? (
                       <div className="band-share-qr">
-                        <img src={qrImageUrlForJoin(shareUrl, 220)} alt="QR kod za pozivnicu u bend" width={220} height={220} />
-                        <p className="band-home-note">Skeniraj telefonom — isti efekat kao link.</p>
+                        <img src={qrImageUrlForJoin(shareUrl, 220)} alt={t("band.qrAlt")} width={220} height={220} />
+                        <p className="band-home-note">{t("band.qrScanHint")}</p>
                       </div>
                     ) : null}
                   </div>
@@ -1139,14 +1139,11 @@ export default function BandPage({
 
               <BandAccordionSection
                 id="settings"
-                title="Podešavanja benda"
+                title={t("band.settings")}
                 open={sideSection === "settings"}
                 onToggle={toggleSideSection}
               >
-                <p className="band-home-note">
-                  Uskoro — ime, boja i pravila benda. Google kalendar sync biće u toku kreiranja i
-                  izmene termina.
-                </p>
+                <p className="band-home-note">{t("band.settingsSoon")}</p>
               </BandAccordionSection>
             </div>
           </div>
@@ -1158,7 +1155,7 @@ export default function BandPage({
           type="button"
           className="band-home-scrim"
           style={{ opacity: Math.min(0.45, progress * 0.45) }}
-          aria-label="Zatvori panel"
+          aria-label={t("band.closePanel")}
           onClick={closeSide}
         />
       ) : null}

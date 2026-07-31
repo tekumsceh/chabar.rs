@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "./api.js";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 /**
  * Top-bar search with DB autocomplete (termin, grad, lokal, bend, korisnik).
  */
 export default function GlobalSearch({ value, onChange, onSelectResult, authReady = true }) {
+  const t = useT();
   const listId = useId();
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -42,14 +44,14 @@ export default function GlobalSearch({ value, onChange, onSelectResult, authRead
       } catch (error) {
         if (seq !== seqRef.current) return;
         setResults([]);
-        setFetchError(error?.message || "Pretraga nije uspela.");
+        setFetchError(error?.message || t("search.fetchFail"));
       } finally {
         if (seq === seqRef.current) setLoading(false);
       }
     }, 180);
 
     return () => clearTimeout(timer);
-  }, [value, authReady]);
+  }, [value, authReady, t]);
 
   useEffect(() => {
     function onPointerDown(event) {
@@ -101,7 +103,7 @@ export default function GlobalSearch({ value, onChange, onSelectResult, authRead
   return (
     <div className={`global-search ${showList ? "is-open" : ""}`} ref={rootRef}>
       <label className="app-topbar-search">
-        <span className="sr-only">Pretraga</span>
+        <span className="sr-only">{t("search.label")}</span>
         <span className="app-topbar-search-icon" aria-hidden="true">
           <TopSearchIcon />
         </span>
@@ -110,7 +112,7 @@ export default function GlobalSearch({ value, onChange, onSelectResult, authRead
           name="globalSearch"
           enterKeyHint="search"
           autoComplete="off"
-          placeholder="Pretraga…"
+          placeholder={t("search.placeholder")}
           className="app-topbar-search-field"
           role="combobox"
           aria-expanded={showList}
@@ -129,10 +131,10 @@ export default function GlobalSearch({ value, onChange, onSelectResult, authRead
       </label>
 
       {showList ? (
-        <ul className="global-search-list" id={listId} role="listbox" aria-label="Predlozi pretrage">
+        <ul className="global-search-list" id={listId} role="listbox" aria-label={t("search.suggestions")}>
           {loading && results.length === 0 ? (
             <li className="global-search-empty" role="presentation">
-              Učitavam…
+              {t("common.loading")}
             </li>
           ) : null}
           {!loading && fetchError ? (
@@ -142,7 +144,7 @@ export default function GlobalSearch({ value, onChange, onSelectResult, authRead
           ) : null}
           {!loading && !fetchError && results.length === 0 ? (
             <li className="global-search-empty" role="presentation">
-              Nema pogodaka
+              {t("search.noMatches")}
             </li>
           ) : null}
           {results.map((result, index) => (

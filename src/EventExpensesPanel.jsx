@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 import { numberValue } from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 const FALLBACK_CURRENCIES = ["EUR", "USD", "GBP", "RSD", "CHF", "JPY", "CAD", "AUD", "SEK", "PLN"];
 
@@ -41,6 +42,7 @@ export default function EventExpensesPanel({
   error = "",
   onExpensesChange,
 }) {
+  const t = useT();
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState("");
@@ -53,12 +55,12 @@ export default function EventExpensesPanel({
 
   const payeeOptions = useMemo(() => {
     const options = [
-      { id: "band", label: "Bend" },
-      { id: "external", label: "Spoljnji" },
+      { id: "band", label: t("finance.payeeBand") },
+      { id: "external", label: t("finance.payeeExternal") },
       ...members.map((member) => ({ id: `member:${member.id}`, label: member.name })),
     ];
     return options;
-  }, [members]);
+  }, [members, t]);
 
   const currencyOptions = useMemo(
     () => currencyList.map((code) => ({ id: code, label: code })),
@@ -107,11 +109,11 @@ export default function EventExpensesPanel({
 
     if (!description) {
       setDescOpen(true);
-      showToast?.("Unesi opis", "error");
+      showToast?.(t("finance.enterDesc"), "error");
       return;
     }
     if (!payee) {
-      showToast?.("Izaberi kome", "error");
+      showToast?.(t("finance.selectPayee"), "error");
       return;
     }
 
@@ -132,10 +134,10 @@ export default function EventExpensesPanel({
       setForm(emptyForm);
       setDescOpen(false);
       setFormOpen(false);
-      showToast?.("Trošak dodat");
+      showToast?.(t("finance.expenseAdded"));
       await onChanged?.();
     } catch (requestError) {
-      showToast?.(requestError.message || "Trošak nije sačuvan", "error");
+      showToast?.(requestError.message || t("finance.expenseSaveFail"), "error");
     } finally {
       setSaving(false);
     }
@@ -156,10 +158,10 @@ export default function EventExpensesPanel({
         bandId,
       });
       onExpensesChange?.((expenses || []).filter((row) => row.id !== item.id));
-      showToast?.("Trošak obrisan");
+      showToast?.(t("finance.expenseDeleted"));
       await onChanged?.();
     } catch (requestError) {
-      showToast?.(requestError.message || "Brisanje nije uspelo", "error");
+      showToast?.(requestError.message || t("tech.deleteFail"), "error");
     } finally {
       setBusyId("");
     }
@@ -170,9 +172,9 @@ export default function EventExpensesPanel({
       <>
         <h3 className="event-page-section-title event-page-section-title-spaced">
           <ExpenseIcon />
-          <span>Troškovi</span>
+          <span>{t("finance.expenses")}</span>
         </h3>
-        <p className="event-finance-status">Učitavam troškove…</p>
+        <p className="event-finance-status">{t("finance.loadingExpenses")}</p>
       </>
     );
   }
@@ -182,7 +184,7 @@ export default function EventExpensesPanel({
       <>
         <h3 className="event-page-section-title event-page-section-title-spaced">
           <ExpenseIcon />
-          <span>Troškovi</span>
+          <span>{t("finance.expenses")}</span>
         </h3>
         <p className="event-finance-status is-error">{error}</p>
       </>
@@ -197,24 +199,22 @@ export default function EventExpensesPanel({
     <>
       <h3 className="event-page-section-title event-page-section-title-spaced">
         <ExpenseIcon />
-        <span>Troškovi</span>
+        <span>{t("finance.expenses")}</span>
       </h3>
       <div className={`event-expenses ${readOnly ? "is-readonly" : ""}`}>
         {readOnly ? (
-          <p className="event-finance-status event-expenses-locknote">
-            Prošli termin — troškovi su zaključani (samo pregled).
-          </p>
+          <p className="event-finance-status event-expenses-locknote">{t("finance.expensesLocked")}</p>
         ) : formOpen ? (
           <form className="event-expenses-form" onSubmit={addExpense}>
             <label className="event-expenses-amount">
-              <span className="sr-only">Iznos</span>
+              <span className="sr-only">{t("finance.expenseAmount")}</span>
               <input
                 id="expense-amount"
                 name="expense-amount"
                 type="text"
                 inputMode="decimal"
                 autoComplete="off"
-                placeholder="Iznos"
+                placeholder={t("finance.expenseAmount")}
                 value={form.amount}
                 disabled={saving}
                 onChange={(e) => updateForm("amount", e.target.value)}
@@ -222,7 +222,7 @@ export default function EventExpensesPanel({
             </label>
             <FieldSelect
               id="expenseCurrency"
-              label="Valuta"
+              label={t("finance.currency")}
               className="event-expenses-currency"
               value={form.currency}
               options={currencyOptions}
@@ -231,10 +231,10 @@ export default function EventExpensesPanel({
             />
             <FieldSelect
               id="expensePayee"
-              label="Kome"
+              label={t("finance.payee")}
               className="event-expenses-payee"
               value={form.payee}
-              placeholder="Kome"
+              placeholder={t("finance.payee")}
               options={payeeOptions}
               disabled={saving}
               onChange={(id) => updateForm("payee", id)}
@@ -243,23 +243,27 @@ export default function EventExpensesPanel({
               <button
                 type="button"
                 className={`event-finance-icon-btn event-expenses-desc-btn ${descriptionReady ? "is-filled" : ""}`}
-                aria-label={descriptionReady ? `Opis: ${form.description}` : "Dodaj opis"}
+                aria-label={
+                  descriptionReady
+                    ? t("finance.descLabel", { desc: form.description })
+                    : t("finance.descAdd")
+                }
                 aria-expanded={descOpen}
-                title={descriptionReady ? form.description : "Opis"}
+                title={descriptionReady ? form.description : t("finance.expenseDesc")}
                 disabled={saving}
                 onClick={() => setDescOpen((open) => !open)}
               >
                 <NoteIcon />
               </button>
               {descOpen ? (
-                <div className="event-expenses-desc-popover" role="dialog" aria-label="Opis troška">
+                <div className="event-expenses-desc-popover" role="dialog" aria-label={t("finance.expenseDescDialog")}>
                   <input
                     ref={descInputRef}
                     id="expense-description"
                     name="expense-description"
                     type="text"
                     autoComplete="off"
-                    placeholder="Opis"
+                    placeholder={t("finance.expenseDesc")}
                     maxLength={200}
                     value={form.description}
                     disabled={saving}
@@ -278,8 +282,8 @@ export default function EventExpensesPanel({
             <button
               type="submit"
               className="event-finance-icon-btn event-finance-icon-btn-accent event-expenses-submit"
-              aria-label="Dodaj trošak"
-              title="Dodaj"
+              aria-label={t("finance.addExpense")}
+              title={t("common.add")}
               disabled={saving || !amountReady}
             >
               {saving ? "…" : <CheckIcon />}
@@ -287,8 +291,8 @@ export default function EventExpensesPanel({
             <button
               type="button"
               className="event-finance-icon-btn event-expenses-cancel"
-              aria-label="Otkaži"
-              title="Otkaži"
+              aria-label={t("common.cancel")}
+              title={t("common.cancel")}
               disabled={saving}
               onClick={closeForm}
             >
@@ -299,16 +303,16 @@ export default function EventExpensesPanel({
           <button
             type="button"
             className="event-expenses-add-trigger"
-            aria-label="Dodaj trošak"
+            aria-label={t("finance.addExpense")}
             onClick={() => setFormOpen(true)}
           >
             <PlusIcon />
-            <span>Dodaj trošak</span>
+            <span>{t("finance.addExpense")}</span>
           </button>
         )}
 
         {expenses.length ? (
-          <ul className="event-expenses-list" aria-label="Lista troškova">
+          <ul className="event-expenses-list" aria-label={t("finance.expenseList")}>
             {expenses.map((item) => (
               <li key={item.id} className="event-expenses-item">
                 <div className="event-expenses-item-main">
@@ -332,8 +336,8 @@ export default function EventExpensesPanel({
                   <button
                     type="button"
                     className="raspored-icon-btn raspored-icon-btn-danger"
-                    aria-label="Obriši trošak"
-                    title="Obriši"
+                    aria-label={t("finance.deleteExpense")}
+                    title={t("common.delete")}
                     disabled={Boolean(busyId) || saving}
                     onClick={() => removeExpense(item)}
                   >

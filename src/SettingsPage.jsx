@@ -9,6 +9,7 @@ import {
   syncPushSubscription,
 } from "./pushNotifications.js";
 import { api } from "./api.js";
+import { useI18n } from "./i18n/I18nProvider.jsx";
 
 function isAutoExchangeRate(settings) {
   return settings?.autoExchangeRate !== "0";
@@ -27,6 +28,7 @@ export default function SettingsPage({
   onBack,
   onOpenButtonShowcase,
 }) {
+  const { t, locale, setLocale, locales } = useI18n();
   const [pushOn, setPushOn] = useState(false);
   const [pushReady, setPushReady] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -34,6 +36,7 @@ export default function SettingsPage({
   const pushSupported = isPushSupported();
   const autoRate = isAutoExchangeRate(settings);
   const invitesAllowed = invitePreference !== "block";
+  const activeLocale = locales.find((item) => item.id === locale) || locales[0];
 
   useEffect(() => {
     let cancelled = false;
@@ -62,16 +65,16 @@ export default function SettingsPage({
       if (pushOn) {
         await disablePush(api);
         await refreshPushState();
-        showToast?.("Obaveštenja isključena");
+        showToast?.(t("settings.pushOff"));
         return;
       }
 
       await enablePush(api);
       await refreshPushState();
-      showToast?.("Obaveštenja dozvoljena");
+      showToast?.(t("settings.pushOn"));
     } catch (error) {
       await refreshPushState();
-      showToast?.(error.message || "Obaveštenja nisu uspela", "error");
+      showToast?.(error.message || t("settings.pushFail"), "error");
     } finally {
       setPushBusy(false);
     }
@@ -79,10 +82,10 @@ export default function SettingsPage({
 
   function pushStatusLabel() {
     if (pushBusy) return "…";
-    if (pushReady) return "Dozvoljeno";
-    if (pushOn && Notification.permission === "denied") return "Blokirano";
-    if (pushOn) return "Dozvoljeno";
-    return "Isključeno";
+    if (pushReady) return t("common.allowed");
+    if (pushOn && Notification.permission === "denied") return t("common.blocked");
+    if (pushOn) return t("common.allowed");
+    return t("common.off");
   }
 
   async function handleAutoRateToggle() {
@@ -103,22 +106,24 @@ export default function SettingsPage({
 
   return (
     <div className="settings-page">
-      <PageHeader title="Podešavanja" onBack={onBack} />
+      <PageHeader title={t("settings.title")} onBack={onBack} />
 
-      <section className="settings-card" aria-label="Izgled">
-        <h2>Izgled</h2>
+      <section className="settings-card" aria-label={t("settings.appearance")}>
+        <h2>{t("settings.appearance")}</h2>
         <div className="settings-row">
           <span>
-            <strong>Tema</strong>
-            <small className="settings-row-status">{theme === "light" ? "Svetla" : "Tamna"}</small>
+            <strong>{t("settings.theme")}</strong>
+            <small className="settings-row-status">
+              {theme === "light" ? t("settings.themeLight") : t("settings.themeDark")}
+            </small>
           </span>
-          <div className="settings-theme-picker" role="group" aria-label="Tema">
+          <div className="settings-theme-picker" role="group" aria-label={t("settings.theme")}>
             <button
               type="button"
               className={`settings-theme-option ${theme === "light" ? "is-active" : ""}`}
-              aria-label="Svetla tema"
+              aria-label={t("settings.themeLightAria")}
               aria-pressed={theme === "light"}
-              title="Svetla"
+              title={t("settings.themeLight")}
               onClick={() => onThemeChange("light")}
             >
               <SunIcon />
@@ -126,67 +131,93 @@ export default function SettingsPage({
             <button
               type="button"
               className={`settings-theme-option ${theme === "dark" ? "is-active" : ""}`}
-              aria-label="Tamna tema"
+              aria-label={t("settings.themeDarkAria")}
               aria-pressed={theme === "dark"}
-              title="Tamna"
+              title={t("settings.themeDark")}
               onClick={() => onThemeChange("dark")}
             >
               <MoonIcon />
             </button>
           </div>
         </div>
-      </section>
-
-      <section className="settings-card" aria-label="Obaveštenja">
-        <h2>Obaveštenja</h2>
         <div className="settings-row">
           <span>
-            <strong>Obaveštenja</strong>
+            <strong>{t("settings.language")}</strong>
+            <small className="settings-row-status">{activeLocale.nativeLabel}</small>
+            <small className="settings-row-hint">{t("settings.languageHint")}</small>
+          </span>
+          <div className="settings-theme-picker" role="group" aria-label={t("settings.language")}>
+            {locales.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`settings-theme-option settings-lang-option ${locale === item.id ? "is-active" : ""}`}
+                aria-label={item.nativeLabel}
+                aria-pressed={locale === item.id}
+                title={item.nativeLabel}
+                onClick={() => setLocale(item.id)}
+              >
+                <span className="settings-lang-code">{item.id.toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-card" aria-label={t("settings.notifications")}>
+        <h2>{t("settings.notifications")}</h2>
+        <div className="settings-row">
+          <span>
+            <strong>{t("settings.notifications")}</strong>
             <small className="settings-row-status">{pushStatusLabel()}</small>
           </span>
           <SettingsSwitch
             checked={pushOn}
             disabled={!pushSupported || Notification.permission === "denied"}
             busy={pushBusy}
-            label="Obaveštenja"
+            label={t("settings.notifications")}
             onChange={handlePushToggle}
           />
         </div>
       </section>
 
-      <section className="settings-card" aria-label="Pozivnice">
-        <h2>Bendovi</h2>
+      <section className="settings-card" aria-label={t("settings.invites")}>
+        <h2>{t("settings.bands")}</h2>
         <div className="settings-row">
           <span>
-            <strong>Pozivnice</strong>
-            <small className="settings-row-status">{invitesAllowed ? "Dozvoljeno" : "Zabrani"}</small>
+            <strong>{t("settings.invites")}</strong>
+            <small className="settings-row-status">
+              {invitesAllowed ? t("settings.invitesAllow") : t("settings.invitesBlock")}
+            </small>
           </span>
           <SettingsSwitch
             checked={invitesAllowed}
-            label="Pozivnice u bend"
+            label={t("settings.invitesAria")}
             onChange={() => onInvitePreferenceChange?.(invitesAllowed ? "block" : "accept")}
           />
         </div>
       </section>
 
-      <section className="settings-card" aria-label="Obračun">
-        <h2>Obračun</h2>
+      <section className="settings-card" aria-label={t("settings.billing")}>
+        <h2>{t("settings.billing")}</h2>
         <div className="settings-row">
           <span>
-            <strong>Kurs EUR/RSD</strong>
-            <small className="settings-row-status">{rateBusy ? "…" : autoRate ? "Automatski" : "Ručno"}</small>
-            <small className="settings-row-hint">NBS srednji kurs; Google Finance kao rezerva</small>
+            <strong>{t("settings.rate")}</strong>
+            <small className="settings-row-status">
+              {rateBusy ? "…" : autoRate ? t("common.auto") : t("common.manual")}
+            </small>
+            <small className="settings-row-hint">{t("settings.rateHint")}</small>
           </span>
           <SettingsSwitch
             checked={autoRate}
             busy={rateBusy}
-            label="Automatski kurs EUR/RSD"
+            label={t("settings.rateAutoAria")}
             onChange={handleAutoRateToggle}
           />
         </div>
         {!autoRate ? (
           <label className="settings-field settings-field-compact" htmlFor="settingsExchangeRate">
-            <span>Ručni kurs</span>
+            <span>{t("settings.rateManual")}</span>
             <input
               id="settingsExchangeRate"
               name="exchangeRate"
@@ -202,48 +233,43 @@ export default function SettingsPage({
             />
           </label>
         ) : null}
-        <p className="settings-note">
-          Kada je automatski uključen, pri unosu uplate koristi se trenutni zvanični kurs. Inače unosiš
-          svoj kurs ručno.
-        </p>
-        <p className="settings-note settings-note-muted">
-          Napomena: vezivanje kursa po uplati i istorija kursa — još razmatramo.
-        </p>
+        <p className="settings-note">{t("settings.rateNote")}</p>
+        <p className="settings-note settings-note-muted">{t("settings.rateNote2")}</p>
       </section>
 
-      <section className="settings-card" aria-label="UI laboratorija">
-        <h2>UI laboratorija</h2>
+      <section className="settings-card" aria-label={t("settings.lab")}>
+        <h2>{t("settings.lab")}</h2>
         <div className="settings-row">
           <span>
-            <strong>Dugmad</strong>
-            <small className="settings-row-status">10 dizajna za pregled</small>
+            <strong>{t("settings.buttons")}</strong>
+            <small className="settings-row-status">{t("settings.buttonsStatus")}</small>
           </span>
           <button type="button" className="settings-lab-link" onClick={() => onOpenButtonShowcase?.()}>
             <PaletteIcon />
-            <span>Otvori</span>
+            <span>{t("common.open")}</span>
             <ChevronSmallIcon />
           </button>
         </div>
       </section>
 
-      <section className="settings-card" aria-label="Pravno">
-        <h2>Pravno</h2>
+      <section className="settings-card" aria-label={t("settings.legal")}>
+        <h2>{t("settings.legal")}</h2>
         <div className="settings-legal-links">
           <button type="button" className="settings-legal-link" onClick={() => onOpenLegal?.("terms")}>
             <DocIcon />
-            <span>Uslovi korišćenja</span>
+            <span>{t("settings.terms")}</span>
           </button>
           <button type="button" className="settings-legal-link" onClick={() => onOpenLegal?.("privacy")}>
             <DocIcon />
-            <span>Politika privatnosti</span>
+            <span>{t("settings.privacy")}</span>
           </button>
           <button type="button" className="settings-legal-link" onClick={() => onOpenLegal?.("cookies")}>
             <DocIcon />
-            <span>Politika kolačića</span>
+            <span>{t("settings.cookies")}</span>
           </button>
           <button type="button" className="settings-legal-link" onClick={() => onOpenLegal?.("imprint")}>
             <DocIcon />
-            <span>Pravne informacije</span>
+            <span>{t("settings.imprint")}</span>
           </button>
         </div>
       </section>

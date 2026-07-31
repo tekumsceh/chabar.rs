@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import { formatEur, numberValue } from "./calculations.js";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 function hasValidDraft(raw) {
   const trimmed = String(raw ?? "").trim();
@@ -33,6 +34,7 @@ export default function EventFinancePanel({
   loading = false,
   error = "",
 }) {
+  const t = useT();
   const [drafts, setDrafts] = useState(() => draftsFromMembers(members));
   const [busyId, setBusyId] = useState("");
   const membersKey = (members || [])
@@ -49,7 +51,7 @@ export default function EventFinancePanel({
 
   function applyDefault(member) {
     if (member.defaultPriceEur == null || Number.isNaN(Number(member.defaultPriceEur))) {
-      showToast?.("Podrazumevani honorar još nije podešen", "error");
+      showToast?.(t("finance.defaultNotSet"), "error");
       return;
     }
     updateDraft(member.id, String(numberValue(member.defaultPriceEur)));
@@ -59,12 +61,12 @@ export default function EventFinancePanel({
     if (readOnly || busyId || !eventId || !bandId) return;
     const raw = String(drafts[member.id] ?? "").trim().replace(",", ".");
     if (raw === "") {
-      showToast?.("Unesi iznos", "error");
+      showToast?.(t("finance.enterAmount"), "error");
       return;
     }
     const priceEur = numberValue(raw);
     if (!Number.isFinite(priceEur) || priceEur < 0) {
-      showToast?.("Iznos nije ispravan", "error");
+      showToast?.(t("finance.invalidAmount"), "error");
       return;
     }
 
@@ -76,17 +78,17 @@ export default function EventFinancePanel({
         body: { priceEur },
       });
       updateDraft(member.id, priceEur > 0 ? String(priceEur) : "");
-      showToast?.(`Honorar: ${member.name} · ${formatEur(priceEur)}`);
+      showToast?.(t("finance.feeSetToast", { name: member.name, amount: formatEur(priceEur) }));
       await onChanged?.(member.id, priceEur);
     } catch (requestError) {
-      showToast?.(requestError.message || "Honorar nije sačuvan", "error");
+      showToast?.(requestError.message || t("finance.saveFail"), "error");
     } finally {
       setBusyId("");
     }
   }
 
   if (loading) {
-    return <p className="event-finance-status">Učitavam članove…</p>;
+    return <p className="event-finance-status">{t("finance.loadingMembers")}</p>;
   }
 
   if (error) {
@@ -94,13 +96,13 @@ export default function EventFinancePanel({
   }
 
   if (!members.length) {
-    return <p className="event-finance-status">Nema članova u bendu.</p>;
+    return <p className="event-finance-status">{t("finance.noMembers")}</p>;
   }
 
   return (
     <ul
       className={`event-finance-list ${solo ? "is-solo" : ""}`.trim()}
-      aria-label={solo ? "Moj honorar" : "Honorari po članu"}
+      aria-label={solo ? t("event.myFee") : t("finance.feesByMember")}
     >
       {members.map((member) => {
         const busy = busyId === member.id;
@@ -114,7 +116,11 @@ export default function EventFinancePanel({
               </strong>
             )}
             <label className="event-finance-amount">
-              <span className="sr-only">Iznos EUR{solo ? "" : ` za ${member.name}`}</span>
+              <span className="sr-only">
+                {solo
+                  ? t("finance.amount")
+                  : t("finance.amountFor", { name: member.name })}
+              </span>
               <input
                 id={`fee-${member.id}`}
                 name={`fee-${member.id}`}
@@ -140,8 +146,10 @@ export default function EventFinancePanel({
                 <button
                   type="button"
                   className="event-finance-icon-btn event-finance-icon-btn-accent"
-                  aria-label={solo ? "Postavi honorar" : `Postavi honorar za ${member.name}`}
-                  title="Postavi"
+                  aria-label={
+                    solo ? t("finance.setFee") : t("finance.setFeeFor", { name: member.name })
+                  }
+                  title={t("finance.set")}
                   disabled={rowBusy || !amountReady}
                   onClick={() => setFee(member)}
                 >
@@ -151,8 +159,8 @@ export default function EventFinancePanel({
                   <button
                     type="button"
                     className="event-finance-icon-btn"
-                    aria-label={`Podrazumevani honorar za ${member.name}`}
-                    title="Podrazumevano"
+                    aria-label={t("finance.defaultFee", { name: member.name })}
+                    title={t("finance.defaultShort")}
                     disabled={rowBusy}
                     onClick={() => applyDefault(member)}
                   >
