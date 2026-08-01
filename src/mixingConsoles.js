@@ -15,6 +15,7 @@ export const MIXING_CONSOLE_GROUPS = [
       { id: "wing-compact", model: "WING Compact", inputChannels: 48, outputChannels: 16 },
       { id: "wing-rack", model: "WING Rack", inputChannels: 48, outputChannels: 16 },
       { id: "x32", model: "X32", inputChannels: 32, outputChannels: 16 },
+      { id: "x32-rack", model: "X32 Rack", inputChannels: 32, outputChannels: 16 },
     ],
   },
   {

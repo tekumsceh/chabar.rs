@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS events (
   venue VARCHAR(255) NOT NULL DEFAULT '',
   maps_url TEXT NOT NULL DEFAULT '',
   tech_console_ids TEXT NOT NULL DEFAULT '[]',
+  tech_rider_origin TEXT NOT NULL DEFAULT 'none'
+    CHECK (tech_rider_origin IN ('none', 'default', 'custom')),
+  tech_rider_notes TEXT NOT NULL DEFAULT '',
   note VARCHAR(255) NOT NULL DEFAULT '',
   price_eur NUMERIC(12, 2) NOT NULL DEFAULT 0,
   transport_rsd NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -111,6 +114,37 @@ CREATE TABLE IF NOT EXISTS event_tech_channels (
 
 CREATE INDEX IF NOT EXISTS event_tech_channels_event_kind_idx
   ON event_tech_channels (event_id, kind, sort_order);
+
+CREATE TABLE IF NOT EXISTS band_tech_rider_defaults (
+  band_id UUID PRIMARY KEY REFERENCES bands(id) ON DELETE CASCADE,
+  console_ids TEXT NOT NULL DEFAULT '[]',
+  notes TEXT NOT NULL DEFAULT '',
+  updated_by UUID NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS band_tech_rider_default_channels (
+  id SERIAL PRIMARY KEY,
+  band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('input', 'output')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  label TEXT NOT NULL DEFAULT '',
+  gear TEXT NOT NULL DEFAULT '',
+  cable TEXT NOT NULL DEFAULT '',
+  hardware TEXT NOT NULL DEFAULT '',
+  phantom_48v BOOLEAN NOT NULL DEFAULT FALSE,
+  pad BOOLEAN NOT NULL DEFAULT FALSE,
+  stereo BOOLEAN NOT NULL DEFAULT FALSE,
+  is_empty BOOLEAN NOT NULL DEFAULT FALSE,
+  level_db NUMERIC(6, 1) NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS band_tech_rider_default_channels_band_kind_idx
+  ON band_tech_rider_default_channels (band_id, kind, sort_order);
 
 CREATE TABLE IF NOT EXISTS band_songs (
   id SERIAL PRIMARY KEY,

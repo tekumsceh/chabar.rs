@@ -17,7 +17,7 @@ import EventDayDetails, {
   emptyDayDetails,
   formatDayDetailValue,
 } from "./EventDayDetails.jsx";
-import TechnicalRiderPanel from "./TechnicalRiderPanel.jsx";
+import TechnicalRiderPanel, { prefetchTechRider } from "./TechnicalRiderPanel.jsx";
 import SetListPanel from "./SetListPanel.jsx";
 import EventRackStubPanel from "./EventRackStubPanel.jsx";
 import FieldSelect from "./FieldSelect.jsx";
@@ -34,8 +34,8 @@ const TABS = [
 ];
 
 const TECH_SUBTABS = [
-  { id: "hospitality-rider", labelKey: "event.sub.hospitality" },
   { id: "technical-rider", labelKey: "event.sub.technical" },
+  { id: "hospitality-rider", labelKey: "event.sub.hospitality" },
   { id: "lighting-rider", labelKey: "event.sub.lighting" },
   { id: "stage-plot", labelKey: "event.sub.stage" },
 ];
@@ -94,9 +94,13 @@ export default function EventPage({
     if (techSubTab === "technical-rider") setTechRiderMounted(true);
   }, [techSubTab]);
 
+  // Prefetch rider in the background when Tehnički opens.
   useEffect(() => {
-    if (tab !== "tehnicki") setTechRiderMounted(false);
-  }, [tab]);
+    if (tab !== "tehnicki") return;
+    const id = event?.id;
+    const bandKey = event?.bandId || band?.id || "";
+    if (id && bandKey) prefetchTechRider(id, bandKey);
+  }, [tab, event?.id, event?.bandId, band?.id]);
 
   const memberRole = band?.memberRole || "member";
   const isGroupBand = band?.kind === "group";
@@ -122,13 +126,12 @@ export default function EventPage({
   const parsedDate = parseDate(event?.date);
   const hasDate = Boolean(String(event?.date || "").trim());
   const locked =
-    hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() <= startOfToday().getTime();
+    hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() < startOfToday().getTime();
 
   const dateParts = formatScheduleDateParts(event?.date);
   const minEditableDateIso = (() => {
-    const next = startOfToday();
-    next.setDate(next.getDate() + 1);
-    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    const today = startOfToday();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   })();
   const myFee = numberValue(event?.priceEur);
   const hasFee = myFee > 0;
@@ -294,7 +297,7 @@ export default function EventPage({
     if (Number.isNaN(parsed.getTime())) {
       return { error: t("event.validation.dateInvalid") };
     }
-    if (parsed.getTime() <= startOfToday().getTime()) {
+    if (parsed.getTime() < startOfToday().getTime()) {
       return { error: t("event.validation.datePast") };
     }
     if (!city && !venue && !mapsUrl && !note) {

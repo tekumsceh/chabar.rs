@@ -807,7 +807,7 @@ export default function App() {
     const isPast =
       Boolean(String(current.date || "").trim()) &&
       !Number.isNaN(eventDate.getTime()) &&
-      eventDate.getTime() <= startOfToday().getTime();
+      eventDate.getTime() < startOfToday().getTime();
     if (isPast) {
       showToast("Prošli termini su zaključani — možeš samo dodati komentar", "error");
       throw new Error("Prošli termini su zaključani — možeš samo dodati komentar");
@@ -867,7 +867,7 @@ export default function App() {
     const isPast =
       Boolean(String(event.date || "").trim()) &&
       !Number.isNaN(eventDate.getTime()) &&
-      eventDate.getTime() <= startOfToday().getTime();
+      eventDate.getTime() < startOfToday().getTime();
 
     if (isPast) {
       showToast("Prošli termini se ne mogu brisati", "error");

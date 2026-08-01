@@ -24,6 +24,8 @@
     "db:migrate:tech-consoles": "node scripts/apply-event-tech-consoles.js",
     "db:migrate:setlist": "node scripts/apply-band-songs-setlist.js",
     "db:migrate:tech-empty": "node scripts/apply-tech-channel-is-empty.js",
+    "db:migrate:tech-default": "node scripts/apply-band-tech-rider-default.js",
+    "db:migrate:tech-notes": "node scripts/apply-tech-rider-notes.js",
     "db:migrate:day-details": "node scripts/apply-event-day-details.js",
     "db:migrate:bands": "node scripts/migrate-bands-ownership.js",
     "db:migrate:finance": "node scripts/migrate-member-finance.js",

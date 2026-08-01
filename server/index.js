@@ -826,6 +826,8 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
           nextBandId,
           eventId: req.params.id,
         });
+        // Wrong-band fix: drop A's rider (incl. custom edits) and load B's default, or empty.
+        await replaceEventTechRiderFromBandDefault(Number(req.params.id), nextBandId, tx);
       }
 
       await upsertMemberFinance(Number(req.params.id), req.user.id, event.priceEur, event.transportRsd, {
@@ -1602,52 +1604,486 @@ function buildTechRiderLimits(consoleIds) {
   return { inputMax: resolved.inputMax, outputMax: resolved.outputMax };
 }
 
-async function loadTechRiderBundle(eventId, bandId) {
-  const eventResult = await query(
-    `SELECT tech_console_ids FROM events WHERE id = :eventId AND band_id = :bandId LIMIT 1`,
+function normalizeTechRiderOrigin(value) {
+  if (value === "default" || value === "custom") return value;
+  return "none";
+}
+
+async function getTechRiderOrigin(eventId, bandId) {
+  const result = await query(
+    `SELECT tech_rider_origin FROM events WHERE id = :eventId AND band_id = :bandId LIMIT 1`,
     { eventId, bandId },
   );
-  const consoleIds = parseTechConsoleIds(eventResult.rows[0]?.tech_console_ids);
+  return normalizeTechRiderOrigin(result.rows[0]?.tech_rider_origin);
+}
 
+async function setTechRiderOrigin(eventId, bandId, origin) {
+  const next = normalizeTechRiderOrigin(origin);
+  await query(
+    `UPDATE events
+     SET tech_rider_origin = :origin, updated_at = NOW()
+     WHERE id = :eventId AND band_id = :bandId`,
+    { eventId, bandId, origin: next },
+  );
+}
+
+async function markTechRiderCustom(eventId, bandId) {
+  await query(
+    `UPDATE events
+     SET tech_rider_origin = 'custom', updated_at = NOW()
+     WHERE id = :eventId AND band_id = :bandId AND tech_rider_origin = 'default'`,
+    { eventId, bandId },
+  );
+}
+
+async function bandHasTechRiderDefault(bandId) {
   const result = await query(
-    `SELECT id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
-            phantom_48v, pad, stereo, is_empty, level_db, notes, created_at, updated_at
+    `SELECT 1 FROM band_tech_rider_defaults WHERE band_id = :bandId LIMIT 1`,
+    { bandId },
+  );
+  return Boolean(result.rows[0]);
+}
+
+async function bandDefaultHasChannels(bandId) {
+  const result = await query(
+    `SELECT 1 FROM band_tech_rider_default_channels WHERE band_id = :bandId LIMIT 1`,
+    { bandId },
+  );
+  return Boolean(result.rows[0]);
+}
+
+function isBlankTechChannelRow(row) {
+  return (
+    !String(row.label || "").trim() &&
+    !String(row.gear || "").trim() &&
+    !String(row.cable || "").trim() &&
+    !String(row.hardware || "").trim() &&
+    !String(row.notes || "").trim()
+  );
+}
+
+/** True when an upcoming date should be overwritten from the band default. */
+function shouldApplyBandDefaultSeed({ eventDateText, origin, channels, defaultChannelCount }) {
+  if (isPastEventDate(eventDateText)) return false;
+  if (!defaultChannelCount) return false;
+
+  const count = Array.isArray(channels) ? channels.length : 0;
+  if (count === 0) return true;
+  if (count >= defaultChannelCount) return false;
+
+  const normalizedOrigin = normalizeTechRiderOrigin(origin);
+  if (normalizedOrigin === "default") return true;
+  // Stub rider (e.g. one blank row after mis-click) — safe to replace.
+  return channels.every(isBlankTechChannelRow);
+}
+
+/** Seed band default into upcoming dates that are empty, partial, or trivial stubs. */
+async function seedEmptyFutureEventsFromBandDefault(bandId) {
+  const defaults = await loadBandTechRiderDefault(bandId);
+  if (!defaults?.channels?.length) return 0;
+  const defaultChannelCount = defaults.channels.length;
+
+  const candidates = await query(
+    `SELECT e.id, e.event_date_text, e.tech_rider_origin,
+            (SELECT COUNT(*)::int FROM event_tech_channels c
+             WHERE c.event_id = e.id AND c.band_id = e.band_id) AS channel_count
+     FROM events e
+     WHERE e.band_id = :bandId
+     ORDER BY e.event_date_text ASC, e.id ASC`,
+    { bandId },
+  );
+
+  let seeded = 0;
+  for (const row of candidates.rows) {
+    if (isPastEventDate(row.event_date_text)) continue;
+
+    let channels = [];
+    const channelCount = Number(row.channel_count) || 0;
+    if (channelCount > 0 && channelCount < defaultChannelCount) {
+      const channelRows = await query(
+        `SELECT label, gear, cable, hardware, notes
+         FROM event_tech_channels
+         WHERE event_id = :eventId AND band_id = :bandId`,
+        { eventId: row.id, bandId },
+      );
+      channels = channelRows.rows;
+    }
+
+    if (
+      !shouldApplyBandDefaultSeed({
+        eventDateText: row.event_date_text,
+        origin: row.tech_rider_origin,
+        channels,
+        defaultChannelCount,
+      })
+    ) {
+      continue;
+    }
+
+    const ok = await seedEventFromBandDefault(row.id, bandId);
+    if (ok) seeded += 1;
+  }
+  return seeded;
+}
+
+async function loadBandTechRiderDefault(bandId) {
+  const header = await query(
+    `SELECT console_ids, notes FROM band_tech_rider_defaults WHERE band_id = :bandId LIMIT 1`,
+    { bandId },
+  );
+  if (!header.rows[0]) return null;
+
+  const channels = await query(
+    `SELECT kind, sort_order, label, gear, cable, hardware,
+            phantom_48v, pad, stereo, is_empty, level_db, notes
+     FROM band_tech_rider_default_channels
+     WHERE band_id = :bandId
+     ORDER BY kind ASC, sort_order ASC, id ASC`,
+    { bandId },
+  );
+
+  return {
+    consoleIds: parseTechConsoleIds(header.rows[0].console_ids),
+    notes: String(header.rows[0].notes || ""),
+    channels: channels.rows,
+  };
+}
+
+async function snapshotEventToBandDefault(eventId, bandId, userId = null) {
+  const eventResult = await query(
+    `SELECT tech_console_ids, tech_rider_notes
+     FROM events WHERE id = :eventId AND band_id = :bandId LIMIT 1`,
+    { eventId, bandId },
+  );
+  if (!eventResult.rows[0]) return false;
+
+  const channels = await query(
+    `SELECT kind, sort_order, label, gear, cable, hardware,
+            phantom_48v, pad, stereo, is_empty, level_db, notes
      FROM event_tech_channels
      WHERE event_id = :eventId AND band_id = :bandId
      ORDER BY kind ASC, sort_order ASC, id ASC`,
     { eventId, bandId },
   );
+  if (!channels.rows.length) return false;
+
+  await query(
+    `INSERT INTO band_tech_rider_defaults (band_id, console_ids, notes, updated_by)
+     VALUES (:bandId, :consoleIds, :notes, :updatedBy)
+     ON CONFLICT (band_id) DO UPDATE
+     SET console_ids = EXCLUDED.console_ids,
+         notes = EXCLUDED.notes,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = NOW()`,
+    {
+      bandId,
+      consoleIds: eventResult.rows[0].tech_console_ids || "[]",
+      notes: String(eventResult.rows[0].tech_rider_notes || "").slice(0, 4000),
+      updatedBy: userId || null,
+    },
+  );
+
+  await query(`DELETE FROM band_tech_rider_default_channels WHERE band_id = :bandId`, { bandId });
+
+  for (const row of channels.rows) {
+    await query(
+      `INSERT INTO band_tech_rider_default_channels (
+         band_id, kind, sort_order, label, gear, cable, hardware,
+         phantom_48v, pad, stereo, is_empty, level_db, notes
+       ) VALUES (
+         :bandId, :kind, :sortOrder, :label, :gear, :cable, :hardware,
+         :phantom48v, :pad, :stereo, :isEmpty, :levelDb, :notes
+       )`,
+      {
+        bandId,
+        kind: row.kind === "output" ? "output" : "input",
+        sortOrder: Number(row.sort_order) || 0,
+        label: row.label || "",
+        gear: row.gear || "",
+        cable: row.cable || "",
+        hardware: row.hardware || "",
+        phantom48v: Boolean(row.phantom_48v),
+        pad: Boolean(row.pad),
+        stereo: Boolean(row.stereo),
+        isEmpty: Boolean(row.is_empty),
+        levelDb: row.level_db == null || row.level_db === "" ? null : Number(row.level_db),
+        notes: row.notes || "",
+      },
+    );
+  }
+
+  return true;
+}
+
+async function maybeAutoCreateBandDefault(eventId, bandId, userId = null) {
+  if (await bandHasTechRiderDefault(bandId)) return false;
+  return snapshotEventToBandDefault(eventId, bandId, userId);
+}
+
+/** If band has no default yet, create one from this event or another filled date. */
+async function ensureBandTechRiderDefault(bandId, preferEventId = null, userId = null) {
+  if (await bandHasTechRiderDefault(bandId)) return true;
+
+  let created = false;
+  if (preferEventId) {
+    created = await snapshotEventToBandDefault(preferEventId, bandId, userId);
+    if (created) {
+      await seedEmptyFutureEventsFromBandDefault(bandId);
+      return true;
+    }
+  }
+
+  const fallback = await query(
+    `SELECT e.id
+     FROM events e
+     WHERE e.band_id = :bandId
+       AND EXISTS (
+         SELECT 1 FROM event_tech_channels c
+         WHERE c.event_id = e.id AND c.band_id = e.band_id
+       )
+     ORDER BY e.updated_at DESC NULLS LAST, e.id DESC
+     LIMIT 1`,
+    { bandId },
+  );
+  if (!fallback.rows[0]) return false;
+  created = await snapshotEventToBandDefault(fallback.rows[0].id, bandId, userId);
+  if (created) {
+    await seedEmptyFutureEventsFromBandDefault(bandId);
+  }
+  return created;
+}
+
+/**
+ * Wipe this date's tech rider and apply the band's default (or empty if none).
+ * Used when moving a date between bands, and when seeding an empty upcoming date.
+ */
+async function replaceEventTechRiderFromBandDefault(eventId, bandId, runQuery = query) {
+  await runQuery(`DELETE FROM event_tech_channels WHERE event_id = :eventId`, { eventId });
+
+  const header = await runQuery(
+    `SELECT console_ids, notes FROM band_tech_rider_defaults WHERE band_id = :bandId LIMIT 1`,
+    { bandId },
+  );
+  if (!header.rows[0]) {
+    await runQuery(
+      `UPDATE events
+       SET tech_console_ids = '[]',
+           tech_rider_notes = '',
+           tech_rider_origin = 'none',
+           updated_at = NOW()
+       WHERE id = :eventId AND band_id = :bandId`,
+      { eventId, bandId },
+    );
+    return false;
+  }
+
+  const channels = await runQuery(
+    `SELECT kind, sort_order, label, gear, cable, hardware,
+            phantom_48v, pad, stereo, is_empty, level_db, notes
+     FROM band_tech_rider_default_channels
+     WHERE band_id = :bandId
+     ORDER BY kind ASC, sort_order ASC, id ASC`,
+    { bandId },
+  );
+
+  if (!channels.rows.length) {
+    await runQuery(
+      `UPDATE events
+       SET tech_console_ids = '[]',
+           tech_rider_notes = '',
+           tech_rider_origin = 'none',
+           updated_at = NOW()
+       WHERE id = :eventId AND band_id = :bandId`,
+      { eventId, bandId },
+    );
+    return false;
+  }
+
+  await runQuery(
+    `UPDATE events
+     SET tech_console_ids = :consoleIds,
+         tech_rider_notes = :notes,
+         tech_rider_origin = 'default',
+         updated_at = NOW()
+     WHERE id = :eventId AND band_id = :bandId`,
+    {
+      eventId,
+      bandId,
+      consoleIds: JSON.stringify(parseTechConsoleIds(header.rows[0].console_ids)),
+      notes: String(header.rows[0].notes || "").slice(0, 4000),
+    },
+  );
+
+  for (const row of channels.rows) {
+    await runQuery(
+      `INSERT INTO event_tech_channels (
+         event_id, band_id, kind, sort_order, label, gear, cable, hardware,
+         phantom_48v, pad, stereo, is_empty, level_db, notes
+       ) VALUES (
+         :eventId, :bandId, :kind, :sortOrder, :label, :gear, :cable, :hardware,
+         :phantom48v, :pad, :stereo, :isEmpty, :levelDb, :notes
+       )`,
+      {
+        eventId,
+        bandId,
+        kind: row.kind === "output" ? "output" : "input",
+        sortOrder: Number(row.sort_order) || 0,
+        label: row.label || "",
+        gear: row.gear || "",
+        cable: row.cable || "",
+        hardware: row.hardware || "",
+        phantom48v: Boolean(row.phantom_48v),
+        pad: Boolean(row.pad),
+        stereo: Boolean(row.stereo),
+        isEmpty: Boolean(row.is_empty),
+        levelDb: row.level_db == null || row.level_db === "" ? null : Number(row.level_db),
+        notes: row.notes || "",
+      },
+    );
+  }
+
+  return true;
+}
+
+async function seedEventFromBandDefault(eventId, bandId, runQuery = query) {
+  const defaults = await loadBandTechRiderDefault(bandId);
+  if (!defaults?.channels?.length) return false;
+  return replaceEventTechRiderFromBandDefault(eventId, bandId, runQuery);
+}
+
+async function loadTechRiderBundle(eventId, bandId) {
+  // Parallel read path — avoid stacked round-trips on every tab open.
+  const [eventResult, channelsResult, defaultResult, defaultChannelsResult] = await Promise.all([
+    query(
+      `SELECT tech_console_ids, tech_rider_origin, tech_rider_notes, event_date_text
+       FROM events WHERE id = :eventId AND band_id = :bandId LIMIT 1`,
+      { eventId, bandId },
+    ),
+    query(
+      `SELECT id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
+              phantom_48v, pad, stereo, is_empty, level_db, notes, created_at, updated_at
+       FROM event_tech_channels
+       WHERE event_id = :eventId AND band_id = :bandId
+       ORDER BY kind ASC, sort_order ASC, id ASC`,
+      { eventId, bandId },
+    ),
+    query(`SELECT 1 FROM band_tech_rider_defaults WHERE band_id = :bandId LIMIT 1`, { bandId }),
+    query(
+      `SELECT COUNT(*)::int AS count FROM band_tech_rider_default_channels WHERE band_id = :bandId`,
+      { bandId },
+    ),
+  ]);
+
+  if (!eventResult.rows[0]) {
+    return null;
+  }
+
+  const eventRow = eventResult.rows[0];
+  let consoleIds = parseTechConsoleIds(eventRow.tech_console_ids);
+  let origin = normalizeTechRiderOrigin(eventRow.tech_rider_origin);
+  let riderNotes = String(eventRow.tech_rider_notes || "");
+  let result = channelsResult;
+  let hasBandDefault = Boolean(defaultResult.rows[0]);
+  const bandDefaultChannelCount = Number(defaultChannelsResult.rows[0]?.count) || 0;
+  const needsDefaultSeed = shouldApplyBandDefaultSeed({
+    eventDateText: eventRow.event_date_text,
+    origin,
+    channels: result.rows,
+    defaultChannelCount: bandDefaultChannelCount,
+  });
+
+  if (result.rows.length && !needsDefaultSeed) {
+    if (!hasBandDefault) {
+      hasBandDefault = Boolean(await ensureBandTechRiderDefault(bandId, eventId));
+    }
+  } else if (needsDefaultSeed) {
+    if (!hasBandDefault) {
+      hasBandDefault = Boolean(await ensureBandTechRiderDefault(bandId, null));
+    }
+    const seeded = await seedEventFromBandDefault(eventId, bandId);
+    if (seeded) {
+      origin = "default";
+      const [refreshed, seededChannels] = await Promise.all([
+        query(
+          `SELECT tech_console_ids, tech_rider_notes
+           FROM events WHERE id = :eventId AND band_id = :bandId LIMIT 1`,
+          { eventId, bandId },
+        ),
+        query(
+          `SELECT id, event_id, band_id, kind, sort_order, label, gear, cable, hardware,
+                  phantom_48v, pad, stereo, is_empty, level_db, notes, created_at, updated_at
+           FROM event_tech_channels
+           WHERE event_id = :eventId AND band_id = :bandId
+           ORDER BY kind ASC, sort_order ASC, id ASC`,
+          { eventId, bandId },
+        ),
+      ]);
+      consoleIds = parseTechConsoleIds(refreshed.rows[0]?.tech_console_ids);
+      riderNotes = String(refreshed.rows[0]?.tech_rider_notes || "");
+      result = seededChannels;
+    }
+  }
+
   const rows = result.rows.map(mapTechChannelRow);
   const inputs = rows.filter((row) => row.kind === "input");
   const outputs = rows.filter((row) => row.kind === "output");
+
+  // Stale flag: origin says default but nothing was copied — don't lie in the UI.
+  if (!inputs.length && !outputs.length && origin === "default") {
+    origin = "none";
+    await setTechRiderOrigin(eventId, bandId, "none");
+  }
+
   return {
     inputs,
     outputs,
     stats: buildTechRiderStats(inputs, outputs),
     consoleIds,
     limits: buildTechRiderLimits(consoleIds),
+    origin,
+    hasBandDefault,
+    bandDefaultChannelCount: hasBandDefault ? bandDefaultChannelCount : 0,
+    notes: riderNotes,
   };
 }
 
 async function assertTechChannelCapacity(eventId, bandId, kind) {
-  const bundle = await loadTechRiderBundle(eventId, bandId);
-  if (!bundle.consoleIds.length) {
+  const channelKind = kind === "output" ? "output" : "input";
+  const [eventResult, countResult] = await Promise.all([
+    query(
+      `SELECT tech_console_ids FROM events WHERE id = :eventId AND band_id = :bandId LIMIT 1`,
+      { eventId, bandId },
+    ),
+    query(
+      `SELECT COUNT(*)::int AS count FROM event_tech_channels
+       WHERE event_id = :eventId AND band_id = :bandId AND kind = :kind`,
+      { eventId, bandId, kind: channelKind },
+    ),
+  ]);
+  if (!eventResult.rows[0]) {
+    const err = new Error("Not found");
+    err.status = 404;
+    throw err;
+  }
+  const consoleIds = parseTechConsoleIds(eventResult.rows[0].tech_console_ids);
+  if (!consoleIds.length) {
     const err = new Error("Izaberi mixing konzolu pre dodavanja kanala.");
     err.status = 400;
     throw err;
   }
-  const list = kind === "output" ? bundle.outputs : bundle.inputs;
-  const max = kind === "output" ? bundle.limits.outputMax : bundle.limits.inputMax;
-  if (list.length >= max) {
+  const limits = buildTechRiderLimits(consoleIds);
+  const max = channelKind === "output" ? limits.outputMax : limits.inputMax;
+  const count = Number(countResult.rows[0]?.count) || 0;
+  if (count >= max) {
     const err = new Error(
-      kind === "output"
+      channelKind === "output"
         ? `Maksimum ${max} izlaza za izabrane konzole.`
         : `Maksimum ${max} ulaza za izabrane konzole.`,
     );
     err.status = 400;
     throw err;
   }
-  return bundle;
+  return { consoleIds, limits, count };
 }
 
 async function assertEventEditableForTechRider(eventId, bandId) {
@@ -1671,13 +2107,40 @@ async function assertEventEditableForTechRider(eventId, bandId) {
 app.get("/api/events/:id/tech-rider", requireAuth, requireBandMember, async (req, res, next) => {
   try {
     const eventId = Number(req.params.id);
-    const event = await query(
-      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
-      { id: eventId, bandId: req.bandId },
-    );
-    if (!event.rows[0]) {
+    const bundle = await loadTechRiderBundle(eventId, req.bandId);
+    if (!bundle) {
       return res.status(404).json({ error: "Not found" });
     }
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...bundle,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/events/:id/tech-rider/notes", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+
+    await assertEventEditableForTechRider(eventId, req.bandId);
+    const notes = String(req.body?.notes ?? "").trim().slice(0, 4000);
+
+    await query(
+      `UPDATE events
+       SET tech_rider_notes = :notes, updated_at = NOW()
+       WHERE id = :eventId AND band_id = :bandId`,
+      { eventId, bandId: req.bandId, notes },
+    );
+
+    await markTechRiderCustom(eventId, req.bandId);
+    await setTechRiderOrigin(eventId, req.bandId, "custom");
+    await maybeAutoCreateBandDefault(eventId, req.bandId, req.user?.id || null);
 
     const bundle = await loadTechRiderBundle(eventId, req.bandId);
     res.json({
@@ -1686,6 +2149,41 @@ app.get("/api/events/:id/tech-rider", requireAuth, requireBandMember, async (req
       ...bundle,
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.put("/api/events/:id/tech-rider/use-as-default", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+    if (!isBandLead(req.memberRole)) {
+      return res.status(403).json({ error: "Samo vlasnik ili lead može postaviti band default." });
+    }
+
+    await assertEventEditableForTechRider(eventId, req.bandId);
+    const saved = await snapshotEventToBandDefault(eventId, req.bandId, req.user?.id || null);
+    if (!saved) {
+      return res.status(400).json({ error: "Nema kanala za band default." });
+    }
+
+    await seedEmptyFutureEventsFromBandDefault(req.bandId);
+    await setTechRiderOrigin(eventId, req.bandId, "custom");
+    const bundle = await loadTechRiderBundle(eventId, req.bandId);
+    res.json({
+      eventId,
+      bandId: req.bandId,
+      ...bundle,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
     next(error);
   }
 });
@@ -1736,6 +2234,10 @@ app.post("/api/events/:id/tech-rider/channels", requireAuth, requireBandMember, 
         notes: channel.notes,
       },
     );
+
+    await markTechRiderCustom(eventId, req.bandId);
+    await maybeAutoCreateBandDefault(eventId, req.bandId, req.user?.id || null);
+    await setTechRiderOrigin(eventId, req.bandId, "custom");
 
     res.status(201).json(mapTechChannelRow(result.rows[0]));
   } catch (error) {
@@ -1804,6 +2306,10 @@ app.put(
         },
       );
 
+      await markTechRiderCustom(eventId, req.bandId);
+      await maybeAutoCreateBandDefault(eventId, req.bandId, req.user?.id || null);
+      await setTechRiderOrigin(eventId, req.bandId, "custom");
+
       res.json(mapTechChannelRow(result.rows[0]));
     } catch (error) {
       if (error.status) {
@@ -1860,6 +2366,9 @@ app.delete(
         ),
       );
 
+      await markTechRiderCustom(eventId, req.bandId);
+      await setTechRiderOrigin(eventId, req.bandId, "custom");
+
       res.status(204).end();
     } catch (error) {
       if (error.status) {
@@ -1907,6 +2416,9 @@ app.put("/api/events/:id/tech-rider/reorder", requireAuth, requireBandMember, as
       ),
     );
 
+    await markTechRiderCustom(eventId, req.bandId);
+    await setTechRiderOrigin(eventId, req.bandId, "custom");
+
     const bundle = await loadTechRiderBundle(eventId, req.bandId);
     res.json({
       eventId,
@@ -1941,6 +2453,18 @@ app.put("/api/events/:id/tech-rider/consoles", requireAuth, requireBandMember, a
         consoleIds: JSON.stringify(consoleIds),
       },
     );
+
+    await markTechRiderCustom(eventId, req.bandId);
+    await maybeAutoCreateBandDefault(eventId, req.bandId, req.user?.id || null);
+    // Consoles-only change still means this date owns its rider if it already has channels.
+    const channelCount = await query(
+      `SELECT COUNT(*)::int AS count FROM event_tech_channels
+       WHERE event_id = :eventId AND band_id = :bandId`,
+      { eventId, bandId: req.bandId },
+    );
+    if ((Number(channelCount.rows[0]?.count) || 0) > 0) {
+      await setTechRiderOrigin(eventId, req.bandId, "custom");
+    }
 
     const bundle = await loadTechRiderBundle(eventId, req.bandId);
     res.json({
@@ -3036,11 +3560,11 @@ async function getPersonalBandId(userId) {
   return result.rows[0]?.id || null;
 }
 
-/** Serbian DD.MM.YYYY. text → comparable date; invalid → not past (don't block). */
+/** Serbian DD.MM.YYYY. text → comparable date; invalid → not past (don't block). Today is editable. */
 function isPastEventDate(dateText) {
   const eventDate = parseDate(dateText);
   if (Number.isNaN(eventDate.getTime())) return false;
-  return eventDate <= startOfToday();
+  return eventDate < startOfToday();
 }
 
 /**
