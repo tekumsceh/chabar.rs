@@ -4,10 +4,14 @@ import {
   calculate,
   expectedFutureEur,
   financeExpenseItems,
+  financeLineKey,
+  financeLineRemainingEur,
+  financeRemainingEur,
   formatEur,
   formatRsd,
   formatScheduleDateParts,
   memberPayeeExpenseEur,
+  numberValue,
   waterfallClaimEur,
   parseDate,
 } from "./calculations.js";
@@ -44,7 +48,15 @@ export default function ReportPage({
   searchQuery = "",
   focusEventId = null,
   onFocusEventConsumed,
+  focusTab = null,
+  onFocusTabConsumed,
   onBack,
+  onPayEvent,
+  onPayLine,
+  onBulkPay,
+  payingEventId = null,
+  payingLineKey = "",
+  bulkPayBusy = false,
 }) {
   const t = useT();
   const search = searchQuery;
@@ -55,12 +67,21 @@ export default function ReportPage({
   const [activeTab, setActiveTab] = useState("dates");
   const [selectedId, setSelectedId] = useState(null);
   const [listPage, setListPage] = useState(0);
+  const [bulkPayOpen, setBulkPayOpen] = useState(false);
+  const [bulkAmount, setBulkAmount] = useState("");
+  const [bulkCurrency, setBulkCurrency] = useState("EUR");
 
   useEffect(() => {
     if (focusEventId == null || focusEventId === "") return;
     setSelectedId(focusEventId);
     onFocusEventConsumed?.();
   }, [focusEventId, onFocusEventConsumed]);
+
+  useEffect(() => {
+    if (focusTab !== "payments" && focusTab !== "dates") return;
+    setActiveTab(focusTab);
+    onFocusTabConsumed?.();
+  }, [focusTab, onFocusTabConsumed]);
 
   const statusOptions = useMemo(
     () => STATUS_OPTION_KEYS.map((item) => ({ id: item.id, label: t(item.labelKey) })),
@@ -71,8 +92,8 @@ export default function ReportPage({
 
   // Row colors + Potražuje share one global payment waterfall (calculate).
   const calculations = useMemo(
-    () => calculate(events, payments, settings),
-    [events, payments, settings],
+    () => calculate(events, payments, settings, null, { mode: financeMode, userId }),
+    [events, payments, settings, financeMode, userId],
   );
 
   const bandRows = useMemo(() => {
@@ -283,6 +304,22 @@ export default function ReportPage({
             <span className="finansije-meta-label">{t("report.expected")}</span>{" "}
             <strong>{formatEur(expectedEur)}</strong>
           </span>
+          {activeTab === "dates" && claimEur > 0 && onBulkPay ? (
+            <>
+              <span className="finansije-meta-sep" aria-hidden="true">
+                ·
+              </span>
+              <button
+                type="button"
+                className="finansije-bulk-pay-btn"
+                disabled={bulkPayBusy}
+                title={t("report.bulkPayTitle")}
+                onClick={() => setBulkPayOpen(true)}
+              >
+                {bulkPayBusy ? "…" : t("report.bulkPay")}
+              </button>
+            </>
+          ) : null}
         </span>
       </div>
 
@@ -322,6 +359,8 @@ export default function ReportPage({
                 const dateParts = formatScheduleDateParts(row.date);
                 const amountTone = feeAmountTone(row);
                 const isSettled = row.done && row.paymentClass === "paid";
+                const owed = financeRemainingEur(row);
+                const rowPaying = payingEventId === row.id;
                 return (
                   <li
                     key={row.id}
@@ -346,6 +385,26 @@ export default function ReportPage({
                       </div>
                     </button>
                     <div className="finansije-row-trail">
+                      {row.done && row.paymentClass === "paid" ? (
+                        <span className="finansije-paid-badge" title={t("report.payPaid")}>
+                          {t("report.paidBadge")}
+                        </span>
+                      ) : null}
+                      {row.done && owed > 0 && onPayEvent ? (
+                        <button
+                          type="button"
+                          className="finansije-pay-btn"
+                          disabled={Boolean(payingEventId)}
+                          aria-label={t("report.payBtnAria", { amount: formatEur(owed) })}
+                          title={formatEur(owed)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onPayEvent(row.id, row.bandId);
+                          }}
+                        >
+                          {rowPaying ? "…" : t("report.payBtn")}
+                        </button>
+                      ) : null}
                       <span
                         className={`finansije-row-amount raspored-fee raspored-fee-${amountTone}`}
                         title={
@@ -357,7 +416,13 @@ export default function ReportPage({
                         {row.hasDate ? formatEurCeil(row.totalEur) : "—"}
                       </span>
                       <div className="raspored-actions">
-                        <FinanceRowMenu row={row} onOpenDetail={() => setSelectedId(row.id)} />
+                        <FinanceRowMenu
+                          row={row}
+                          owed={owed}
+                          onOpenDetail={() => setSelectedId(row.id)}
+                          onPay={() => onPayEvent?.(row.id, row.bandId)}
+                          payDisabled={Boolean(payingEventId)}
+                        />
                       </div>
                     </div>
                   </li>
@@ -384,6 +449,12 @@ export default function ReportPage({
                     </time>
                     <span className="raspored-fee">
                       {Number(payment.amount || 0).toLocaleString("sr-RS")} {payment.currency || "EUR"}
+                      {String(payment.currency || "EUR").toUpperCase() === "RSD" && payment.exchangeRate ? (
+                        <small className="finansije-payment-rate">
+                          {" "}
+                          · {t("report.paymentRateNote", { rate: payment.exchangeRate })}
+                        </small>
+                      ) : null}
                     </span>
                   </li>
                 );
@@ -428,36 +499,64 @@ export default function ReportPage({
           financeMode={financeMode}
           userId={userId}
           onClose={() => setSelectedId(null)}
+          onPayLine={onPayLine}
+          payingLineKey={payingLineKey}
+        />
+      ) : null}
+
+      {bulkPayOpen ? (
+        <BulkPayModal
+          amount={bulkAmount}
+          currency={bulkCurrency}
+          exchangeRate={settings?.exchangeRate}
+          busy={bulkPayBusy}
+          onAmountChange={setBulkAmount}
+          onCurrencyChange={setBulkCurrency}
+          onClose={() => setBulkPayOpen(false)}
+          onSubmit={async () => {
+            const ok = await onBulkPay?.({ amount: bulkAmount, currency: bulkCurrency });
+            if (ok) {
+              setBulkPayOpen(false);
+              setBulkAmount("");
+            }
+          }}
         />
       ) : null}
     </div>
   );
 }
 
-function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = "", onClose }) {
+function FinanceDetailModal({
+  row,
+  band,
+  rate,
+  financeMode = "member",
+  userId = "",
+  onClose,
+  onPayLine,
+  payingLineKey = "",
+}) {
   const t = useT();
   const isBandMode = financeMode === "band";
   const name = band?.name || row.bandName || "";
   const color = resolveBandColor(band, row.bandId || name);
-  const memberWages = Array.isArray(row.memberWages) ? row.memberWages.filter(Boolean) : [];
-  const allExpenses = financeExpenseItems(row);
-  const expenseItems = isBandMode
-    ? allExpenses
-    : filterMyExpenseItems(allExpenses, userId);
-  const honorarTotal = isBandMode
-    ? memberWages.reduce((sum, member) => sum + numberish(member.priceEur), 0)
-    : numberish(row.priceEur);
-  const detailTotalEur = isBandMode
-    ? honorarTotal + sumExpensesEur(expenseItems, rate)
+  const detailLines = Array.isArray(row.financeLines) ? row.financeLines : [];
+  const detailTotalEur = detailLines.length
+    ? detailLines.reduce((sum, line) => sum + numberish(line.totalEur), 0)
     : numberish(row.totalEur);
-  const remaining =
-    row.paymentClass === "partial" || row.paymentClass === "unpaid"
-      ? numberish(row.paymentStatus)
-      : row.paymentClass === "paid"
-        ? 0
-        : detailTotalEur;
+  const remaining = financeRemainingEur(row);
   const bandPay = bandPaymentNote(row, detailTotalEur, remaining, t);
   const dateLabel = String(row.date || "").replace(/\.$/, "") || t("report.noDate");
+
+  function linePayLabel(line) {
+    if (line.lineKind === "expense") return line.label || t("report.expense");
+    return line.label || t("report.fee");
+  }
+
+  function lineAmountLabel(line) {
+    if (line.lineKind === "expense" && line.item) return formatExpenseAmount(line.item, rate);
+    return formatEur(numberish(line.totalEur));
+  }
 
   return (
     <div
@@ -504,41 +603,62 @@ function FinanceDetailModal({ row, band, rate, financeMode = "member", userId = 
 
           <section className="finance-detail-section">
             <h3>{isBandMode ? t("report.bandCalc") : t("report.myCalc")}</h3>
-            <ul className="finance-detail-lines">
-              {isBandMode ? (
-                memberWages.length ? (
-                  memberWages.map((member) => (
-                    <li key={member.id || member.name}>
-                      <span>{member.name || t("report.member")}</span>
-                      <strong>{formatEur(numberish(member.priceEur))}</strong>
+            <ul className="finance-detail-lines finance-detail-lines-payable">
+              {detailLines.length ? (
+                detailLines.map((line) => {
+                  const lineKey = financeLineKey(line.eventId, line.lineKind, line.expenseKey);
+                  const lineOwed = financeLineRemainingEur(line);
+                  const linePaid = numberish(line.paidEur);
+                  const isPaid = line.lineClass === "paid";
+                  const isPartial = line.lineClass === "partial";
+                  return (
+                    <li key={lineKey} className={`finance-detail-line-${line.lineClass || "unpaid"}`}>
+                      <div className="finance-detail-line-main">
+                        <span>
+                          {linePayLabel(line)}
+                          {isBandMode && line.item?.payeeName ? (
+                            <small className="finance-detail-payee"> · {line.item.payeeName}</small>
+                          ) : null}
+                        </span>
+                        <strong>{lineAmountLabel(line)}</strong>
+                      </div>
+                      {row.done ? (
+                        <div className="finance-detail-line-meta">
+                          {isPaid ? (
+                            <span className="finansije-paid-badge is-compact">{t("report.paidBadge")}</span>
+                          ) : (
+                            <>
+                              <span className="finance-detail-line-status">
+                                {isPartial
+                                  ? t("report.linePartial", {
+                                      paid: formatEur(linePaid),
+                                      total: formatEur(line.totalEur),
+                                    })
+                                  : t("report.lineUnpaid")}
+                                {lineOwed > 0 ? t("report.remains", { amount: formatEur(lineOwed) }) : null}
+                              </span>
+                              {lineOwed > 0 && onPayLine ? (
+                                <button
+                                  type="button"
+                                  className="finansije-pay-btn is-compact"
+                                  disabled={Boolean(payingLineKey)}
+                                  onClick={() =>
+                                    onPayLine(row.id, row.bandId, line.lineKind, line.expenseKey || "")
+                                  }
+                                >
+                                  {payingLineKey === lineKey ? "…" : t("report.payBtn")}
+                                </button>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      ) : null}
                     </li>
-                  ))
-                ) : (
-                  <li>
-                    <span>{t("finance.fees")}</span>
-                    <strong>{formatEur(honorarTotal)}</strong>
-                  </li>
-                )
+                  );
+                })
               ) : (
-                <li>
-                  <span>{t("report.fee")}</span>
-                  <strong>{formatEur(honorarTotal)}</strong>
-                </li>
-              )}
-              {expenseItems.map((item) => (
-                <li key={item.id || `${item.description}-${item.amount}-${item.payeeUserId || ""}`}>
-                  <span>
-                    {item.description || t("report.expense")}
-                    {isBandMode && item.payeeName ? (
-                      <small className="finance-detail-payee"> · {item.payeeName}</small>
-                    ) : null}
-                  </span>
-                  <strong>{formatExpenseAmount(item, rate)}</strong>
-                </li>
-              ))}
-              {!expenseItems.length && honorarTotal <= 0 ? (
                 <li className="finance-detail-empty">{t("report.noAmounts")}</li>
-              ) : null}
+              )}
             </ul>
           </section>
 
@@ -688,21 +808,82 @@ function financeBandLabel(band, row, t) {
   return name;
 }
 
-function financeRemainingEur(row) {
-  if (!row?.done) return 0;
-  if (row.paymentClass === "paid") return 0;
-  if (row.paymentClass === "partial") return numberish(row.paymentStatus);
-  if (row.paymentClass === "unpaid") return numberish(row.totalEur);
-  return 0;
+function BulkPayModal({
+  amount,
+  currency,
+  exchangeRate,
+  busy,
+  onAmountChange,
+  onCurrencyChange,
+  onClose,
+  onSubmit,
+}) {
+  const t = useT();
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-panel finansije-bulk-pay-panel" role="dialog" aria-modal="true" aria-labelledby="bulk-pay-title">
+        <header className="modal-head">
+          <h2 id="bulk-pay-title">{t("report.bulkPay")}</h2>
+          <button type="button" className="modal-close" aria-label={t("report.bulkPayCancel")} onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <div className="finansije-bulk-pay-body">
+          <p className="finansije-bulk-pay-note">
+            {t("report.bulkPayRateNote", { rate: exchangeRate || "—" })}
+          </p>
+          <label className="finansije-bulk-pay-field">
+            <span>{t("report.bulkPayAmount")}</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={amount}
+              onChange={(event) => onAmountChange(event.target.value)}
+            />
+          </label>
+          <label className="finansije-bulk-pay-field">
+            <span>{t("report.bulkPayCurrency")}</span>
+            <select value={currency} onChange={(event) => onCurrencyChange(event.target.value)}>
+              <option value="EUR">EUR</option>
+              <option value="RSD">RSD</option>
+            </select>
+          </label>
+        </div>
+        <footer className="modal-foot">
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>
+            {t("report.bulkPayCancel")}
+          </button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={onSubmit}>
+            {busy ? "…" : t("report.bulkPaySubmit")}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
 }
 
-function FinanceRowMenu({ row, onOpenDetail }) {
+function FinanceRowMenu({ row, onOpenDetail, onPay, owed = 0, payDisabled = false }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const idleTimerRef = useRef(0);
   const menuId = useId();
-  const owed = financeRemainingEur(row);
   const needsPay = row.done && owed > 0;
 
   useEffect(() => {
@@ -772,10 +953,11 @@ function FinanceRowMenu({ row, onOpenDetail }) {
                 type="button"
                 className="date-row-menu-item is-pay"
                 role="menuitem"
+                disabled={payDisabled}
                 onClick={(event) => {
                   event.stopPropagation();
                   setOpen(false);
-                  onOpenDetail?.();
+                  onPay?.();
                 }}
               >
                 {t("report.payThisDate")}

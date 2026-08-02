@@ -5242,6 +5242,142 @@ button.date-row-menu-item.is-pay:focus-visible {
   flex-shrink: 0;
 }
 
+.finansije-paid-badge {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+  border-radius: 999px;
+  color: var(--ok);
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  padding: 0.28rem 0.45rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.finansije-pay-btn {
+  background: color-mix(in srgb, var(--brand) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--line));
+  border-radius: 0.35rem;
+  color: var(--brand-dark);
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  min-width: 2.6rem;
+  padding: 0.32rem 0.5rem;
+}
+
+.finansije-pay-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 20%, var(--panel));
+  border-color: var(--brand);
+}
+
+.finansije-pay-btn:disabled {
+  opacity: 0.55;
+}
+
+.finansije-bulk-pay-btn {
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--line));
+  border-radius: 999px;
+  color: var(--brand-dark);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-left: 0.15rem;
+  padding: 0.28rem 0.65rem;
+}
+
+.finansije-bulk-pay-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+
+.finansije-bulk-pay-panel {
+  max-width: 22rem;
+  width: min(92vw, 22rem);
+}
+
+.finansije-bulk-pay-body {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem 0.25rem;
+}
+
+.finansije-bulk-pay-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.finansije-bulk-pay-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.finansije-bulk-pay-field span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.finansije-bulk-pay-field input,
+.finansije-bulk-pay-field select {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.finansije-payment-rate {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.finansije-paid-badge.is-compact {
+  font-size: 0.58rem;
+  padding: 0.22rem 0.38rem;
+}
+
+.finance-detail-lines-payable li {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.finance-detail-line-main {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.finance-detail-line-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: space-between;
+}
+
+.finance-detail-line-status {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.finansije-pay-btn.is-compact {
+  font-size: 0.66rem;
+  min-width: 2.2rem;
+  padding: 0.24rem 0.42rem;
+}
+
 .finansije .raspored-row-finance > .raspored-row-open {
   grid-template-columns: 2.6rem minmax(0, 1fr);
   min-width: 0;

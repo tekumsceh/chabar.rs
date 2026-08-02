@@ -74,7 +74,7 @@ export function snapshotPayment(row) {
     userId: row.user_id ?? row.userId ?? null,
     date: row.payment_date_text ?? row.date ?? "",
     amount: Number(row.amount ?? 0),
-    currency: row.currency === "RSD" ? "RSD" : "EUR",
+    exchangeRate: Number(row.exchange_rate ?? row.exchangeRate ?? 0) || null,
   };
 }
 

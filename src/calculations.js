@@ -9,6 +9,297 @@ export const LEGACY_RATE_THROUGH_TEXT = "20.07.2026.";
 
 const POOL_EPS = 0.000001;
 
+export function financeLineKey(eventId, lineKind, expenseKey = "") {
+  return `${eventId}:${lineKind}:${expenseKey || ""}`;
+}
+
+export function expenseItemEur(item, rate) {
+  const amount = numberValue(item?.amount);
+  if (amount <= 0) return 0;
+  const safeRate = rate > 0 ? rate : DEFAULT_RATE;
+  return String(item?.currency || "EUR").toUpperCase() === "RSD" ? amount / safeRate : amount;
+}
+
+export function filterMyMemberExpenses(items, userId) {
+  return (items || []).filter((item) => {
+    if (String(item?.payeeKind || "").toLowerCase() !== "member") return false;
+    if (!item.payeeUserId) return true;
+    return userId && String(item.payeeUserId) === String(userId);
+  });
+}
+
+/** Payable lines for one date — expenses first, then fee(s). */
+export function buildFinanceLines(row, context = {}) {
+  const bandMode = context.mode === "band";
+  const userId = context.userId || "";
+  const rate = row.rate || DEFAULT_RATE;
+  const expenseLines = [];
+  const feeLines = [];
+
+  if (bandMode) {
+    for (const item of row.expenseItems || financeExpenseItems(row)) {
+      const totalEur = round(expenseItemEur(item, rate));
+      if (totalEur <= 0) continue;
+      expenseLines.push({
+        lineKind: "expense",
+        expenseKey: String(item.id),
+        eventId: row.id,
+        totalEur,
+        label: item.description || "Trošak",
+        item,
+      });
+    }
+    for (const member of row.memberWages || []) {
+      const totalEur = round(numberValue(member.priceEur));
+      if (totalEur <= 0) continue;
+      feeLines.push({
+        lineKind: "fee",
+        expenseKey: String(member.id || member.name || ""),
+        eventId: row.id,
+        totalEur,
+        label: member.name || "Honorar",
+        memberId: member.id,
+      });
+    }
+    if (!feeLines.length && numberValue(row.priceEur) > 0) {
+      feeLines.push({
+        lineKind: "fee",
+        expenseKey: "",
+        eventId: row.id,
+        totalEur: round(numberValue(row.priceEur)),
+        label: "Honorar",
+      });
+    }
+    return [...expenseLines, ...feeLines];
+  }
+
+  for (const item of filterMyMemberExpenses(financeExpenseItems(row), userId)) {
+    const totalEur = round(expenseItemEur(item, rate));
+    if (totalEur <= 0) continue;
+    expenseLines.push({
+      lineKind: "expense",
+      expenseKey: String(item.id),
+      eventId: row.id,
+      totalEur,
+      label: item.description || "Trošak",
+      item,
+    });
+  }
+  const feeEur = round(numberValue(row.priceEur));
+  if (feeEur > 0) {
+    feeLines.push({
+      lineKind: "fee",
+      expenseKey: "",
+      eventId: row.id,
+      totalEur: feeEur,
+      label: "Honorar",
+    });
+  }
+  return [...expenseLines, ...feeLines];
+}
+
+export function financeLineRemainingEur(line) {
+  if (!line) return 0;
+  if (line.lineClass === "paid") return 0;
+  if (line.remainingEur != null) return Math.max(0, numberValue(line.remainingEur));
+  if (line.lineClass === "partial") return Math.max(0, numberValue(line.totalEur) - numberValue(line.paidEur));
+  return Math.max(0, numberValue(line.totalEur));
+}
+
+function distributeLegacyEventAllocation(lines, amountEur) {
+  let remaining = Math.max(0, numberValue(amountEur));
+  for (const line of lines) {
+    if (remaining <= POOL_EPS) break;
+    const already = numberValue(line.directPaid);
+    const need = Math.max(0, numberValue(line.totalEur) - already);
+    if (need <= POOL_EPS) continue;
+    const applied = Math.min(need, remaining);
+    line.directPaid = already + applied;
+    remaining -= applied;
+  }
+}
+
+function settleFinanceLine(line, poolRef) {
+  const direct = numberValue(line.directPaid);
+  const need = Math.max(0, numberValue(line.totalEur) - direct);
+
+  if (need <= POOL_EPS) {
+    line.paidEur = line.totalEur;
+    line.remainingEur = 0;
+    line.lineClass = "paid";
+    return;
+  }
+
+  if (poolRef.value >= need - POOL_EPS) {
+    line.paidEur = line.totalEur;
+    line.remainingEur = 0;
+    line.lineClass = "paid";
+    poolRef.value = Math.max(0, poolRef.value - need);
+    return;
+  }
+
+  if (poolRef.value > POOL_EPS) {
+    line.paidEur = round(direct + poolRef.value);
+    line.remainingEur = round(need - poolRef.value);
+    line.lineClass = "partial";
+    poolRef.value = 0;
+    return;
+  }
+
+  if (direct > POOL_EPS) {
+    line.paidEur = round(direct);
+    line.remainingEur = round(need);
+    line.lineClass = "partial";
+    return;
+  }
+
+  line.paidEur = 0;
+  line.remainingEur = round(line.totalEur);
+  line.lineClass = "unpaid";
+}
+
+function rollupRowPaymentStatus(row) {
+  const lines = row.financeLines || [];
+  if (!lines.length) {
+    row.paymentStatus = row.totalEur;
+    row.paymentClass = "unpaid";
+    return;
+  }
+
+  const remaining = round(lines.reduce((sum, line) => sum + financeLineRemainingEur(line), 0));
+  const allPaid = lines.every((line) => line.lineClass === "paid");
+  const anyPaid = lines.some((line) => line.lineClass === "paid" || line.lineClass === "partial");
+
+  if (allPaid) {
+    row.paymentStatus = "Plaćeno";
+    row.paymentClass = "paid";
+    return;
+  }
+
+  if (anyPaid || remaining < row.totalEur - POOL_EPS) {
+    row.paymentStatus = remaining;
+    row.paymentClass = "partial";
+    return;
+  }
+
+  row.paymentStatus = row.totalEur;
+  row.paymentClass = "unpaid";
+}
+
+export function flattenPaymentAllocations(payments) {
+  const out = [];
+  for (const payment of payments || []) {
+    for (const row of payment.allocations || []) {
+      out.push({
+        paymentId: payment.id,
+        eventId: row.eventId,
+        amountEur: numberValue(row.amountEur),
+        lineKind: row.lineKind || "event",
+        expenseKey: row.expenseKey || "",
+      });
+    }
+  }
+  return out;
+}
+
+/** EUR value of a payment row, using snapshotted rate when present. */
+export function paymentAmountEur(payment, settingsOrRate) {
+  const amount = numberValue(payment?.amount);
+  if (amount <= 0) return 0;
+  const snapRate = numberValue(payment?.exchangeRate);
+  const rate =
+    snapRate > 0
+      ? snapRate
+      : rateForDate(payment?.date, settingsOrRate);
+  const safeRate = rate > 0 ? rate : DEFAULT_RATE;
+  return String(payment?.currency || "EUR").toUpperCase() === "RSD" ? amount / safeRate : amount;
+}
+
+/** Convert EUR target into payment currency using the live/snapshotted rate. */
+export function eurToPaymentAmount(amountEur, currency, exchangeRate) {
+  const eur = Math.max(0, numberValue(amountEur));
+  const rate = positiveNumber(exchangeRate, DEFAULT_RATE);
+  if (String(currency || "EUR").toUpperCase() === "RSD") return round(eur * rate);
+  return round(eur);
+}
+
+export function financeRemainingEur(row) {
+  if (!row?.done) return 0;
+  if (row.paymentClass === "paid") return 0;
+  if (row.paymentClass === "partial") return numberValue(row.paymentStatus);
+  if (row.paymentClass === "unpaid") return numberValue(row.totalEur);
+  return 0;
+}
+
+/** Oldest-unpaid-first allocation plan for a lump-sum payment (line-level, expenses before fee). */
+export function simulateBulkPayAllocations(rows, amountEur) {
+  let remaining = Math.max(0, numberValue(amountEur));
+  const allocations = [];
+  let fullyPaidCount = 0;
+  let partialEventId = null;
+  let partialPaidEur = 0;
+  let partialOwedEur = 0;
+  let partialLineKind = null;
+  let partialExpenseKey = "";
+
+  const ordered = [...(rows || [])]
+    .filter((row) => row.done && row.hasDate && row.paymentClass !== "paid")
+    .sort(compareFinanceRows);
+
+  for (const row of ordered) {
+    if (remaining <= POOL_EPS) break;
+
+    let hadUnpaid = false;
+    let rowComplete = true;
+
+    for (const line of row.financeLines || []) {
+      const owed = financeLineRemainingEur(line);
+      if (owed <= POOL_EPS) continue;
+      hadUnpaid = true;
+
+      if (remaining >= owed - POOL_EPS) {
+        allocations.push({
+          eventId: row.id,
+          lineKind: line.lineKind,
+          expenseKey: line.expenseKey || "",
+          amountEur: round(owed),
+        });
+        remaining = Math.max(0, remaining - owed);
+        continue;
+      }
+
+      allocations.push({
+        eventId: row.id,
+        lineKind: line.lineKind,
+        expenseKey: line.expenseKey || "",
+        amountEur: round(remaining),
+      });
+      partialEventId = row.id;
+      partialPaidEur = round(remaining);
+      partialOwedEur = round(owed);
+      partialLineKind = line.lineKind;
+      partialExpenseKey = line.expenseKey || "";
+      remaining = 0;
+      rowComplete = false;
+      break;
+    }
+
+    if (partialEventId) break;
+    if (hadUnpaid && rowComplete) fullyPaidCount += 1;
+  }
+
+  return {
+    allocations,
+    fullyPaidCount,
+    partialEventId,
+    partialPaidEur,
+    partialOwedEur,
+    partialLineKind,
+    partialExpenseKey,
+    unallocatedEur: round(remaining),
+  };
+}
+
 export function legacyRateThroughDate() {
   return parseDate(LEGACY_RATE_THROUGH_TEXT);
 }
@@ -41,11 +332,48 @@ function compareFinanceRows(a, b) {
  * - One personal uplate pool applied in calendar order across bands.
  * - Undated / invalid dates never earn and never consume the pool.
  */
-export function calculate(events, payments, settings) {
+export function calculate(events, payments, settings, allocationRows = null, financeContext = null) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
   const asOfDate = parseDate(settings.asOfDate);
   const calculationDate = Number.isNaN(asOfDate.getTime()) ? startOfToday() : asOfDate;
-  let paidPool = totalPaymentsEur(payments, settings);
+  const ctx = financeContext || { mode: "member", userId: "" };
+
+  const allocations = Array.isArray(allocationRows)
+    ? allocationRows
+    : flattenPaymentAllocations(payments);
+
+  const legacyByEvent = new Map();
+  const directByLine = new Map();
+  const allocatedByPayment = new Map();
+
+  for (const row of allocations) {
+    const eventId = row.eventId;
+    const amountEur = numberValue(row.amountEur);
+    if (!eventId || amountEur <= 0) continue;
+
+    const lineKind = row.lineKind || "event";
+    if (lineKind === "event") {
+      legacyByEvent.set(eventId, (legacyByEvent.get(eventId) || 0) + amountEur);
+    } else {
+      const key = financeLineKey(eventId, lineKind, row.expenseKey || "");
+      directByLine.set(key, (directByLine.get(key) || 0) + amountEur);
+    }
+
+    if (row.paymentId != null) {
+      allocatedByPayment.set(
+        row.paymentId,
+        (allocatedByPayment.get(row.paymentId) || 0) + amountEur,
+      );
+    }
+  }
+
+  let paidPool = 0;
+  for (const payment of payments || []) {
+    const totalEur = paymentAmountEur(payment, settings);
+    const allocated = allocatedByPayment.get(payment.id) || 0;
+    paidPool += Math.max(0, totalEur - allocated);
+  }
+
   let strictEur = 0;
   let strictDin = 0;
   let futureCount = 0;
@@ -73,40 +401,62 @@ export function calculate(events, payments, settings) {
       expenseEur,
       rate,
       totalEur,
+      financeLines: [],
       paymentStatus: "",
       paymentClass: "future",
     };
   });
 
   const allocationOrder = [...enriched].sort(compareFinanceRows);
+  const poolRef = { value: paidPool };
 
   for (const row of allocationOrder) {
     if (!row.hasDate) continue;
 
     if (!row.done) {
       futureCount += 1;
+      row.financeLines = buildFinanceLines(row, ctx);
+      if (ctx.mode === "band" && row.financeLines.length) {
+        row.totalEur = round(row.financeLines.reduce((sum, line) => sum + numberValue(line.totalEur), 0));
+      }
       continue;
     }
 
     strictEur += row.totalEur;
     strictDin += memberPayeeExpenseRsd(row.expenseItems);
+    row.financeLines = buildFinanceLines(row, ctx).map((line) => ({
+      ...line,
+      directPaid: 0,
+      paidEur: 0,
+      remainingEur: line.totalEur,
+      lineClass: "unpaid",
+    }));
 
-    if (row.totalEur <= paidPool + POOL_EPS) {
-      row.paymentStatus = "Plaćeno";
-      row.paymentClass = "paid";
-      paidPool = Math.max(0, paidPool - row.totalEur);
-    } else if (paidPool > POOL_EPS) {
-      const remaining = row.totalEur - paidPool;
-      row.paymentStatus = remaining;
-      row.paymentClass = "partial";
+    if (ctx.mode === "band" && row.financeLines.length) {
+      row.totalEur = round(row.financeLines.reduce((sum, line) => sum + numberValue(line.totalEur), 0));
+    }
+
+    const legacyAmount = legacyByEvent.get(row.id) || 0;
+    if (legacyAmount > 0) {
+      distributeLegacyEventAllocation(row.financeLines, legacyAmount);
+    }
+
+    for (const line of row.financeLines) {
+      const key = financeLineKey(line.eventId, line.lineKind, line.expenseKey);
+      const direct = directByLine.get(key) || 0;
+      if (direct > 0) line.directPaid = numberValue(line.directPaid) + direct;
+    }
+
+    for (const line of row.financeLines) {
+      settleFinanceLine(line, poolRef);
+    }
+
+    rollupRowPaymentStatus(row);
+    if (row.paymentClass === "partial") {
       partialCount += 1;
       unpaidCount += 1;
-      paidPool = 0;
-    } else {
-      row.paymentStatus = row.totalEur;
-      row.paymentClass = "unpaid";
+    } else if (row.paymentClass === "unpaid") {
       unpaidCount += 1;
-      paidPool = 0;
     }
   }
 
@@ -248,18 +598,17 @@ export function expectedFutureEur(rows) {
 }
 
 export function totalPaymentsEur(payments, settingsOrRate) {
-  return (payments || []).reduce((sum, payment) => {
-    const amount = numberValue(payment.amount);
-    const rate = rateForDate(payment.date, settingsOrRate);
-    return sum + (payment.currency === "RSD" ? amount / rate : amount);
-  }, 0);
+  return (payments || []).reduce((sum, payment) => sum + paymentAmountEur(payment, settingsOrRate), 0);
 }
 
 export function totalPaymentsDin(payments, settingsOrRate) {
   return (payments || []).reduce((sum, payment) => {
     const amount = numberValue(payment.amount);
-    const rate = rateForDate(payment.date, settingsOrRate);
-    return sum + (payment.currency === "RSD" ? amount : amount * rate);
+    const snapRate = numberValue(payment.exchangeRate);
+    const rate =
+      snapRate > 0 ? snapRate : rateForDate(payment.date, settingsOrRate);
+    const safeRate = rate > 0 ? rate : DEFAULT_RATE;
+    return sum + (payment.currency === "RSD" ? amount : amount * safeRate);
   }, 0);
 }
 

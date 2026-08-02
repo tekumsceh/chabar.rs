@@ -79,6 +79,16 @@ import { getCommunityLyricsById, searchCommunityLyrics } from "./lyricsLookup.js
 import { canEditSetlist, isBandLead, isBandSaradnik } from "../shared/roles.js";
 import { parseDate, startOfToday } from "../src/calculations.js";
 import { normalizeConsoleIds, resolveConsoleLimits } from "../src/mixingConsoles.js";
+import {
+  attachAllocationsToPayments,
+  bulkPayPlan,
+  createPaymentWithAllocations,
+  fetchAndPersistExchangeRate,
+  payEventPlan,
+  payLinePlan,
+  paymentSummaryText,
+  resolvePaymentFromPlan,
+} from "./financePay.js";
 
 const app = express();
 const port = Number(process.env.API_PORT || 3001);
@@ -3376,6 +3386,8 @@ app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next)
       ...payment,
       id: created.id,
       bandId: req.bandId,
+      exchangeRate: created.exchange_rate == null ? null : Number(created.exchange_rate),
+      allocations: [],
     });
 
     const who = await actorLabel(req.user.id);
@@ -3497,6 +3509,298 @@ app.delete("/api/payments/:id", requireAuth, async (req, res, next) => {
 
     res.status(204).end();
   } catch (error) {
+    next(error);
+  }
+});
+
+async function assertEventBandMembership(eventId, userId) {
+  const result = await query(
+    `SELECT e.id, e.band_id
+     FROM events e
+     JOIN band_members m ON m.band_id = e.band_id AND m.user_id = :userId
+     WHERE e.id = :eventId
+     LIMIT 1`,
+    { eventId, userId },
+  );
+  if (!result.rows[0]) {
+    const err = new Error("Not found");
+    err.status = 404;
+    throw err;
+  }
+  return result.rows[0];
+}
+
+function financeContextFromRequest(req, financeMode) {
+  return {
+    mode: financeMode === "band" ? "band" : "member",
+    userId: req.user.id,
+  };
+}
+
+async function loadFinanceLedger(req, financeMode, bandId) {
+  if (financeMode === "band") {
+    return Promise.all([getBandFinanceEvents(bandId), getBandPayments(bandId)]);
+  }
+  return Promise.all([getMyFinanceEvents(req.user.id), getMyPayments(req.user.id)]);
+}
+
+app.post("/api/finance/pay-line", requireAuth, async (req, res, next) => {
+  try {
+    const eventId = Number(req.body?.eventId);
+    const lineKind = req.body?.lineKind === "expense" ? "expense" : "fee";
+    const expenseKey = String(req.body?.expenseKey ?? "");
+    const financeMode = req.body?.financeMode === "band" ? "band" : "member";
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request", detail: "eventId is required" });
+    }
+
+    const eventRow = await assertEventBandMembership(eventId, req.user.id);
+    const bandId = eventRow.band_id;
+
+    if (financeMode === "band") {
+      const band = await getBandMeta(bandId);
+      if (!band || band.kind === "personal") {
+        return res.status(400).json({ error: "Invalid band", detail: "Band mode is only for group bands" });
+      }
+      const membership = await query(
+        `SELECT member_role FROM band_members WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+        { bandId, userId: req.user.id },
+      );
+      if (!isBandLead(membership.rows[0]?.member_role)) {
+        return res.status(403).json({ error: "Forbidden", detail: "Samo vlasnik ili lead." });
+      }
+    }
+
+    const { rate, settings } = await fetchAndPersistExchangeRate(
+      req.user.id,
+      query,
+      getPersonalSettings,
+    );
+    const financeContext = financeContextFromRequest(req, financeMode);
+    const [events, payments] = await loadFinanceLedger(req, financeMode, bandId);
+    const plan = payLinePlan(events, payments, settings, eventId, lineKind, expenseKey, financeContext);
+    const requestedCurrency =
+      req.body?.currency === "RSD" ? "RSD" : req.body?.currency === "EUR" ? "EUR" : undefined;
+    const { amount: paymentAmount, currency: paymentCurrency } = resolvePaymentFromPlan({
+      owedEur: plan.owedEur,
+      currency: requestedCurrency,
+      exchangeRate: rate,
+      line: plan.line,
+    });
+
+    const payment = await withTransaction(async (tx) =>
+      createPaymentWithAllocations({
+        tx,
+        userId: req.user.id,
+        bandId,
+        amount: paymentAmount,
+        currency: paymentCurrency,
+        exchangeRate: rate,
+        allocations: plan.allocations,
+        actorUserId: req.user.id,
+      }),
+    );
+
+    res.status(201).json({
+      payment,
+      settings,
+      exchangeRate: rate,
+      owedEur: plan.owedEur,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.post("/api/finance/pay-event", requireAuth, async (req, res, next) => {
+  try {
+    const eventId = Number(req.body?.eventId);
+    const financeMode = req.body?.financeMode === "band" ? "band" : "member";
+    if (!eventId) {
+      return res.status(400).json({ error: "Invalid request", detail: "eventId is required" });
+    }
+
+    const eventRow = await assertEventBandMembership(eventId, req.user.id);
+    const bandId = eventRow.band_id;
+
+    if (financeMode === "band") {
+      const band = await getBandMeta(bandId);
+      if (!band || band.kind === "personal") {
+        return res.status(400).json({ error: "Invalid band", detail: "Band mode is only for group bands" });
+      }
+      const membership = await query(
+        `SELECT member_role FROM band_members WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+        { bandId, userId: req.user.id },
+      );
+      if (!isBandLead(membership.rows[0]?.member_role)) {
+        return res.status(403).json({ error: "Forbidden", detail: "Samo vlasnik ili lead." });
+      }
+    }
+
+    const { rate, settings } = await fetchAndPersistExchangeRate(
+      req.user.id,
+      query,
+      getPersonalSettings,
+    );
+
+    const financeContext = financeContextFromRequest(req, financeMode);
+    const [events, payments] = await loadFinanceLedger(req, financeMode, bandId);
+
+    const plan = payEventPlan(events, payments, settings, eventId, financeContext);
+    const requestedCurrency = req.body?.currency === "RSD" ? "RSD" : "EUR";
+    const { amount: paymentAmount, currency: paymentCurrency } = resolvePaymentFromPlan({
+      owedEur: plan.owedEur,
+      currency: requestedCurrency,
+      exchangeRate: rate,
+    });
+
+    const payment = await withTransaction(async (tx) =>
+      createPaymentWithAllocations({
+        tx,
+        userId: req.user.id,
+        bandId,
+        amount: paymentAmount,
+        currency: paymentCurrency,
+        exchangeRate: rate,
+        allocations: plan.allocations,
+        actorUserId: req.user.id,
+      }),
+    );
+
+    res.status(201).json({
+      payment,
+      settings,
+      exchangeRate: rate,
+      owedEur: plan.owedEur,
+    });
+
+    const who = await actorLabel(req.user.id);
+    await notifyBandEvent({
+      bandId,
+      type: "payment_changed",
+      actorUserId: req.user.id,
+      audience: "finance",
+      subjectUserId: req.user.id,
+      message: `${who} je platio/la datum: ${paymentAmount} ${paymentCurrency}${paymentCurrency === "RSD" ? ` (kurs ${rate})` : ""}`,
+      payload: { page: "report", bandId },
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
+    next(error);
+  }
+});
+
+app.post("/api/finance/bulk-pay", requireAuth, async (req, res, next) => {
+  try {
+    const financeMode = req.body?.financeMode === "band" ? "band" : "member";
+    const amount = numberValue(req.body?.amount);
+    const currency = req.body?.currency === "RSD" ? "RSD" : "EUR";
+    const scopedBandId = String(req.body?.bandId || req.bandId || "").trim();
+
+    if (amount <= 0) {
+      return res.status(400).json({ error: "Invalid amount", detail: "Unesi iznos uplate." });
+    }
+
+    if (financeMode === "band") {
+      if (!scopedBandId) {
+        return res.status(400).json({ error: "Invalid band", detail: "Izaberi bend." });
+      }
+      const band = await getBandMeta(scopedBandId);
+      if (!band || band.kind === "personal") {
+        return res.status(400).json({ error: "Invalid band", detail: "Band mode is only for group bands" });
+      }
+      const membership = await query(
+        `SELECT member_role FROM band_members WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+        { bandId: scopedBandId, userId: req.user.id },
+      );
+      if (!membership.rows[0]) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (!isBandLead(membership.rows[0]?.member_role)) {
+        return res.status(403).json({ error: "Forbidden", detail: "Samo vlasnik ili lead." });
+      }
+    }
+
+    const { rate, settings } = await fetchAndPersistExchangeRate(
+      req.user.id,
+      query,
+      getPersonalSettings,
+    );
+
+    const financeContext = financeContextFromRequest(req, financeMode);
+
+    let events;
+    let payments;
+    let bandId;
+
+    if (financeMode === "band") {
+      bandId = scopedBandId;
+      [events, payments] = await loadFinanceLedger(req, financeMode, bandId);
+    } else {
+      [events, payments] = await Promise.all([
+        getMyFinanceEvents(req.user.id),
+        getMyPayments(req.user.id),
+      ]);
+      if (scopedBandId) {
+        events = events.filter((row) => String(row.bandId) === String(scopedBandId));
+      }
+      bandId =
+        scopedBandId ||
+        events.find((row) => row.bandId)?.bandId ||
+        (await getPersonalBandId(req.user.id));
+    }
+
+    if (!bandId) {
+      return res.status(400).json({ error: "Invalid band", detail: "Nema aktivnog benda." });
+    }
+
+    const plan = bulkPayPlan(events, payments, settings, amount, currency, rate, financeContext);
+    const payment = await withTransaction(async (tx) =>
+      createPaymentWithAllocations({
+        tx,
+        userId: req.user.id,
+        bandId,
+        amount: plan.paymentAmount,
+        currency,
+        exchangeRate: rate,
+        allocations: plan.allocations,
+        actorUserId: req.user.id,
+      }),
+    );
+
+    res.status(201).json({
+      payment,
+      settings,
+      exchangeRate: rate,
+      summary: {
+        fullyPaidCount: plan.fullyPaidCount,
+        partialEventId: plan.partialEventId,
+        partialPaidEur: plan.partialPaidEur,
+        partialOwedEur: plan.partialOwedEur,
+        unallocatedEur: plan.unallocatedEur,
+        text: paymentSummaryText(plan),
+      },
+    });
+
+    const who = await actorLabel(req.user.id);
+    await notifyBandEvent({
+      bandId,
+      type: "payment_changed",
+      actorUserId: req.user.id,
+      audience: "finance",
+      subjectUserId: req.user.id,
+      message: `${who} bulk uplata: ${plan.paymentAmount} ${currency} (kurs ${rate}) — ${paymentSummaryText(plan)}`,
+      payload: { page: "report", bandId },
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, detail: error.message });
+    }
     next(error);
   }
 });
@@ -3699,7 +4003,7 @@ async function getMyFinanceEvents(userId) {
 
 async function getMyPayments(userId) {
   const result = await query(
-    `SELECT id, band_id, payment_date_text, amount, currency
+    `SELECT id, band_id, payment_date_text, amount, currency, exchange_rate
      FROM payments
      WHERE user_id = :userId
        AND (
@@ -3711,13 +4015,7 @@ async function getMyPayments(userId) {
      ORDER BY sort_order, id`,
     { userId },
   );
-  return result.rows.map((row) => ({
-    id: row.id,
-    bandId: row.band_id,
-    date: row.payment_date_text,
-    amount: Number(row.amount),
-    currency: row.currency,
-  }));
+  return attachAllocationsToPayments(result.rows, query);
 }
 
 async function getBandMeta(bandId) {
@@ -3820,7 +4118,7 @@ async function getBandFinanceEvents(bandId) {
 
 async function getBandPayments(bandId) {
   const result = await query(
-    `SELECT id, band_id, payment_date_text, amount, currency
+    `SELECT id, band_id, payment_date_text, amount, currency, exchange_rate
      FROM payments
      WHERE band_id = :bandId
        AND (
@@ -3832,13 +4130,8 @@ async function getBandPayments(bandId) {
      ORDER BY sort_order, id`,
     { bandId },
   );
-  return result.rows.map((row) => ({
-    id: row.id,
-    bandId: row.band_id || bandId,
-    date: row.payment_date_text,
-    amount: Number(row.amount),
-    currency: row.currency,
-  }));
+  const rows = await attachAllocationsToPayments(result.rows, query);
+  return rows.map((row) => ({ ...row, bandId: row.bandId || bandId }));
 }
 
 async function upsertMemberFinance(eventId, userId, priceEur, transportRsd, options = {}) {

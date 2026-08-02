@@ -75,6 +75,7 @@ export default function App() {
   const [page, setPageState] = useState(DEFAULT_PAGE);
   const [scheduleFocusEventId, setScheduleFocusEventId] = useState(null);
   const [reportFocusEventId, setReportFocusEventId] = useState(null);
+  const [reportFocusTab, setReportFocusTab] = useState(null);
   /** Bumped when user chooses Raspored — closes open event detail (with dirty save prompt). */
   const [scheduleLeaveNonce, setScheduleLeaveNonce] = useState(0);
 
@@ -94,6 +95,9 @@ export default function App() {
     autoExchangeRate: "1",
   });
   const [planner, setPlanner] = useState({ eur: 0, rsd: 0 });
+  const [payingEventId, setPayingEventId] = useState(null);
+  const [payingLineKey, setPayingLineKey] = useState("");
+  const [bulkPayBusy, setBulkPayBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
@@ -170,10 +174,13 @@ export default function App() {
   const effectiveFinanceMode = canUseBandMode && financeMode === "band" ? "band" : "member";
 
   const financeClaimEur = useMemo(() => {
-    const calc = calculate(financeEvents, payments, settings);
+    const calc = calculate(financeEvents, payments, settings, null, {
+      mode: effectiveFinanceMode,
+      userId: profile?.id || "",
+    });
     const pastRows = calc.rows.filter((row) => row.done && row.hasDate);
     return waterfallClaimEur(pastRows);
-  }, [financeEvents, payments, settings]);
+  }, [financeEvents, payments, settings, effectiveFinanceMode, profile?.id]);
 
   const canManageActiveBand = Boolean(
     activeBand &&
@@ -553,6 +560,31 @@ export default function App() {
     }
   }
 
+  function mergeFinancePayment(current, payment) {
+    if (!payment?.id) return current;
+    const index = current.findIndex((item) => item.id === payment.id);
+    if (index >= 0) {
+      const next = [...current];
+      next[index] = payment;
+      return next;
+    }
+    return [...current, payment];
+  }
+
+  async function afterFinancePayment(result) {
+    if (result?.payment) {
+      setPayments((current) => mergeFinancePayment(current, result.payment));
+    }
+    if (result?.settings) {
+      setSettings((current) => ({
+        ...current,
+        exchangeRate: result.settings.exchangeRate || result.exchangeRate || current.exchangeRate,
+      }));
+    }
+    await reloadFinance();
+    setReportFocusTab("payments");
+  }
+
   async function handleFinanceModeChange(nextMode) {
     setFinanceMode(nextMode);
   }
@@ -904,6 +936,102 @@ export default function App() {
     showToast(t("toast.paymentAdded"));
   }
 
+  async function payFinanceEvent(eventId, bandId) {
+    if (!eventId || payingEventId) return;
+    setPayingEventId(eventId);
+    try {
+      const band = bands.find((item) => item.id === (bandId || activeBandId));
+      const financeModePayload =
+        financeMode === "band" &&
+        band &&
+        band.kind === "group" &&
+        (band.memberRole === "owner" || band.memberRole === "lead")
+          ? "band"
+          : "member";
+
+      const result = await api("/api/finance/pay-event", {
+        method: "POST",
+        bandId: bandId || activeBandId,
+        body: { eventId, financeMode: financeModePayload },
+      });
+      await afterFinancePayment(result);
+      showToast(t("toast.paymentAdded"));
+    } catch (requestError) {
+      showToast(requestError.message || t("toast.notSaved"), "error");
+    } finally {
+      setPayingEventId(null);
+    }
+  }
+
+  async function payFinanceLine(eventId, bandId, lineKind, expenseKey = "") {
+    const lineKey = `${eventId}:${lineKind}:${expenseKey || ""}`;
+    if (!eventId || payingLineKey) return;
+    setPayingLineKey(lineKey);
+    try {
+      const band = bands.find((item) => item.id === (bandId || activeBandId));
+      const financeModePayload =
+        financeMode === "band" &&
+        band &&
+        band.kind === "group" &&
+        (band.memberRole === "owner" || band.memberRole === "lead")
+          ? "band"
+          : "member";
+
+      const result = await api("/api/finance/pay-line", {
+        method: "POST",
+        bandId: bandId || activeBandId,
+        body: { eventId, lineKind, expenseKey, financeMode: financeModePayload },
+      });
+      await afterFinancePayment(result);
+      showToast(t("toast.paymentAdded"));
+    } catch (requestError) {
+      showToast(requestError.message || t("toast.notSaved"), "error");
+    } finally {
+      setPayingLineKey("");
+    }
+  }
+
+  async function bulkPayFinance({ amount, currency }) {
+    if (bulkPayBusy) return;
+    const parsed = numberValue(amount);
+    if (parsed <= 0) {
+      showToast(t("toast.enterAmount"), "error");
+      return;
+    }
+    setBulkPayBusy(true);
+    try {
+      const band = bands.find((item) => item.id === activeBandId);
+      const financeModePayload =
+        financeMode === "band" &&
+        band &&
+        band.kind === "group" &&
+        (band.memberRole === "owner" || band.memberRole === "lead") &&
+        activeBandId !== ALL_BANDS_ID
+          ? "band"
+          : "member";
+
+      const result = await api("/api/finance/bulk-pay", {
+        method: "POST",
+        bandId: activeBandId !== ALL_BANDS_ID ? activeBandId : undefined,
+        body: {
+          amount: parsed,
+          currency: currency === "RSD" ? "RSD" : "EUR",
+          financeMode: financeModePayload,
+          bandId: activeBandId !== ALL_BANDS_ID ? activeBandId : undefined,
+        },
+      });
+      await afterFinancePayment(result);
+      const summary = result.summary?.text || t("toast.paymentAdded");
+      showToast(t("report.bulkPaySummary", { summary }));
+      return true;
+    } catch (requestError) {
+      showToast(requestError.message || t("toast.notSaved"), "error");
+      return false;
+    } finally {
+      setBulkPayBusy(false);
+    }
+  }
+
   async function removePayment(id) {
     await api(`/api/payments/${id}`, { method: "DELETE" });
     setPayments((current) => current.filter((payment) => payment.id !== id));
@@ -1071,7 +1199,15 @@ export default function App() {
           searchQuery={globalSearch}
           focusEventId={reportFocusEventId}
           onFocusEventConsumed={() => setReportFocusEventId(null)}
+          focusTab={reportFocusTab}
+          onFocusTabConsumed={() => setReportFocusTab(null)}
           onBack={goToSchedule}
+          onPayEvent={payFinanceEvent}
+          onPayLine={payFinanceLine}
+          onBulkPay={bulkPayFinance}
+          payingEventId={payingEventId}
+          payingLineKey={payingLineKey}
+          bulkPayBusy={bulkPayBusy}
         />
       </div>
 

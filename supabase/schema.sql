@@ -57,9 +57,24 @@ CREATE TABLE IF NOT EXISTS payments (
   payment_date_text VARCHAR(32) NOT NULL DEFAULT '',
   amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   currency VARCHAR(3) NOT NULL DEFAULT 'EUR' CHECK (currency IN ('EUR', 'RSD')),
+  exchange_rate NUMERIC(12, 4),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS payment_allocations (
+  id SERIAL PRIMARY KEY,
+  payment_id INTEGER NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  amount_eur NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  line_kind TEXT NOT NULL DEFAULT 'event',
+  expense_key TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (payment_id, event_id, line_kind, expense_key)
+);
+
+CREATE INDEX IF NOT EXISTS payment_allocations_event_id_idx ON payment_allocations(event_id);
+CREATE INDEX IF NOT EXISTS payment_allocations_payment_id_idx ON payment_allocations(payment_id);
 
 CREATE TABLE IF NOT EXISTS settings (
   band_id UUID NOT NULL REFERENCES bands(id) ON DELETE CASCADE,
