@@ -148,7 +148,7 @@ export default function ReportPage({
     });
   }, [bandRows, search, statusFilter, viewYear, dateSort]);
 
-  /** Uplate: same band tile + year as Datumi. */
+  /** Uplate: payment log only (when + how much). Allocations/waterfall stay on Datumi. */
   const scopedPayments = useMemo(() => {
     return payments.filter((payment) => {
       if (yearFromDate(payment.date) !== viewYear) return false;
@@ -359,12 +359,14 @@ export default function ReportPage({
                 const dateParts = formatScheduleDateParts(row.date);
                 const amountTone = feeAmountTone(row);
                 const isSettled = row.done && row.paymentClass === "paid";
+                const isPartial = row.done && row.paymentClass === "partial";
                 const owed = financeRemainingEur(row);
+                const displayEur = isPartial ? owed : row.totalEur;
                 const rowPaying = payingEventId === row.id;
                 return (
                   <li
                     key={row.id}
-                    className={`raspored-row raspored-row-finance ${isSettled ? "is-settled" : ""}`}
+                    className={`raspored-row raspored-row-finance ${isSettled ? "is-settled" : ""}${isPartial ? " is-partial" : ""}`}
                     style={color ? { "--band-accent": color } : undefined}
                   >
                     <button
@@ -389,6 +391,13 @@ export default function ReportPage({
                         <span className="finansije-paid-badge" title={t("report.payPaid")}>
                           {t("report.paidBadge")}
                         </span>
+                      ) : isPartial ? (
+                        <span className="finansije-partial-badge" title={t("report.paidPartial", {
+                          paid: formatEur(Math.max(0, row.totalEur - owed)),
+                          total: formatEur(row.totalEur),
+                        })}>
+                          {t("report.payPartial")}
+                        </span>
                       ) : null}
                       {row.done && owed > 0 && onPayEvent ? (
                         <button
@@ -409,11 +418,16 @@ export default function ReportPage({
                         className={`finansije-row-amount raspored-fee raspored-fee-${amountTone}`}
                         title={
                           row.hasDate
-                            ? `${payStatusLabel(row, t)} · ${formatEur(row.totalEur)}`
+                            ? isPartial
+                              ? `${payStatusLabel(row, t)} · ${t("report.paidPartial", {
+                                  paid: formatEur(Math.max(0, row.totalEur - owed)),
+                                  total: formatEur(row.totalEur),
+                                })}`
+                              : `${payStatusLabel(row, t)} · ${formatEur(row.totalEur)}`
                             : undefined
                         }
                       >
-                        {row.hasDate ? formatEurCeil(row.totalEur) : "—"}
+                        {row.hasDate ? formatEurCeil(displayEur) : "—"}
                       </span>
                       <div className="raspored-actions">
                         <FinanceRowMenu

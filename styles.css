@@ -5257,6 +5257,21 @@ button.date-row-menu-item.is-pay:focus-visible {
   white-space: nowrap;
 }
 
+.finansije-partial-badge {
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+  border-radius: 999px;
+  color: #b45309;
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  padding: 0.28rem 0.45rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .finansije-pay-btn {
   background: color-mix(in srgb, var(--brand) 12%, var(--panel));
   border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--line));

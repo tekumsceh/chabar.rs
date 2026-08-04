@@ -158,6 +158,18 @@ function settleFinanceLine(line, poolRef) {
   line.lineClass = "unpaid";
 }
 
+function normalizeFinanceLine(line) {
+  const total = numberValue(line.totalEur);
+  const paid = numberValue(line.paidEur);
+  const remaining = round(Math.max(0, total - paid));
+  line.remainingEur = remaining;
+  if (remaining <= POOL_EPS && total > POOL_EPS) {
+    line.lineClass = "paid";
+    line.paidEur = total;
+    line.remainingEur = 0;
+  }
+}
+
 function rollupRowPaymentStatus(row) {
   const lines = row.financeLines || [];
   if (!lines.length) {
@@ -167,7 +179,7 @@ function rollupRowPaymentStatus(row) {
   }
 
   const remaining = round(lines.reduce((sum, line) => sum + financeLineRemainingEur(line), 0));
-  const allPaid = lines.every((line) => line.lineClass === "paid");
+  const allPaid = lines.every((line) => line.lineClass === "paid") || remaining <= POOL_EPS;
   const anyPaid = lines.some((line) => line.lineClass === "paid" || line.lineClass === "partial");
 
   if (allPaid) {
@@ -231,7 +243,7 @@ export function financeRemainingEur(row) {
   return 0;
 }
 
-/** Oldest-unpaid-first allocation plan for a lump-sum payment (line-level, expenses before fee). */
+/** Oldest-unpaid-first; within each date expenses then fee (buildFinanceLines order). */
 export function simulateBulkPayAllocations(rows, amountEur) {
   let remaining = Math.max(0, numberValue(amountEur));
   const allocations = [];
@@ -329,13 +341,13 @@ function compareFinanceRows(a, b) {
 /**
  * Member/band ledger:
  * - Honorar + troškovi “meni” (member-payee, incl. legacy prevoz) on each date.
- * - One personal uplate pool applied in calendar order across bands.
+ * - One personal uplate pool applied oldest-date-first; per date expenses then fee.
  * - Undated / invalid dates never earn and never consume the pool.
  */
 export function calculate(events, payments, settings, allocationRows = null, financeContext = null) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
-  const asOfDate = parseDate(settings.asOfDate);
-  const calculationDate = Number.isNaN(asOfDate.getTime()) ? startOfToday() : asOfDate;
+  // Held/dospeo = calendar today inclusive (not settings.asOfDate — that can lag).
+  const calculationDate = startOfToday();
   const ctx = financeContext || { mode: "member", userId: "" };
 
   const allocations = Array.isArray(allocationRows)
@@ -449,6 +461,7 @@ export function calculate(events, payments, settings, allocationRows = null, fin
 
     for (const line of row.financeLines) {
       settleFinanceLine(line, poolRef);
+      normalizeFinanceLine(line);
     }
 
     rollupRowPaymentStatus(row);

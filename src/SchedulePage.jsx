@@ -79,9 +79,9 @@ export default function SchedulePage({
 
   const ALL_PAGE_SIZE = 20;
 
-  const rows = useMemo(() => enrichScheduleRows(events, settings.asOfDate), [events, settings.asOfDate]);
+  const rows = useMemo(() => enrichScheduleRows(events), [events]);
   const filteredRows = useMemo(() => {
-    const filtered = rows.filter((row) => matchesScheduleFilter(row, search, filter, settings.asOfDate));
+    const filtered = rows.filter((row) => matchesScheduleFilter(row, search, filter));
     const direction = dateSort === "desc" ? -1 : 1;
     return [...filtered].sort((a, b) => {
       const aOk = a.hasDate && !Number.isNaN(a.parsedDate.getTime());
@@ -91,7 +91,7 @@ export default function SchedulePage({
       if (!bOk) return -1;
       return (a.parsedDate.getTime() - b.parsedDate.getTime()) * direction;
     });
-  }, [rows, search, filter, settings.asOfDate, dateSort]);
+  }, [rows, search, filter, dateSort]);
 
   useEffect(() => {
     setListPage(0);
@@ -717,16 +717,16 @@ function MoreDotsIcon() {
   );
 }
 
-function enrichScheduleRows(events, asOfDateText) {
-  const asOfDate = parseDate(asOfDateText || todayText());
-  const calculationDate = Number.isNaN(asOfDate.getTime()) ? new Date() : asOfDate;
+function enrichScheduleRows(events) {
+  const calculationDate = startOfToday();
 
   return events
     .filter((event) => !isFinancialOnlyEntry(event))
     .map((event) => {
       const hasDate = Boolean(String(event.date || "").trim());
       const parsedDate = parseDate(event.date);
-      const done = hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate <= calculationDate;
+      const done =
+        hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() <= calculationDate.getTime();
 
       return {
         ...event,
@@ -741,14 +741,14 @@ function enrichScheduleRows(events, asOfDateText) {
     }));
 }
 
-function matchesScheduleFilter(row, search, filter, asOfDate) {
+function matchesScheduleFilter(row, search, filter) {
   const query = search.trim().toLowerCase();
   const haystack = [row.date, row.city, row.venue, row.note, row.bandName].join(" ").toLowerCase();
 
   if (query && !haystack.includes(query)) return false;
   if (filter === "upcoming") return row.hasDate && !row.done;
   if (filter === "done") return row.done;
-  if (filter === "month") return sameMonth(row.parsedDate, parseDate(asOfDate));
+  if (filter === "month") return sameMonth(row.parsedDate, startOfToday());
   return true;
 }
 
