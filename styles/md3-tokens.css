@@ -1,0 +1,163 @@
+/**
+ * Material Design 3 tokens for Chabar.
+ * Maps MD3 semantics onto existing app CSS variables (--brand, --panel, etc.).
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+
+:root {
+  color-scheme: light;
+
+  /* MD3 core */
+  --md-primary: #276ef1;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #d8e2ff;
+  --md-on-primary-container: #001a41;
+  --md-secondary: #565f71;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #dae2f9;
+  --md-on-secondary-container: #131c2b;
+  --md-surface: #fdfbff;
+  --md-surface-dim: #ded8e1;
+  --md-surface-bright: #fdfbff;
+  --md-surface-container-lowest: #ffffff;
+  --md-surface-container-low: #f7f2fa;
+  --md-surface-container: #f1ecf4;
+  --md-surface-container-high: #ece6f0;
+  --md-surface-container-highest: #e6e0e9;
+  --md-on-surface: #1a1c1e;
+  --md-on-surface-variant: #44474e;
+  --md-outline: #74777f;
+  --md-outline-variant: #c4c6d0;
+  --md-error: #ba1a1a;
+  --md-on-error: #ffffff;
+  --md-tertiary: #006874;
+  --md-on-tertiary: #ffffff;
+  --md-tertiary-container: #9eeffd;
+  --md-on-tertiary-container: #001f24;
+
+  /* App semantic aliases (used across styles.css) */
+  --bg: var(--md-surface);
+  --panel: var(--md-surface-container-lowest);
+  --panel-soft: var(--md-surface-container-low);
+  --ink: var(--md-on-surface);
+  --on-ink: var(--md-on-primary);
+  --muted: var(--md-on-surface-variant);
+  --line: var(--md-outline-variant);
+  --brand: var(--md-primary);
+  --brand-dark: #1e56c4;
+  --brand-hover: #1a4db3;
+  --on-brand: var(--md-on-primary);
+  --brand-soft: color-mix(in srgb, var(--md-primary) 12%, transparent);
+  --surface: var(--md-surface-container);
+  --surface-2: var(--md-surface-container-high);
+  --ok: #146c2e;
+  --warn: #7d5700;
+  --danger: var(--md-error);
+
+  /* MD3 shape */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 28px;
+  --radius-pill: 9999px;
+  --menu-radius: var(--radius-lg);
+
+  /* MD3 elevation */
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-click: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-click-hover: 0 2px 4px rgba(0, 0, 0, 0.14);
+  --menu-shadow: 0 4px 8px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.1);
+
+  /* Controls */
+  --control-font: 0.875rem;
+  --control-pad-y: 0.625rem;
+  --control-pad-x: 1.5rem;
+  --control-row-min: 2.5rem;
+  --icon-btn-size: 2.5rem;
+  --icon-btn-svg: 1.25rem;
+
+  /* Legacy neon aliases → MD3 (for old rules) */
+  --neon-cyan: var(--md-primary);
+  --neon-lime: var(--ok);
+  --neon-magenta: var(--md-primary);
+}
+
+html,
+body {
+  background: var(--md-surface);
+  background-attachment: fixed;
+  color: var(--md-on-surface);
+  font-family: Roboto, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html[data-theme="dark"],
+html[data-theme="dark"] body,
+.app-shell[data-theme="dark"] {
+  color-scheme: dark;
+
+  --md-primary: #adc6ff;
+  --md-on-primary: #002e69;
+  --md-primary-container: #004494;
+  --md-on-primary-container: #d8e2ff;
+  --md-secondary: #bec6dc;
+  --md-on-secondary: #283041;
+  --md-secondary-container: #3e4759;
+  --md-on-secondary-container: #dae2f9;
+  --md-surface: #1a1c1e;
+  --md-surface-dim: #1a1c1e;
+  --md-surface-bright: #3a3c3e;
+  --md-surface-container-lowest: #0f1113;
+  --md-surface-container-low: #1a1c1e;
+  --md-surface-container: #1e2022;
+  --md-surface-container-high: #292a2d;
+  --md-surface-container-highest: #343537;
+  --md-on-surface: #e2e2e6;
+  --md-on-surface-variant: #c4c6d0;
+  --md-outline: #8e9099;
+  --md-outline-variant: #44474e;
+  --md-error: #ffb4ab;
+  --md-on-error: #690005;
+  --md-tertiary: #4dd8eb;
+  --md-on-tertiary: #00363d;
+  --md-tertiary-container: #004f58;
+  --md-on-tertiary-container: #9eeffd;
+
+  --bg: var(--md-surface);
+  --panel: var(--md-surface-container-high);
+  --panel-soft: var(--md-surface-container);
+  --ink: var(--md-on-surface);
+  --on-ink: var(--md-on-primary);
+  --muted: var(--md-on-surface-variant);
+  --line: var(--md-outline-variant);
+  --brand: var(--md-primary);
+  --brand-dark: var(--md-primary);
+  --brand-hover: color-mix(in srgb, var(--md-primary) 88%, white);
+  --on-brand: var(--md-on-primary);
+  --brand-soft: color-mix(in srgb, var(--md-primary) 18%, transparent);
+  --surface: var(--md-surface-container);
+  --surface-2: var(--md-surface-container-high);
+  --ok: #6dd58c;
+  --warn: #f9cf6b;
+  --danger: var(--md-error);
+
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-soft: 0 2px 6px rgba(0, 0, 0, 0.28);
+  --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --neon-cyan: var(--md-primary);
+  --neon-lime: var(--ok);
+  --neon-magenta: var(--md-primary);
+}
+
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+
+.app-shell[data-theme="dark"] {
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}

@@ -1,0 +1,301 @@
+/**
+ * Material Design 3 component overrides on top of legacy styles.css.
+ */
+
+/* —— MD3 buttons (filled tonal default) —— */
+button:not(.icon):not(.app-topbar-brand):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-tile):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab) {
+  background: var(--md-primary-container);
+  border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: none;
+  color: var(--md-on-primary-container);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  min-height: 2.5rem;
+  text-transform: none;
+}
+
+button:not(.icon):not(:disabled):hover {
+  box-shadow: var(--shadow-click);
+  filter: brightness(0.98);
+  transform: none;
+}
+
+button.primary,
+button[type="submit"]:not(.icon),
+.finansije-pay-btn,
+.confirm-btn-primary {
+  background: var(--md-primary) !important;
+  color: var(--md-on-primary) !important;
+}
+
+.app-shell[data-theme="dark"] button.primary,
+.app-shell[data-theme="dark"] .finansije-pay-btn {
+  background: var(--md-primary) !important;
+  color: var(--md-on-primary) !important;
+}
+
+button.danger,
+.confirm-btn-danger {
+  background: color-mix(in srgb, var(--md-error) 14%, var(--md-surface-container)) !important;
+  color: var(--md-error) !important;
+}
+
+button.icon {
+  border-radius: var(--radius-pill);
+  color: var(--md-on-surface-variant);
+}
+
+button.icon:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
+  color: var(--md-on-surface);
+}
+
+/* —— MD3 text fields —— */
+input,
+select,
+textarea {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline);
+  border-radius: var(--radius-sm);
+  color: var(--md-on-surface);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 1px var(--md-primary);
+}
+
+.app-shell[data-theme="dark"] input,
+.app-shell[data-theme="dark"] select,
+.app-shell[data-theme="dark"] textarea {
+  background: var(--md-surface-container-high);
+  border-color: var(--md-outline-variant);
+  color: var(--md-on-surface);
+}
+
+/* —— Top app bar —— */
+.app-topbar {
+  background: var(--md-surface);
+  border-bottom: 1px solid var(--md-outline-variant);
+  box-shadow: none;
+}
+
+.app-topbar-brand {
+  color: var(--md-primary) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em !important;
+  text-shadow: none !important;
+  text-transform: none !important;
+}
+
+.app-topbar-search {
+  background: var(--md-surface-container-highest);
+  border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: none;
+}
+
+.app-topbar-search-icon {
+  color: var(--md-on-surface-variant);
+}
+
+.app-topbar-search input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+
+.app-shell[data-theme="dark"] .app-topbar {
+  background: var(--md-surface);
+  border-bottom-color: var(--md-outline-variant);
+}
+
+.app-shell[data-theme="dark"] .app-topbar-brand {
+  color: var(--md-primary) !important;
+  text-shadow: none !important;
+}
+
+/* —— Navigation bar —— */
+.app-tabbar {
+  background: var(--md-surface-container);
+  border-top: 1px solid var(--md-outline-variant);
+  box-shadow: none;
+}
+
+.app-tabbar-item {
+  border-radius: var(--radius-lg);
+  color: var(--md-on-surface-variant);
+  font-weight: 500;
+}
+
+.app-tabbar-item.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.app-tabbar-add {
+  background: var(--md-primary-container) !important;
+  box-shadow: var(--shadow-click) !important;
+  color: var(--md-on-primary-container) !important;
+}
+
+.app-tabbar-add:hover,
+.app-tabbar-add.is-open {
+  background: var(--md-primary) !important;
+  color: var(--md-on-primary) !important;
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-add {
+  background: var(--md-primary-container) !important;
+  color: var(--md-on-primary-container) !important;
+}
+
+.app-shell[data-theme="dark"] .app-tabbar {
+  background: var(--md-surface-container);
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-item.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+/* —— Cards / panels —— */
+.panel,
+.summary-card,
+.toolbar,
+.settings-card,
+.finance-detail-panel,
+.menu-select-list,
+.user-menu-panel,
+.global-search-list {
+  background: var(--md-surface-container-low);
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.app-shell[data-theme="dark"] .panel,
+.app-shell[data-theme="dark"] .summary-card,
+.app-shell[data-theme="dark"] .toolbar,
+.app-shell[data-theme="dark"] .settings-card,
+.app-shell[data-theme="dark"] .finance-detail-panel {
+  background: var(--md-surface-container-high);
+  box-shadow: var(--shadow-soft);
+}
+
+/* —— List rows —— */
+.raspored-row {
+  background: var(--md-surface-container-lowest);
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+.raspored-row + .raspored-row {
+  margin-top: 0.35rem;
+}
+
+.app-shell:not([data-theme="dark"]) .raspored-row:hover {
+  background: var(--md-surface-container);
+  box-shadow: var(--shadow-click);
+}
+
+.app-shell[data-theme="dark"] .raspored-row:hover {
+  background: var(--md-surface-container-high) !important;
+  box-shadow: var(--shadow-click) !important;
+}
+
+.app-shell[data-theme="dark"] .raspored-row.is-next {
+  background: var(--md-primary-container);
+  box-shadow: none;
+}
+
+.app-shell[data-theme="dark"] .raspored-row:hover {
+  border-color: transparent !important;
+}
+
+/* —— Finance chips / badges —— */
+.finansije-paid-badge {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ok);
+  font-weight: 500;
+  text-transform: none;
+}
+
+.finansije-partial-badge {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--warn);
+  font-weight: 500;
+  text-transform: none;
+}
+
+.finansije .raspored-fee-paid {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--ok) !important;
+}
+
+.finansije .raspored-fee-partial {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--warn) !important;
+}
+
+.finansije .raspored-fee-unpaid {
+  background: color-mix(in srgb, var(--md-error) 12%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--md-error) !important;
+}
+
+/* —— Settings switch MD3 —— */
+.settings-switch-track {
+  background: var(--md-surface-container-highest);
+  border: 2px solid var(--md-outline);
+  box-shadow: none;
+}
+
+.settings-switch.is-on .settings-switch-track {
+  background: var(--md-primary);
+  border-color: var(--md-primary);
+  box-shadow: none;
+}
+
+.app-shell[data-theme="dark"] .settings-switch.is-on .settings-switch-track {
+  background: var(--md-primary);
+  border-color: var(--md-primary);
+  box-shadow: none;
+}
+
+.app-shell[data-theme="dark"] .settings-theme-option.is-active {
+  background: var(--md-secondary-container) !important;
+  box-shadow: none !important;
+  color: var(--md-on-secondary-container) !important;
+}
+
+/* —— Modals —— */
+.modal-backdrop {
+  background: color-mix(in srgb, var(--md-on-surface) 32%, transparent);
+}
+
+.modal-panel,
+.confirm-dialog-panel {
+  background: var(--md-surface-container-high);
+  border: 0;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--menu-shadow);
+}
+
+/* —— Page header —— */
+.page-header {
+  background: var(--md-surface);
+}
+
+.page-header-title {
+  font-weight: 400;
+  letter-spacing: 0;
+}

@@ -1,49 +1,4 @@
-:root {
-  color-scheme: dark;
-  --bg: #14001f;
-  --panel: #1f0730;
-  --panel-soft: #2a0a42;
-  --ink: #f7f2ff;
-  --on-ink: #16001f;
-  --muted: #c4a8e8;
-  --line: #ff3dce66;
-  --brand: #ff2bd6;
-  --brand-dark: #ff7aef;
-  --brand-hover: #ff5ae3;
-  --on-brand: #1a0020;
-  --brand-soft: rgba(255, 43, 214, 0.22);
-  --surface: #2a0a42;
-  --surface-2: #3b1060;
-  --ok: #b8ff00;
-  --warn: #ffe600;
-  --danger: #ff3d6e;
-  --neon-cyan: #00f6ff;
-  --neon-lime: #b8ff00;
-  --neon-magenta: #ff2bd6;
-  --shadow:
-    0 0 0 1px rgba(255, 43, 214, 0.35),
-    0 12px 0 rgba(0, 246, 255, 0.18),
-    0 22px 48px rgba(255, 43, 214, 0.28);
-  --shadow-soft:
-    0 0 0 1px rgba(0, 246, 255, 0.28),
-    0 10px 0 rgba(184, 255, 0, 0.12),
-    0 18px 40px rgba(0, 0, 0, 0.45);
-  --radius: 3px;
-  --radius-sm: 3px;
-  --radius-lg: 3px;
-  --radius-pill: 3px;
-  --shadow-click: 0 1px 2px rgba(15, 23, 42, 0.1), 0 1px 1px rgba(15, 23, 42, 0.06);
-  --shadow-click-hover: 0 2px 5px rgba(15, 23, 42, 0.14), 0 1px 2px rgba(15, 23, 42, 0.08);
-  /* Phone-density controls (menus, icon tools) */
-  --control-font: 0.8125rem;
-  --control-pad-y: 0.38rem;
-  --control-pad-x: 0.88rem;
-  --control-row-min: 2rem;
-  --icon-btn-size: 2.125rem;
-  --icon-btn-svg: 1.125rem;
-  --menu-radius: 0.5rem;
-  --menu-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
-}
+/* Design tokens: styles/md3-tokens.css (Material Design 3). Legacy rules below use --brand, --panel, etc. */
 
 * {
   box-sizing: border-box;
@@ -56,21 +11,12 @@ html {
 
 html,
 body {
-  background:
-    radial-gradient(circle at 12% 8%, rgba(255, 43, 214, 0.38), transparent 32%),
-    radial-gradient(circle at 88% 0%, rgba(0, 246, 255, 0.28), transparent 34%),
-    radial-gradient(circle at 50% 100%, rgba(184, 255, 0, 0.14), transparent 40%),
-    linear-gradient(160deg, #0c0014 0%, #1a0030 45%, #050010 100%);
-  background-attachment: fixed;
+  margin: 0;
 }
 
 body {
-  margin: 0;
   height: 100%;
   min-width: 0;
-  color: var(--ink);
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   overflow: hidden;
 }
 
@@ -5848,56 +5794,13 @@ button.date-row-menu-item.is-pay:focus-visible {
   margin: 0 0 0.75rem;
 }
 
-/* Dark theme = even wilder cyan/magenta neon */
+/* Dark theme tokens: styles/md3-tokens.css */
 .app-shell[data-theme="dark"],
 html[data-theme="dark"] body {
   color-scheme: dark;
 }
 
-html[data-theme="dark"],
-html[data-theme="dark"] body {
-  background:
-    radial-gradient(circle at 10% 0%, rgba(0, 246, 255, 0.35), transparent 30%),
-    radial-gradient(circle at 90% 10%, rgba(255, 43, 214, 0.32), transparent 32%),
-    radial-gradient(circle at 40% 110%, rgba(184, 255, 0, 0.16), transparent 42%),
-    #000008;
-  background-attachment: fixed;
-  color: #f4fbff;
-}
-
 .app-shell[data-theme="dark"] {
-  --bg: #000008;
-  --panel: #070816;
-  --panel-soft: #101428;
-  --ink: #f0fbff;
-  --on-ink: #00050c;
-  --muted: #8fd8ff;
-  --line: #00f6ff66;
-  --brand: #00f6ff;
-  --brand-dark: #7dffff;
-  --brand-hover: #5efbff;
-  --on-brand: #001018;
-  --brand-soft: rgba(0, 246, 255, 0.2);
-  --surface: #0c1224;
-  --surface-2: #15203a;
-  --ok: #b8ff00;
-  --warn: #ffe600;
-  --danger: #ff3d6e;
-  --neon-cyan: #00f6ff;
-  --neon-lime: #b8ff00;
-  --neon-magenta: #ff2bd6;
-  --shadow:
-    0 0 0 1px rgba(0, 246, 255, 0.45),
-    0 14px 0 rgba(255, 43, 214, 0.22),
-    0 28px 56px rgba(0, 246, 255, 0.22);
-  --shadow-soft:
-    0 0 0 1px rgba(255, 43, 214, 0.35),
-    0 12px 0 rgba(0, 246, 255, 0.16),
-    0 22px 44px rgba(0, 0, 0, 0.55);
-  --shadow-click: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.22);
-  --shadow-click-hover: 0 2px 6px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.28);
-  background: transparent;
-  color: var(--ink);
   height: 100%;
 }
 
@@ -5908,8 +5811,8 @@ html[data-theme="dark"] body {
 }
 
 .app-shell[data-theme="dark"] .top-nav-brand {
-  color: var(--neon-magenta);
-  text-shadow: 0 0 12px rgba(255, 43, 214, 0.8);
+  color: var(--brand-dark);
+  text-shadow: none;
 }
 
 .app-shell[data-theme="dark"] .top-nav-link:hover {

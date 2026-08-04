@@ -5,7 +5,9 @@ import { ConfirmProvider } from "./confirmDialog.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import { I18nProvider } from "./i18n/I18nProvider.jsx";
 import { initFadeScrollbars } from "./fadeScrollbar.js";
+import "../styles/md3-tokens.css";
 import "../styles.css";
+import "../styles/md3-overrides.css";
 
 // www and apex are different origins — OAuth PKCE breaks across them.
 if (typeof window !== "undefined" && window.location.hostname === "www.chabar.rs") {
