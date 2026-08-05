@@ -1,7 +1,12 @@
-import BandFilterSelect from "./BandFilterSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
-import { CalendarFilterIcon, ManageBandIcon, SortArrowIcon } from "./appIcons.jsx";
-import { formatEur } from "./calculations.js";
+import {
+  CalendarFilterIcon,
+  CardLayoutIcon,
+  ListLayoutIcon,
+  ManageBandIcon,
+  SortArrowIcon,
+} from "./appIcons.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 const scheduleFilters = [
   { id: "upcoming", label: "Buduće" },
@@ -11,31 +16,24 @@ const scheduleFilters = [
 ];
 
 export default function ScheduleToolbar({
-  bands = [],
-  activeBandId,
-  allBandsId,
-  onBandChange,
   filter,
   onFilterChange,
+  layoutView = "list",
+  onLayoutViewChange,
   dateSort,
   onDateSortChange,
-  claimEur = 0,
-  onOpenMoney,
   canManageBand = false,
   onManageBand,
 }) {
-  const showMoney = claimEur > 0.005;
+  const t = useT();
+  const layoutOptions = [
+    { id: "list", label: t("schedule.layoutList"), icon: <ListLayoutIcon /> },
+    { id: "card", label: t("schedule.layoutCard"), icon: <CardLayoutIcon /> },
+  ];
 
   return (
     <div className="schedule-home-chrome">
-      <div className="schedule-home-bar">
-        <BandFilterSelect
-          bands={bands}
-          activeBandId={activeBandId}
-          allBandsId={allBandsId}
-          onSelectBand={onBandChange}
-          layout="bar"
-        />
+      <div className="schedule-home-bar schedule-home-bar-tools-only">
         <div className="schedule-home-tools">
           {canManageBand ? (
             <button
@@ -48,6 +46,13 @@ export default function ScheduleToolbar({
               <ManageBandIcon />
             </button>
           ) : null}
+          <MenuSelect
+            label={t("schedule.layoutView")}
+            icon={layoutView === "card" ? <CardLayoutIcon /> : <ListLayoutIcon />}
+            value={layoutView}
+            options={layoutOptions}
+            onChange={onLayoutViewChange}
+          />
           <MenuSelect
             label="Prikaz"
             icon={<CalendarFilterIcon />}
@@ -66,16 +71,6 @@ export default function ScheduleToolbar({
           </button>
         </div>
       </div>
-
-      {showMoney ? (
-        <button type="button" className="finance-summary-chip" onClick={onOpenMoney} aria-label={`Novac, potražuje ${formatEur(claimEur)}`}>
-          <span className="finance-summary-chip-icon" aria-hidden="true">
-            €
-          </span>
-          <span className="finance-summary-chip-value">{formatEur(claimEur)}</span>
-          <span className="finance-summary-chip-hint">potražuje</span>
-        </button>
-      ) : null}
     </div>
   );
 }

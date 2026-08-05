@@ -1,5 +1,27 @@
 /** Placeholder rows while list data is loading (YouTube-style shell). */
 export default function RasporedSkeleton({ rows = 8, variant = "schedule" }) {
+  if (variant === "schedule-card") {
+    return (
+      <div className="raspored-card-grid raspored-card-grid-skeleton" aria-busy="true" aria-label="Učitavanje">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div key={index} className="schedule-event-card schedule-event-card-skeleton">
+            <span className="sk sk-date" />
+            <div className="schedule-event-card-body">
+              <span className="sk sk-line" />
+              <span className="sk sk-line sk-short" />
+            </div>
+            <div className="schedule-event-card-links">
+              <span className="sk sk-chip" />
+              <span className="sk sk-chip" />
+              <span className="sk sk-chip" />
+              <span className="sk sk-chip" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <ul className="raspored-list raspored-list-skeleton" aria-busy="true" aria-label="Učitavanje">
       {Array.from({ length: rows }, (_, index) => (

@@ -343,7 +343,8 @@ function isNoticeViewable(notice) {
       type === "comment_added" ||
       type === "finance_changed" ||
       type === "expense_changed" ||
-      type === "payment_changed",
+      type === "payment_changed" ||
+      type === "schedule_conflict",
   );
 }
 

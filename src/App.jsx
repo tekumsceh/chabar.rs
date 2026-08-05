@@ -8,7 +8,7 @@ import ReportPage from "./ReportPage.jsx";
 import SchedulePage from "./SchedulePage.jsx";
 import SettingsPage from "./SettingsPage.jsx";
 import ButtonShowcasePage from "./ButtonShowcasePage.jsx";
-import GlobalSearch from "./GlobalSearch.jsx";
+import BandPills from "./BandPills.jsx";
 import ProfileHub from "./ProfileHub.jsx";
 import {
   AddNavIcon,
@@ -102,7 +102,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
   const [profileHubOpen, setProfileHubOpen] = useState(false);
-  const [globalSearch, setGlobalSearch] = useState("");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addActionRequest, setAddActionRequest] = useState(null);
   const addNavRef = useRef(null);
@@ -201,31 +200,6 @@ export default function App() {
   function goToMoney() {
     setProfileHubOpen(false);
     setPage("report");
-  }
-
-  function handleGlobalSearchSelect(result) {
-    if (!result) return;
-
-    if (result.kind === "event") {
-      if (result.bandId) setActiveBandId(result.bandId);
-      if (activePage === "report") {
-        setPage("report");
-        setReportFocusEventId(result.id);
-      } else {
-        setPage("schedule");
-        setScheduleFocusEventId(result.id);
-      }
-      setGlobalSearch(result.filterText || result.label || "");
-      return;
-    }
-
-    if (result.kind === "band") {
-      if (result.bandId) setActiveBandId(result.bandId);
-      setGlobalSearch("");
-      return;
-    }
-
-    setGlobalSearch(result.filterText || result.label || "");
   }
 
   function openBandPage(bandId) {
@@ -773,6 +747,16 @@ export default function App() {
     return bands.find((band) => band.kind === "personal")?.id || "";
   }
 
+  async function refreshScheduleAfterMutation(bandIds = []) {
+    const targets = [...new Set(bandIds.filter(Boolean))];
+    for (const bandId of targets) invalidateScheduleCache(bandId);
+    try {
+      await loadScheduleAndFinance({ scheduleOnly: true });
+    } catch (refreshError) {
+      log.warn("schedule refresh after save failed", refreshError);
+    }
+  }
+
   async function saveEvent(eventOrId) {
     const id = typeof eventOrId === "object" ? eventOrId.id : eventOrId;
     const event =
@@ -795,8 +779,7 @@ export default function App() {
           transportRsd: numberValue(event.transportRsd),
         },
       });
-      invalidateScheduleCache(eventBandId(event));
-      await loadScheduleAndFinance();
+      await refreshScheduleAfterMutation([eventBandId(event)]);
     } catch (requestError) {
       reportError(requestError, "save event failed");
     }
@@ -822,8 +805,7 @@ export default function App() {
         transportRsd: numberValue(payload.transportRsd),
       },
     });
-    invalidateScheduleCache(bandIdForWrite);
-    await loadScheduleAndFinance();
+    await refreshScheduleAfterMutation([bandIdForWrite]);
     showToast(`Termin dodat: ${created.date}${created.city ? ` — ${created.city}` : ""}`);
     return created;
   }
@@ -880,9 +862,7 @@ export default function App() {
           transportRsd: numberValue(nextEvent.transportRsd),
         },
       });
-      invalidateScheduleCache(fromBandId);
-      if (toBandId !== fromBandId) invalidateScheduleCache(toBandId);
-      await loadScheduleAndFinance();
+      await refreshScheduleAfterMutation([fromBandId, toBandId]);
       showToast(`Termin sačuvan: ${nextEvent.date}${nextEvent.city ? ` — ${nextEvent.city}` : ""}`);
     } catch (requestError) {
       showToast(requestError.message || "Termin nije sačuvan", "error");
@@ -907,8 +887,7 @@ export default function App() {
     }
 
     await api(`/api/events/${id}`, { method: "DELETE", bandId: eventBandId(event) });
-    invalidateScheduleCache(eventBandId(event));
-    await loadScheduleAndFinance();
+    await refreshScheduleAfterMutation([eventBandId(event)]);
     const label = [event.date, event.city, event.venue].filter(Boolean).join(" — ");
     showToast(`Termin obrisan${label ? `: ${label}` : ""}`);
   }
@@ -1101,23 +1080,11 @@ export default function App() {
   return (
     <div className="app-shell" data-theme={theme}>
       <header className="app-topbar">
-        <button
-          type="button"
-          className="app-topbar-brand"
-          aria-label={t("nav.brandAria")}
-          title={t("nav.schedule")}
-          onClick={() => {
-            setProfileHubOpen(false);
-            goToSchedule();
-          }}
-        >
-          Chabar
-        </button>
-        <GlobalSearch
-          value={globalSearch}
-          onChange={setGlobalSearch}
-          onSelectResult={handleGlobalSearchSelect}
-          authReady={Boolean(session?.access_token)}
+        <BandPills
+          bands={bands}
+          activeBandId={activeBandId}
+          allBandsId={ALL_BANDS_ID}
+          onSelectBand={setActiveBandId}
         />
       </header>
 
@@ -1153,9 +1120,6 @@ export default function App() {
           addActionRequest={addActionRequest}
           onAddActionConsumed={() => setAddActionRequest(null)}
           loading={loading}
-          searchQuery={globalSearch}
-          claimEur={financeClaimEur}
-          onOpenMoney={goToMoney}
           canManageBand={canManageActiveBand}
           onManageBand={() => openBandPage(activeBandId)}
         />
@@ -1188,7 +1152,6 @@ export default function App() {
           bands={bands}
           activeBandId={activeBandId}
           allBandsId={ALL_BANDS_ID}
-          onBandChange={setActiveBandId}
           financeMode={effectiveFinanceMode}
           canUseBandMode={canUseBandMode}
           onFinanceModeChange={handleFinanceModeChange}
@@ -1196,7 +1159,6 @@ export default function App() {
           loading={loading}
           showToast={showToast}
           userId={profile?.id || ""}
-          searchQuery={globalSearch}
           focusEventId={reportFocusEventId}
           onFocusEventConsumed={() => setReportFocusEventId(null)}
           focusTab={reportFocusTab}

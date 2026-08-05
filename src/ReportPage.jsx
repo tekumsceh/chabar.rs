@@ -17,7 +17,6 @@ import {
 } from "./calculations.js";
 import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
-import BandFilterSelect from "./BandFilterSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import PageHeader from "./PageHeader.jsx";
@@ -37,7 +36,6 @@ export default function ReportPage({
   bands = [],
   activeBandId,
   allBandsId,
-  onBandChange,
   financeMode = "member",
   canUseBandMode = false,
   onFinanceModeChange,
@@ -231,12 +229,6 @@ export default function ReportPage({
 
       <header className="raspored-bar finansije-toolbar">
         <div className="raspored-tools raspored-tools-start" aria-label={t("report.filters")}>
-          <BandFilterSelect
-            bands={bands}
-            activeBandId={activeBandId}
-            allBandsId={allBandsId}
-            onSelectBand={onBandChange}
-          />
           {canUseBandMode ? (
             <button
               type="button"

@@ -30,8 +30,13 @@ export function publicAppUrl() {
   return String(process.env.PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:5173").replace(/\/$/, "");
 }
 
+export function googleCalendarSyncEnabled() {
+  const flag = String(process.env.GOOGLE_CALENDAR_SYNC_ENABLED || "0").trim().toLowerCase();
+  return flag === "1" || flag === "true";
+}
+
 export function googleCalendarConfigured() {
-  return Boolean(clientId() && clientSecret());
+  return googleCalendarSyncEnabled() && Boolean(clientId() && clientSecret());
 }
 
 let encKeyWarned = false;
@@ -490,26 +495,153 @@ function buildGoogleEventBody(event, { bandName = "", chabarEventId }) {
   };
 }
 
+export async function getMemberBandCalendarPref(userId, bandId) {
+  const result = await query(
+    `SELECT sync_enabled, calendar_id, updated_at
+     FROM user_band_calendar_prefs
+     WHERE user_id = :userId AND band_id = :bandId`,
+    { userId, bandId },
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    syncEnabled: Boolean(row.sync_enabled),
+    calendarId: row.calendar_id || "primary",
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function updateMemberBandCalendarPref(
+  userId,
+  bandId,
+  { syncEnabled, calendarId } = {},
+) {
+  const existing = await getMemberBandCalendarPref(userId, bandId);
+  const nextEnabled = syncEnabled !== undefined ? Boolean(syncEnabled) : existing?.syncEnabled || false;
+  const nextCalendarId =
+    calendarId !== undefined ? String(calendarId || "primary").trim() || "primary" : existing?.calendarId || "primary";
+
+  await query(
+    `INSERT INTO user_band_calendar_prefs (user_id, band_id, sync_enabled, calendar_id, updated_at)
+     VALUES (:userId, :bandId, :enabled, :calendarId, NOW())
+     ON CONFLICT (user_id, band_id) DO UPDATE SET
+       sync_enabled = EXCLUDED.sync_enabled,
+       calendar_id = COALESCE(NULLIF(EXCLUDED.calendar_id, ''), user_band_calendar_prefs.calendar_id),
+       updated_at = NOW()`,
+    { userId, bandId, enabled: nextEnabled, calendarId: nextCalendarId },
+  );
+  return getMemberBandCalendarPref(userId, bandId);
+}
+
+async function userHasGoogleAccount(userId) {
+  const result = await query(
+    `SELECT 1 FROM user_google_accounts WHERE user_id = :userId LIMIT 1`,
+    { userId },
+  );
+  return Boolean(result.rows[0]);
+}
+
+/** Band shared calendar + acting member's private calendar (both when configured). */
 async function resolveSyncTargets(bandId, actorUserId) {
+  const targets = [];
+
   const link = await getBandCalendarLink(bandId);
   if (link?.syncEnabled && link.calendarId) {
-    return [{ calendarId: link.calendarId, userId: link.connectedByUserId, kind: "band" }];
+    targets.push({ calendarId: link.calendarId, userId: link.connectedByUserId, kind: "band" });
   }
 
-  // Personal fallback: ONLY the acting user (never fan-out to other members — avoids surprise copies)
-  if (!actorUserId) return [];
-  const prefs = await query(
-    `SELECT ucp.user_id, ucp.personal_calendar_id
-     FROM user_calendar_prefs ucp
-     JOIN user_google_accounts uga ON uga.user_id = ucp.user_id
-     WHERE ucp.user_id = :userId AND ucp.personal_sync_enabled = TRUE`,
-    { userId: actorUserId },
+  if (!actorUserId) return targets;
+
+  const memberPref = await getMemberBandCalendarPref(actorUserId, bandId);
+  if (memberPref?.syncEnabled && memberPref.calendarId && (await userHasGoogleAccount(actorUserId))) {
+    targets.push({
+      calendarId: memberPref.calendarId,
+      userId: actorUserId,
+      kind: "member",
+    });
+  } else if (!link?.syncEnabled || !link?.calendarId) {
+    // Legacy global personal fallback when the band has no shared calendar
+    const prefs = await query(
+      `SELECT ucp.user_id, ucp.personal_calendar_id
+       FROM user_calendar_prefs ucp
+       JOIN user_google_accounts uga ON uga.user_id = ucp.user_id
+       WHERE ucp.user_id = :userId AND ucp.personal_sync_enabled = TRUE`,
+      { userId: actorUserId },
+    );
+    for (const row of prefs.rows) {
+      targets.push({
+        calendarId: row.personal_calendar_id || "primary",
+        userId: row.user_id,
+        kind: "member",
+      });
+    }
+  }
+
+  return targets;
+}
+
+async function getEventSyncRows(eventId) {
+  const result = await query(
+    `SELECT kind, user_id, calendar_id, google_event_id
+     FROM event_google_sync
+     WHERE event_id = :eventId`,
+    { eventId },
   );
-  return prefs.rows.map((row) => ({
-    calendarId: row.personal_calendar_id || "primary",
-    userId: row.user_id,
-    kind: "personal",
-  }));
+  return result.rows;
+}
+
+async function upsertEventSyncRow({ eventId, kind, userId, calendarId, googleEventId }) {
+  await query(
+    `INSERT INTO event_google_sync (event_id, kind, user_id, calendar_id, google_event_id, synced_at)
+     VALUES (:eventId, :kind, :userId, :calendarId, :googleEventId, NOW())
+     ON CONFLICT (event_id, kind, user_id) DO UPDATE SET
+       calendar_id = EXCLUDED.calendar_id,
+       google_event_id = EXCLUDED.google_event_id,
+       synced_at = NOW()`,
+    { eventId, kind, userId, calendarId, googleEventId },
+  );
+}
+
+async function deleteRemoteGoogleEvent({ userId, calendarId, googleEventId }) {
+  if (!googleEventId || !calendarId || !userId) return;
+  try {
+    await googleFetch(
+      userId,
+      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
+      { method: "DELETE" },
+    );
+  } catch (error) {
+    if (error.status !== 404 && error.status !== 410) throw error;
+  }
+}
+
+async function upsertRemoteGoogleEvent({ userId, calendarId, chabarEventId, body, prevGoogleEventId = null }) {
+  let googleEventId = prevGoogleEventId;
+  if (!googleEventId) {
+    const found = await findGoogleEventByChabarId(userId, calendarId, chabarEventId);
+    googleEventId = found?.id || null;
+  }
+
+  if (googleEventId) {
+    try {
+      await googleFetch(
+        userId,
+        `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
+        { method: "PUT", body },
+      );
+      return googleEventId;
+    } catch (error) {
+      if (error.status !== 404 && error.status !== 410) throw error;
+      googleEventId = null;
+    }
+  }
+
+  const data = await googleFetch(
+    userId,
+    `/calendars/${encodeURIComponent(calendarId)}/events`,
+    { method: "POST", body },
+  );
+  return data.id;
 }
 
 /** Find an existing Google event we already tagged with this Chabar id (avoids duplicate POSTs). */
@@ -534,115 +666,118 @@ export async function syncEventUpsert({ eventId, bandId, event, bandName = "", a
     const targets = await resolveSyncTargets(bandId, actorUserId);
     if (!targets.length) return;
 
-    const existing = await query(
-      `SELECT google_event_id, google_calendar_id FROM events WHERE id = :id`,
-      { id: eventId },
-    );
-    const prev = existing.rows[0] || {};
     const body = buildGoogleEventBody(
       { ...event, bandId },
       { bandName, chabarEventId: eventId },
     );
     if (!body) return;
 
-    const bandTarget = targets.find((t) => t.kind === "band");
-    if (bandTarget) {
-      let googleEventId = prev.google_event_id;
-      if (googleEventId && prev.google_calendar_id && prev.google_calendar_id !== bandTarget.calendarId) {
-        // Calendar changed — don't update the old one; look for tag on the new calendar
-        googleEventId = null;
-      }
-      if (!googleEventId) {
-        const found = await findGoogleEventByChabarId(
-          bandTarget.userId,
-          bandTarget.calendarId,
-          eventId,
-        );
-        if (found?.id) googleEventId = found.id;
-      }
+    const existingRows = await getEventSyncRows(eventId);
+    const legacy = await query(
+      `SELECT google_event_id, google_calendar_id, sync_source FROM events WHERE id = :id`,
+      { id: eventId },
+    );
+    const legacyRow = legacy.rows[0] || {};
 
-      let data;
-      if (googleEventId) {
-        try {
-          data = await googleFetch(
-            bandTarget.userId,
-            `/calendars/${encodeURIComponent(bandTarget.calendarId)}/events/${encodeURIComponent(googleEventId)}`,
-            { method: "PUT", body },
-          );
-        } catch (error) {
-          if (error.status === 404 || error.status === 410) {
-            data = await googleFetch(
-              bandTarget.userId,
-              `/calendars/${encodeURIComponent(bandTarget.calendarId)}/events`,
-              { method: "POST", body },
-            );
-            googleEventId = data.id;
-          } else {
-            throw error;
-          }
-        }
-      } else {
-        data = await googleFetch(
-          bandTarget.userId,
-          `/calendars/${encodeURIComponent(bandTarget.calendarId)}/events`,
-          { method: "POST", body },
-        );
-        googleEventId = data.id;
-      }
-      await query(
-        `UPDATE events
-         SET google_event_id = :googleEventId,
-             google_calendar_id = :calendarId,
-             sync_source = CASE
-               WHEN sync_source = 'google' THEN sync_source
-               ELSE 'chabar'
-             END,
-             synced_at = NOW()
-         WHERE id = :id`,
-        { id: eventId, googleEventId, calendarId: bandTarget.calendarId },
-      );
-      await query(
-        `UPDATE band_google_calendars SET last_synced_at = NOW(), updated_at = NOW()
-         WHERE band_id = :bandId`,
-        { bandId },
-      );
-      return;
+    if (
+      legacyRow.google_event_id &&
+      legacyRow.google_calendar_id &&
+      !existingRows.some((row) => row.kind === "band")
+    ) {
+      existingRows.push({
+        kind: "band",
+        user_id: targets.find((t) => t.kind === "band")?.userId,
+        calendar_id: legacyRow.google_calendar_id,
+        google_event_id: legacyRow.google_event_id,
+      });
     }
 
-    // Personal-only: upsert for the acting user alone
     for (const target of targets) {
       try {
-        let googleEventId = prev.google_event_id;
-        if (!googleEventId || prev.google_calendar_id !== target.calendarId) {
-          const found = await findGoogleEventByChabarId(target.userId, target.calendarId, eventId);
-          googleEventId = found?.id || null;
+        const prev = existingRows.find(
+          (row) => row.kind === target.kind && String(row.user_id) === String(target.userId),
+        );
+
+        if (
+          prev?.google_event_id &&
+          prev.calendar_id &&
+          prev.calendar_id !== target.calendarId
+        ) {
+          await deleteRemoteGoogleEvent({
+            userId: prev.user_id,
+            calendarId: prev.calendar_id,
+            googleEventId: prev.google_event_id,
+          });
         }
-        let data;
-        if (googleEventId) {
-          data = await googleFetch(
-            target.userId,
-            `/calendars/${encodeURIComponent(target.calendarId)}/events/${encodeURIComponent(googleEventId)}`,
-            { method: "PUT", body },
+
+        const googleEventId = await upsertRemoteGoogleEvent({
+          userId: target.userId,
+          calendarId: target.calendarId,
+          chabarEventId: eventId,
+          body,
+          prevGoogleEventId:
+            prev?.calendar_id === target.calendarId ? prev.google_event_id : null,
+        });
+
+        await upsertEventSyncRow({
+          eventId,
+          kind: target.kind,
+          userId: target.userId,
+          calendarId: target.calendarId,
+          googleEventId,
+        });
+
+        if (target.kind === "band") {
+          await query(
+            `UPDATE events
+             SET google_event_id = :googleEventId,
+                 google_calendar_id = :calendarId,
+                 sync_source = CASE
+                   WHEN sync_source = 'google' THEN sync_source
+                   ELSE 'chabar'
+                 END,
+                 synced_at = NOW()
+             WHERE id = :id`,
+            { id: eventId, googleEventId, calendarId: target.calendarId },
           );
-        } else {
-          data = await googleFetch(
-            target.userId,
-            `/calendars/${encodeURIComponent(target.calendarId)}/events`,
-            { method: "POST", body },
+          await query(
+            `UPDATE band_google_calendars SET last_synced_at = NOW(), updated_at = NOW()
+             WHERE band_id = :bandId`,
+            { bandId },
           );
-          googleEventId = data.id;
         }
+      } catch (error) {
+        logger.warn("Calendar sync target failed", {
+          eventId,
+          bandId,
+          kind: target.kind,
+          userId: target.userId,
+          detail: error.message,
+        });
+      }
+    }
+
+    const activeKeys = new Set(
+      targets.map((target) => `${target.kind}:${String(target.userId)}`),
+    );
+    for (const prev of existingRows) {
+      const key = `${prev.kind}:${String(prev.user_id)}`;
+      if (activeKeys.has(key)) continue;
+      try {
+        await deleteRemoteGoogleEvent({
+          userId: prev.user_id,
+          calendarId: prev.calendar_id,
+          googleEventId: prev.google_event_id,
+        });
         await query(
-          `UPDATE events
-           SET google_event_id = :googleEventId,
-               google_calendar_id = :calendarId,
-               synced_at = NOW()
-           WHERE id = :id`,
-          { id: eventId, googleEventId, calendarId: target.calendarId },
+          `DELETE FROM event_google_sync
+           WHERE event_id = :eventId AND kind = :kind AND user_id = :userId`,
+          { eventId, kind: prev.kind, userId: prev.user_id },
         );
       } catch (error) {
-        logger.warn("Personal calendar sync failed", {
-          userId: target.userId,
+        logger.warn("Calendar sync orphan cleanup failed", {
+          eventId,
+          kind: prev.kind,
           detail: error.message,
         });
       }
@@ -655,23 +790,33 @@ export async function syncEventUpsert({ eventId, bandId, event, bandName = "", a
 export async function syncEventDelete({ eventId, bandId }) {
   if (!googleCalendarConfigured()) return;
   try {
-    const link = await getBandCalendarLink(bandId);
     const row = await query(
       `SELECT google_event_id, google_calendar_id, sync_source FROM events WHERE id = :id`,
       { id: eventId },
     );
     const event = row.rows[0];
-    // Imported-from-Google rows: Chabar delete must not wipe the Google source event.
     if (event?.sync_source === "google") return;
-    const googleEventId = event?.google_event_id;
-    const calendarId = event?.google_calendar_id || link?.calendarId;
-    if (!googleEventId || !calendarId || !link?.connectedByUserId) return;
 
-    await googleFetch(
-      link.connectedByUserId,
-      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
-      { method: "DELETE" },
-    );
+    const syncRows = await getEventSyncRows(eventId);
+    if (!syncRows.length) {
+      const link = await getBandCalendarLink(bandId);
+      const googleEventId = event?.google_event_id;
+      const calendarId = event?.google_calendar_id || link?.calendarId;
+      const userId = link?.connectedByUserId;
+      if (googleEventId && calendarId && userId) {
+        await deleteRemoteGoogleEvent({ userId, calendarId, googleEventId });
+      }
+      return;
+    }
+
+    for (const syncRow of syncRows) {
+      await deleteRemoteGoogleEvent({
+        userId: syncRow.user_id,
+        calendarId: syncRow.calendar_id,
+        googleEventId: syncRow.google_event_id,
+      });
+    }
+    await query(`DELETE FROM event_google_sync WHERE event_id = :eventId`, { eventId });
   } catch (error) {
     logger.warn("Event calendar sync delete failed", { eventId, bandId, detail: error.message });
   }
@@ -999,6 +1144,13 @@ export async function pushBandCalendar(bandId) {
            WHERE id = :id`,
           { id: row.id, googleEventId: found.id, calendarId: link.calendarId },
         );
+        await upsertEventSyncRow({
+          eventId: row.id,
+          kind: "band",
+          userId: link.connectedByUserId,
+          calendarId: link.calendarId,
+          googleEventId: found.id,
+        });
         linked += 1;
         return;
       }
@@ -1017,6 +1169,13 @@ export async function pushBandCalendar(bandId) {
          WHERE id = :id`,
         { id: row.id, googleEventId: data.id, calendarId: link.calendarId },
       );
+      await upsertEventSyncRow({
+        eventId: row.id,
+        kind: "band",
+        userId: link.connectedByUserId,
+        calendarId: link.calendarId,
+        googleEventId: data.id,
+      });
       created += 1;
       createdIds.push(row.id);
     } catch (error) {

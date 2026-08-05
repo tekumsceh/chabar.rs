@@ -21,40 +21,60 @@ export async function api(url, options = {}) {
     headers["X-Band-Id"] = bandId;
   }
 
-  let response;
-  try {
-    response = await fetch(url, {
-      method: options.method || "GET",
-      headers,
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: options.signal,
-    });
-  } catch (error) {
-    if (error?.name === "AbortError") throw error;
-    const networkError = new Error("Veza sa serverom nije uspela. Sačekaj sekund i pokušaj ponovo.");
-    networkError.status = 0;
-    throw networkError;
-  }
+  const method = options.method || "GET";
+  const retriable =
+    !options.noRetry &&
+    method !== "POST" &&
+    (options.retry !== false);
+  const attempts = retriable ? 2 : 1;
 
-  if (!response.ok) {
-    const raw = await response.text().catch(() => "");
-    let data = {};
-    if (raw) {
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        data = {};
-      }
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
     }
-    const fallback =
-      response.status === 404
-        ? "Endpoint nije pronađen (možda treba deploy novog API-ja)."
-        : `Zahtev nije uspeo (${response.status})`;
-    const error = new Error(data.detail || data.error || fallback);
-    error.status = response.status;
-    throw error;
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        signal: options.signal,
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      lastError = new Error("Veza sa serverom nije uspela. Sačekaj sekund i pokušaj ponovo.");
+      lastError.status = 0;
+      if (attempt + 1 < attempts) continue;
+      throw lastError;
+    }
+
+    if (!response.ok) {
+      const raw = await response.text().catch(() => "");
+      let data = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = {};
+        }
+      }
+      const fallback =
+        response.status === 404
+          ? "Endpoint nije pronađen (možda treba deploy novog API-ja)."
+          : `Zahtev nije uspeo (${response.status})`;
+      const error = new Error(data.detail || data.error || fallback);
+      error.status = response.status;
+      lastError = error;
+      const retryStatus = response.status === 502 || response.status === 503 || response.status === 504;
+      if (retryStatus && attempt + 1 < attempts) continue;
+      throw error;
+    }
+
+    if (response.status === 204) return null;
+    return response.json();
   }
 
-  if (response.status === 204) return null;
-  return response.json();
+  throw lastError || new Error("Zahtev nije uspeo");
 }

@@ -10,6 +10,8 @@ import {
 } from "./pushNotifications.js";
 import { api } from "./api.js";
 import { useI18n } from "./i18n/I18nProvider.jsx";
+import { GOOGLE_CALENDAR_SYNC } from "./featureFlags.js";
+import GoogleCalendarPanel from "./GoogleCalendarPanel.jsx";
 
 function isAutoExchangeRate(settings) {
   return settings?.autoExchangeRate !== "0";
@@ -236,6 +238,13 @@ export default function SettingsPage({
         <p className="settings-note">{t("settings.rateNote")}</p>
         <p className="settings-note settings-note-muted">{t("settings.rateNote2")}</p>
       </section>
+
+      {GOOGLE_CALENDAR_SYNC ? (
+        <section className="settings-card" aria-label={t("gcal.title")}>
+          <h2>{t("gcal.title")}</h2>
+          <GoogleCalendarPanel mode="account" showToast={showToast} />
+        </section>
+      ) : null}
 
       <section className="settings-card" aria-label={t("settings.lab")}>
         <h2>{t("settings.lab")}</h2>

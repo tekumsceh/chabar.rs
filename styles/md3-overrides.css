@@ -1,9 +1,10 @@
 /**
- * Material Design 3 component overrides on top of legacy styles.css.
+ * Material Design 3 component overrides — Chabar colors, MD3 shapes.
+ * Nav / list neon effects stay in styles.css; avoid flattening those here.
  */
 
 /* —— MD3 buttons (filled tonal default) —— */
-button:not(.icon):not(.app-topbar-brand):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-tile):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab) {
+button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-tile):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab) {
   background: var(--md-primary-container);
   border: 0;
   border-radius: var(--radius-pill);
@@ -31,8 +32,8 @@ button[type="submit"]:not(.icon),
 
 .app-shell[data-theme="dark"] button.primary,
 .app-shell[data-theme="dark"] .finansije-pay-btn {
-  background: var(--md-primary) !important;
-  color: var(--md-on-primary) !important;
+  background: var(--brand) !important;
+  color: var(--on-brand) !important;
 }
 
 button.danger,
@@ -64,100 +65,111 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--md-primary);
-  box-shadow: 0 0 0 1px var(--md-primary);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
 }
 
 .app-shell[data-theme="dark"] input,
 .app-shell[data-theme="dark"] select,
 .app-shell[data-theme="dark"] textarea {
-  background: var(--md-surface-container-high);
-  border-color: var(--md-outline-variant);
-  color: var(--md-on-surface);
+  background: color-mix(in srgb, var(--panel) 88%, #000);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-link.is-filled {
+  color: var(--neon-lime);
 }
 
 /* —— Top app bar —— */
 .app-topbar {
-  background: var(--md-surface);
-  border-bottom: 1px solid var(--md-outline-variant);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
   box-shadow: none;
-}
-
-.app-topbar-brand {
-  color: var(--md-primary) !important;
-  font-weight: 500 !important;
-  letter-spacing: 0.01em !important;
-  text-shadow: none !important;
-  text-transform: none !important;
-}
-
-.app-topbar-search {
-  background: var(--md-surface-container-highest);
-  border: 0;
-  border-radius: var(--radius-pill);
-  box-shadow: none;
-}
-
-.app-topbar-search-icon {
-  color: var(--md-on-surface-variant);
-}
-
-.app-topbar-search input::placeholder {
-  color: var(--md-on-surface-variant);
+  padding-bottom: 0.4rem;
 }
 
 .app-shell[data-theme="dark"] .app-topbar {
-  background: var(--md-surface);
-  border-bottom-color: var(--md-outline-variant);
+  background: color-mix(in srgb, var(--panel, #070816) 82%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent);
 }
 
-.app-shell[data-theme="dark"] .app-topbar-brand {
-  color: var(--md-primary) !important;
-  text-shadow: none !important;
+.band-pill {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--muted);
+}
+
+.band-pill:hover {
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+}
+
+.band-pill.is-active {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+.band-pill.is-active:hover {
+  background: var(--brand-hover);
+  filter: none;
+}
+
+.app-shell[data-theme="dark"] .band-pill {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.app-shell[data-theme="dark"] .band-pill.is-active {
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 /* —— Navigation bar —— */
 .app-tabbar {
-  background: var(--md-surface-container);
-  border-top: 1px solid var(--md-outline-variant);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   box-shadow: none;
 }
 
 .app-tabbar-item {
   border-radius: var(--radius-lg);
-  color: var(--md-on-surface-variant);
+  color: var(--muted);
   font-weight: 500;
 }
 
 .app-tabbar-item.is-active {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
+  color: var(--brand) !important;
+}
+
+.app-shell[data-theme="dark"] .app-tabbar {
+  background: color-mix(in srgb, var(--panel, #070816) 94%, #000);
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-item.is-active {
+  background: transparent !important;
+  color: var(--neon-cyan) !important;
 }
 
 .app-tabbar-add {
-  background: var(--md-primary-container) !important;
-  box-shadow: var(--shadow-click) !important;
-  color: var(--md-on-primary-container) !important;
+  background: var(--ink) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16) !important;
+  color: var(--on-ink) !important;
 }
 
 .app-tabbar-add:hover,
 .app-tabbar-add.is-open {
-  background: var(--md-primary) !important;
-  color: var(--md-on-primary) !important;
+  background: var(--brand) !important;
+  color: var(--on-brand) !important;
 }
 
 .app-shell[data-theme="dark"] .app-tabbar-add {
-  background: var(--md-primary-container) !important;
-  color: var(--md-on-primary-container) !important;
+  background: var(--neon-cyan) !important;
+  color: var(--on-brand, #1a0020) !important;
 }
 
-.app-shell[data-theme="dark"] .app-tabbar {
-  background: var(--md-surface-container);
-}
-
-.app-shell[data-theme="dark"] .app-tabbar-item.is-active {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
+.app-shell[data-theme="dark"] .app-tabbar-add:hover,
+.app-shell[data-theme="dark"] .app-tabbar-add.is-open {
+  background: var(--brand) !important;
+  color: var(--on-brand) !important;
 }
 
 /* —— Cards / panels —— */
@@ -170,7 +182,7 @@ textarea:focus {
 .user-menu-panel,
 .global-search-list {
   background: var(--md-surface-container-low);
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
 }
@@ -180,39 +192,36 @@ textarea:focus {
 .app-shell[data-theme="dark"] .toolbar,
 .app-shell[data-theme="dark"] .settings-card,
 .app-shell[data-theme="dark"] .finance-detail-panel {
-  background: var(--md-surface-container-high);
+  background: var(--panel);
+  border-color: var(--line);
   box-shadow: var(--shadow-soft);
 }
 
-/* —— List rows —— */
-.raspored-row {
-  background: var(--md-surface-container-lowest);
-  border: 0;
-  border-radius: var(--radius-lg);
-  box-shadow: none;
+.schedule-event-card {
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border-color: color-mix(in srgb, var(--line) 68%, transparent);
+  box-shadow: var(--shadow-soft);
 }
 
+.app-shell[data-theme="dark"] .schedule-event-card {
+  background: color-mix(in srgb, var(--panel, #070816) 96%, #000);
+  box-shadow: var(--shadow-soft);
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card.is-next {
+  box-shadow:
+    var(--shadow-soft),
+    inset 3px 0 0 var(--band-accent, var(--neon-lime));
+}
+
+.schedule-event-card-link:hover,
+.schedule-event-card-link:focus-visible {
+  background: color-mix(in srgb, var(--brand) 10%, transparent) !important;
+}
+
+/* List row spacing — hover / is-next neon: styles.css */
 .raspored-row + .raspored-row {
   margin-top: 0.35rem;
-}
-
-.app-shell:not([data-theme="dark"]) .raspored-row:hover {
-  background: var(--md-surface-container);
-  box-shadow: var(--shadow-click);
-}
-
-.app-shell[data-theme="dark"] .raspored-row:hover {
-  background: var(--md-surface-container-high) !important;
-  box-shadow: var(--shadow-click) !important;
-}
-
-.app-shell[data-theme="dark"] .raspored-row.is-next {
-  background: var(--md-primary-container);
-  box-shadow: none;
-}
-
-.app-shell[data-theme="dark"] .raspored-row:hover {
-  border-color: transparent !important;
 }
 
 /* —— Finance chips / badges —— */
@@ -252,7 +261,7 @@ textarea:focus {
   color: var(--md-error) !important;
 }
 
-/* —— Settings switch MD3 —— */
+/* —— Settings switch —— */
 .settings-switch-track {
   background: var(--md-surface-container-highest);
   border: 2px solid var(--md-outline);
@@ -260,21 +269,27 @@ textarea:focus {
 }
 
 .settings-switch.is-on .settings-switch-track {
-  background: var(--md-primary);
-  border-color: var(--md-primary);
+  background: var(--brand);
+  border-color: var(--brand);
   box-shadow: none;
 }
 
 .app-shell[data-theme="dark"] .settings-switch.is-on .settings-switch-track {
-  background: var(--md-primary);
-  border-color: var(--md-primary);
-  box-shadow: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--neon-cyan) 85%, #0a2540) 0%,
+    color-mix(in srgb, var(--neon-cyan) 55%, #061018) 100%
+  );
+  border-color: color-mix(in srgb, var(--neon-cyan) 60%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 18px color-mix(in srgb, var(--neon-cyan) 45%, transparent);
 }
 
 .app-shell[data-theme="dark"] .settings-theme-option.is-active {
-  background: var(--md-secondary-container) !important;
+  background: color-mix(in srgb, var(--neon-cyan) 14%, var(--panel)) !important;
   box-shadow: none !important;
-  color: var(--md-on-secondary-container) !important;
+  color: var(--ink) !important;
 }
 
 /* —— Modals —— */
@@ -285,17 +300,27 @@ textarea:focus {
 .modal-panel,
 .confirm-dialog-panel {
   background: var(--md-surface-container-high);
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   border-radius: var(--radius-xl);
   box-shadow: var(--menu-shadow);
 }
 
+.app-shell[data-theme="dark"] .modal-panel,
+.app-shell[data-theme="dark"] .confirm-dialog-panel {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
 /* —— Page header —— */
 .page-header {
-  background: var(--md-surface);
+  background: transparent;
 }
 
 .page-header-title {
   font-weight: 400;
   letter-spacing: 0;
+}
+
+.app-shell[data-theme="dark"] .page-header {
+  background: transparent;
 }

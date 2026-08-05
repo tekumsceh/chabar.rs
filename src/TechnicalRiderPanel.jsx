@@ -46,6 +46,7 @@ function isSuspiciousPartialBundle(data) {
   const count = bundleChannelCount(data);
   const expected = Number(data.bandDefaultChannelCount) || 0;
   if (expected <= 0) return false;
+  if (count === 0 && data.hasBandDefault) return true;
   if (data.origin === "default" && count > 0 && count < expected) return true;
   if (count > 0 && count < expected && count <= 2) {
     const rows = [...(data.inputs || []), ...(data.outputs || [])];
@@ -193,6 +194,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
   const outputsRef = useRef(outputs);
   const saveTimersRef = useRef(new Map());
   const saveInFlightRef = useRef(new Map());
+  const saveGenerationRef = useRef(new Map());
 
   inputsRef.current = inputs;
   outputsRef.current = outputs;
@@ -311,6 +313,11 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
     if (data.notes != null) setRiderNotes(String(data.notes || ""));
   }
 
+  function invalidateCachedBundle() {
+    if (!eventId || !bandId) return;
+    techRiderBundleCache.delete(cacheKeyFor(eventId, bandId));
+  }
+
   function markLocalCustom() {
     setOrigin((current) => (current === "default" ? "custom" : current));
   }
@@ -389,6 +396,9 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
     const previous = saveInFlightRef.current.get(key);
     if (previous) await previous.catch(() => {});
 
+    const generation = (saveGenerationRef.current.get(key) || 0) + 1;
+    saveGenerationRef.current.set(key, generation);
+
     const request = (async () => {
       try {
         const updated = await api(`/api/events/${eventId}/tech-rider/channels/${id}`, {
@@ -412,8 +422,11 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
             return next;
           });
         }
+        invalidateCachedBundle();
       } catch (requestError) {
-        showToast?.(requestError.message || t("tech.saveFail"), "error");
+        if (saveGenerationRef.current.get(key) === generation) {
+          showToast?.(requestError.message || t("tech.saveFail"), "error");
+        }
       } finally {
         if (saveInFlightRef.current.get(key) === request) {
           saveInFlightRef.current.delete(key);
@@ -499,6 +512,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
       if (data.origin != null) setOrigin(data.origin);
       if (data.hasBandDefault != null) setHasBandDefault(Boolean(data.hasBandDefault));
       if ((inputsRef.current.length || outputsRef.current.length) > 0) markLocalCustom();
+      invalidateCachedBundle();
     } catch (requestError) {
       setConsoleIds(previousIds);
       showToast?.(requestError.message || t("tech.consolesFail"), "error");
@@ -553,6 +567,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         });
       }
       showToast?.(mode === "output" ? t("tech.outputAdded") : t("tech.inputAdded"));
+      invalidateCachedBundle();
     } catch (requestError) {
       showToast?.(requestError.message || t("tech.addFail"), "error");
     } finally {
@@ -592,6 +607,7 @@ export default function TechnicalRiderPanel({ eventId, bandId, readOnly = false,
         });
       }
       showToast?.(t("tech.channelDeleted"));
+      invalidateCachedBundle();
     } catch (requestError) {
       showToast?.(requestError.message || t("tech.deleteFail"), "error");
     } finally {

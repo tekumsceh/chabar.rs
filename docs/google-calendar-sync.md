@@ -7,8 +7,8 @@ Ovaj dokument objašnjava kako sync radi, kako ga uključiti/isključiti, i šta
 1. **Prijava Google-om** ≠ **Calendar sync**. Sync traži posebnu dozvolu.
 2. **Po bendu** biraš **jedan** Google kalendar (npr. „Saint Louis” → taj privatni kalendar).
 3. **Podrazumevano** Chabar **samo šalje** termine u Google (i ažurira one koje je već povezao). **Ne uvozi** staru istoriju dok ti eksplicitno ne kažeš.
-4. **Lični sync** (Settings) piše **samo u tvoj** kalendar, i **samo** ako taj bend **nema** band kalendar. Nikad ne piše u kalendare drugih članova.
-5. Drugi članovi benda **ne dobijaju** automatski kopije u svoje Google kalendare.
+4. **Lični sync po bendu** (Bend → Podešavanja) piše **u tvoj** izabrani kalendar za taj bend — **pored** zajedničkog band kalendara, ne umesto njega.
+5. Drugi članovi benda **ne dobijaju** automatski kopije u svoje Google kalendare (samo ako sami uključe lični sync).
 
 ## Ko može šta (v1)
 
@@ -36,18 +36,21 @@ Google opis događaja sadrži grad/lokal/napomenu + `created via chabar.rs` — 
 
 - Svaki Google događaj koji je Chabar napravio ima privatni tag `chabarEventId`.
 - Pre novog POST-a Chabar traži taj tag — ako postoji, radi UPDATE.
-- Band kalendar pobeđuje lični sync (lični se ne koristi dok je bend povezan).
+- Band kalendar i lični sync po bendu mogu raditi **istovremeno** (zajednički + tvoja kopija).
 - Lični sync = samo korisnik koji je sačuvao termin, ne svi članovi.
 - Uvoz: match po `google_event_id`, pa po istom datumu (+ sličan naziv) pre INSERT-a.
 - Uvoz samo od **danas** nadalje.
 
-## Lični sync
+## Lični sync po bendu
 
-- Uključi u Podešavanjima samo ako bend **nema** svoj Google kalendar.
-- Piše u **tvoj** primary (ili izabrani) kalendar.
+- Uključi u **Bend → Podešavanja → Moj lični kalendar** za svaki bend posebno.
+- Radi i kada bend već ima zajednički Google kalendar.
+- Piše u **tvoj** izabrani kalendar samo za termine koje **ti** dodaš ili izmeniš.
 - Ne šalje se drugim članovima.
 
 ## Uključivanje / isključivanje
+
+**Trenutno isključeno na produkciji** — sync radi samo kada je na serveru `GOOGLE_CALENDAR_SYNC_ENABLED=1` i OAuth env vars postavljeni. UI je sakriven dok flag nije uključen u kodu (`src/featureFlags.js`).
 
 - **Isključi sync** na bendu = prestaje pisanje u Google; link ostaje.
 - **Odveži kalendar** = briše link; Google eventi ostaju u Google-u.

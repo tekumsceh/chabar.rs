@@ -4,6 +4,7 @@ import { query } from "./db.js";
 import {
   getBandCalendarLink,
   getGoogleAccountStatus,
+  getMemberBandCalendarPref,
   googleCalendarConfigured,
   countGoogleImportedEvents,
 } from "./googleCalendar.js";
@@ -416,15 +417,17 @@ export async function getBandHome(req, res, next) {
 }
 
 async function buildGoogleCalendarPayload(bandId, userId) {
-  const [account, link, importedCount] = await Promise.all([
+  const [account, link, importedCount, memberPref] = await Promise.all([
     getGoogleAccountStatus(userId),
     getBandCalendarLink(bandId),
     countGoogleImportedEvents(bandId),
+    getMemberBandCalendarPref(userId, bandId),
   ]);
   return {
     configured: googleCalendarConfigured(),
     account,
     link,
+    memberPref,
     importedCount,
     canManageLink: !link || link.connectedByUserId === userId,
   };

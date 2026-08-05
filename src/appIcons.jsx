@@ -148,3 +148,51 @@ export function ChevronRightIcon() {
     </svg>
   );
 }
+
+export function ListLayoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function CardLayoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="4" y="5" width="16" height="6.5" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="4" y="14.5" width="16" height="6.5" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+export function LogisticsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 7v5l3 2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function RiderIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5 8h14M5 12h10M5 16h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="17.5" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="17.5" cy="8" r="1.6" fill="currentColor" />
+      <circle cx="17.5" cy="16" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function SetlistIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M8 6h12M8 12h12M8 18h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="5" cy="6" r="1.2" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="5" cy="18" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}

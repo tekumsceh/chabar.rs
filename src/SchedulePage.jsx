@@ -16,6 +16,12 @@ import EventPage from "./EventPage.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import DateMonthPicker from "./DateMonthPicker.jsx";
 import ScheduleToolbar from "./ScheduleToolbar.jsx";
+import ScheduleEventCard, { scheduleCanSeeFinance, scheduleFeeMarked } from "./ScheduleEventCard.jsx";
+import {
+  buildDuplicateConfirmMessage,
+  findScheduleDuplicates,
+  hasScheduleDuplicates,
+} from "./scheduleConflicts.js";
 import { MoneyIcon } from "./appIcons.jsx";
 import { QUICK_CREATE_CITIES } from "./quickCreateCities.js";
 import { ownerBandLimit } from "../shared/bandLimits.js";
@@ -27,6 +33,16 @@ const emptyForm = {
   venue: "",
   note: "",
 };
+
+const SCHEDULE_LAYOUT_KEY = "chabar.scheduleLayout";
+
+function readScheduleLayout() {
+  try {
+    return localStorage.getItem(SCHEDULE_LAYOUT_KEY) === "card" ? "card" : "list";
+  } catch {
+    return "list";
+  }
+}
 
 export default function SchedulePage({
   events,
@@ -49,8 +65,6 @@ export default function SchedulePage({
   onAddActionConsumed,
   loading = false,
   searchQuery = "",
-  claimEur = 0,
-  onOpenMoney,
   canManageBand = false,
   onManageBand,
 }) {
@@ -58,6 +72,8 @@ export default function SchedulePage({
   const { confirm } = useConfirm();
   const search = searchQuery;
   const [filter, setFilter] = useState("upcoming");
+  const [layoutView, setLayoutView] = useState(readScheduleLayout);
+  const [eventOpenFocus, setEventOpenFocus] = useState(null);
   /** desc = present → past (default); asc = past → present */
   const [dateSort, setDateSort] = useState("desc");
   const [listPage, setListPage] = useState(0);
@@ -95,15 +111,34 @@ export default function SchedulePage({
 
   useEffect(() => {
     setListPage(0);
-  }, [filter, search, activeBandId, dateSort]);
+  }, [filter, search, activeBandId, dateSort, layoutView]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SCHEDULE_LAYOUT_KEY, layoutView);
+    } catch {
+      /* ignore */
+    }
+  }, [layoutView]);
+
+  function openEvent(eventId, focus = null) {
+    setEventOpenFocus(focus);
+    setSelectedEventId(eventId);
+  }
+
+  function closeEvent() {
+    setSelectedEventId(null);
+    setEventOpenFocus(null);
+  }
 
   useEffect(() => {
     setSelectedEventId(null);
+    setEventOpenFocus(null);
   }, [activeBandId]);
 
   useEffect(() => {
     if (focusEventId == null || focusEventId === "") return;
-    setSelectedEventId(focusEventId);
+    openEvent(focusEventId);
     onFocusEventConsumed?.();
   }, [focusEventId, onFocusEventConsumed]);
 
@@ -264,6 +299,18 @@ export default function SchedulePage({
       return null;
     }
 
+    const duplicates = findScheduleDuplicates({ events, bandId, date });
+    if (hasScheduleDuplicates(duplicates)) {
+      const confirmed = await confirm({
+        title: t("schedule.duplicateTitle"),
+        message: buildDuplicateConfirmMessage(t, { ...duplicates, date }),
+        confirmLabel: t("schedule.duplicateProceed"),
+        cancelLabel: t("common.cancel"),
+        danger: true,
+      });
+      if (!confirmed) return null;
+    }
+
     try {
       setSaving(true);
       setFormError("");
@@ -308,43 +355,72 @@ export default function SchedulePage({
           event={selectedEvent}
           band={selectedBand}
           bands={bands}
+          events={events}
           profile={profile}
-          onBack={() => setSelectedEventId(null)}
+          onBack={closeEvent}
           onUpdate={onUpdate}
           onRefreshSchedule={onRefreshSchedule}
           leaveSignal={leaveEventSignal}
           showToast={showToast}
+          initialTab={eventOpenFocus?.tab || "osnovno"}
+          initialTechSubTab={eventOpenFocus?.techSubTab || ""}
+          initialShowSubTab={eventOpenFocus?.showSubTab || ""}
+          initialDetailsOpen={Boolean(eventOpenFocus?.detailsOpen)}
         />
       ) : (
       <div className="raspored-list-view">
       <ScheduleToolbar
-        bands={bands}
-        activeBandId={activeBandId}
-        allBandsId={allBandsId}
-        onBandChange={onBandChange}
         filter={filter}
         onFilterChange={setFilter}
+        layoutView={layoutView}
+        onLayoutViewChange={setLayoutView}
         dateSort={dateSort}
         onDateSortChange={setDateSort}
-        claimEur={claimEur}
-        onOpenMoney={onOpenMoney}
         canManageBand={canManageBand}
         onManageBand={onManageBand}
       />
 
-      <FadeScroll viewportClassName="raspored-panel" viewportAriaLabel={t("schedule.eventsAria")}>
+      <FadeScroll
+        viewportClassName={`raspored-panel ${layoutView === "card" ? "is-card-view" : ""}`.trim()}
+        viewportAriaLabel={t("schedule.eventsAria")}
+      >
         {loading && events.length === 0 ? (
-          <RasporedSkeleton variant="schedule" />
+          <RasporedSkeleton variant={layoutView === "card" ? "schedule-card" : "schedule"} />
         ) : visibleRows.length === 0 ? (
           <p className="raspored-empty">{t("schedule.emptyFilter")}</p>
+        ) : layoutView === "card" ? (
+          <div className="raspored-card-grid" role="list">
+            {visibleRows.map((row) => {
+              const band = bandsById.get(row.bandId);
+              const bandColor = resolveBandColor(band, row.bandId || row.bandName || "");
+              const feeMarked = scheduleFeeMarked(row);
+              return (
+                <ScheduleEventCard
+                  key={row.id}
+                  row={row}
+                  bandColor={bandColor}
+                  feeMarked={feeMarked}
+                  isNext={row.id === nextId}
+                  canSeeFinance={scheduleCanSeeFinance(band)}
+                  onOpen={openEvent}
+                  actions={
+                    <DateRowMenu
+                      feeMarked={feeMarked}
+                      locked={Boolean(row.done)}
+                      onDelete={() => requestRemove(row)}
+                    />
+                  }
+                />
+              );
+            })}
+          </div>
         ) : (
           <ul className="raspored-list">
             {visibleRows.map((row) => {
               const dateParts = formatScheduleDateParts(row.date);
               const band = bandsById.get(row.bandId);
               const bandColor = resolveBandColor(band, row.bandId || row.bandName || "");
-              const feeMarked =
-                numberValue(row.priceEur) > 0 || numberValue(row.defaultPriceEur) > 0;
+              const feeMarked = scheduleFeeMarked(row);
               return (
               <li
                 key={row.id}
@@ -354,7 +430,7 @@ export default function SchedulePage({
                 <button
                   type="button"
                   className="raspored-row-button raspored-row-open"
-                  onClick={() => setSelectedEventId(row.id)}
+                  onClick={() => openEvent(row.id)}
                   aria-label={t("schedule.openEvent", {
                     label: `${row.date || ""} ${row.city || ""}`.trim(),
                   })}

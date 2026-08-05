@@ -122,6 +122,35 @@ async function insertNotifications(userIds, { type, bandId, actorUserId, message
   }
 }
 
+/** Direct notification to one user (e.g. schedule conflict). Best-effort. */
+export async function notifyUser({
+  userId,
+  type,
+  bandId = null,
+  actorUserId = null,
+  message,
+  payload = null,
+  title = "Chabar",
+} = {}) {
+  try {
+    if (!userId || !type || !message) return;
+    await insertNotifications([String(userId)], {
+      type,
+      bandId,
+      actorUserId,
+      message,
+      payload,
+    });
+    await sendPushToUsers([String(userId)], {
+      title,
+      body: message,
+      payload: payload || {},
+    });
+  } catch (error) {
+    logger.warn("notifyUser failed", { type, userId, message: error.message });
+  }
+}
+
 async function sendPushToUsers(userIds, { title, body, payload }) {
   if (!vapidReady || !userIds.length) return;
 

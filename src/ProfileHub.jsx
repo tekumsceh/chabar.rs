@@ -147,7 +147,11 @@ export default function ProfileHub({
               <ProfileHubTile
                 icon={<MoneyIcon />}
                 label={t("profile.money")}
-                hint={showMoneyHint ? formatEur(claimEur) : null}
+                hint={
+                  showMoneyHint
+                    ? t("profile.moneyClaimHint", { amount: formatEur(claimEur) })
+                    : null
+                }
                 onClick={() => closeAnd(onOpenMoney)}
               />
               <ProfileHubTile icon={<BandsIcon />} label={t("profile.bands")} onClick={() => setView("bands")} />
@@ -282,5 +286,13 @@ function ProfileHubTile({ icon, label, badge = 0, hint = null, tone = "default",
 }
 
 function isNoticeViewable(notice) {
-  return Boolean(notice?.eventId || notice?.bandId || notice?.page);
+  const payload = notice?.payload || {};
+  return Boolean(
+    notice?.eventId ||
+      notice?.bandId ||
+      notice?.page ||
+      payload.eventId ||
+      payload.bandId ||
+      payload.page,
+  );
 }

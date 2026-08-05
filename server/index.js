@@ -53,12 +53,14 @@ import {
   savePushSubscription,
   sendTestNotification,
 } from "./notifications.js";
+import { notifyCrossBandScheduleConflicts } from "./scheduleConflicts.js";
 import {
   buildAuthUrl,
   disconnectGoogleAccount,
   frontendReturnUrl,
   getBandCalendarLink,
   getGoogleAccountStatus,
+  getMemberBandCalendarPref,
   googleCalendarConfigured,
   handleOAuthCallback,
   linkBandCalendar,
@@ -72,6 +74,7 @@ import {
   syncEventUpsert,
   unlinkBandCalendar,
   updatePersonalPrefs,
+  updateMemberBandCalendarPref,
   deleteGoogleImportedEvents,
 } from "./googleCalendar.js";
 import { rateLimit } from "./rateLimit.js";
@@ -381,10 +384,12 @@ app.get(
     try {
       const link = await getBandCalendarLink(req.params.id);
       const status = await getGoogleAccountStatus(req.user.id);
+      const memberPref = await getMemberBandCalendarPref(req.user.id, req.params.id);
       res.json({
         configured: googleCalendarConfigured(),
         account: status,
         link,
+        memberPref,
         canManageLink: link
           ? link.connectedByUserId === req.user.id
           : isBandLead(req.memberRole),
@@ -456,6 +461,28 @@ app.delete(
     try {
       await unlinkBandCalendar({ bandId: req.params.id, userId: req.user.id });
       res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.patch(
+  "/api/bands/:id/google-calendar/member",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  async (req, res, next) => {
+    try {
+      const account = await getGoogleAccountStatus(req.user.id);
+      if (!account.connected) {
+        return res.status(400).json({ error: "Google kalendar nije povezan." });
+      }
+      const memberPref = await updateMemberBandCalendarPref(req.user.id, req.params.id, {
+        syncEnabled: req.body?.syncEnabled,
+        calendarId: req.body?.calendarId,
+      });
+      res.json({ memberPref });
     } catch (error) {
       next(error);
     }
@@ -750,6 +777,23 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
       message: `${who} je kreirao/la termin ${formatEventLabel(event)}`,
       payload: { page: "schedule", eventId: String(created.id), bandId: req.bandId },
     });
+    void notifyCrossBandScheduleConflicts({
+      actorUserId: req.user.id,
+      newEventId: created.id,
+      newBandId: req.bandId,
+      dateText: event.date,
+      newEventLabel: formatEventLabel(event),
+    });
+    // Seed band tech rider on create so the first tab open is not empty.
+    try {
+      await seedEventFromBandDefault(created.id, req.bandId);
+    } catch (seedError) {
+      logger.warn("tech rider seed on create failed", {
+        eventId: created.id,
+        bandId: req.bandId,
+        detail: seedError.message,
+      });
+    }
     res.status(201).json({ ...event, id: created.id, bandId: req.bandId });
   } catch (error) {
     next(error);
@@ -879,6 +923,18 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
       message: `${who} je ažurirao/la termin ${formatEventLabel(event)}`,
       payload: { page: "schedule", eventId: String(req.params.id), bandId: nextBandId },
     });
+    const dateOrBandChanged =
+      String(existingRow.event_date_text || "").trim() !== String(event.date || "").trim() ||
+      String(nextBandId) !== String(existingRow.band_id);
+    if (dateOrBandChanged) {
+      void notifyCrossBandScheduleConflicts({
+        actorUserId: req.user.id,
+        newEventId: Number(req.params.id),
+        newBandId: nextBandId,
+        dateText: event.date,
+        newEventLabel: formatEventLabel(event),
+      });
+    }
     res.json({ ...event, id: Number(req.params.id), bandId: nextBandId, bandName });
   } catch (error) {
     next(error);
@@ -1679,12 +1735,18 @@ function shouldApplyBandDefaultSeed({ eventDateText, origin, channels, defaultCh
 
   const count = Array.isArray(channels) ? channels.length : 0;
   if (count === 0) return true;
-  if (count >= defaultChannelCount) return false;
 
   const normalizedOrigin = normalizeTechRiderOrigin(origin);
+  const allBlank = channels.every(isBlankTechChannelRow);
+
+  // Stub rider (mis-clicks / empty placeholders) — safe to replace with band default.
+  if (allBlank) {
+    return normalizedOrigin === "none" || normalizedOrigin === "default" || count < defaultChannelCount;
+  }
+
+  if (count >= defaultChannelCount) return false;
   if (normalizedOrigin === "default") return true;
-  // Stub rider (e.g. one blank row after mis-click) — safe to replace.
-  return channels.every(isBlankTechChannelRow);
+  return false;
 }
 
 /** Seed band default into upcoming dates that are empty, partial, or trivial stubs. */
@@ -4271,7 +4333,7 @@ function normalizeDayDetails(value) {
 function normalizeEvent(value) {
   return {
     date: String(value.date ?? ""),
-    city: String(value.city ?? ""),
+    city: String(value.city ?? "").slice(0, 255),
     venue: String(value.venue ?? "").slice(0, 255),
     mapsUrl: String(value.mapsUrl ?? value.maps_url ?? "").trim().slice(0, 2000),
     note: String(value.note ?? ""),

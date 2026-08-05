@@ -1,6 +1,6 @@
 /**
- * Material Design 3 tokens for Chabar.
- * Maps MD3 semantics onto existing app CSS variables (--brand, --panel, etc.).
+ * Material Design 3 structure + Chabar brand colors (neon magenta / cyan / lime).
+ * Maps MD3 semantics onto legacy app variables (--brand, --panel, --neon-*, etc.).
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
@@ -8,14 +8,19 @@
 :root {
   color-scheme: light;
 
-  /* MD3 core */
-  --md-primary: #276ef1;
+  /* Chabar brand (light surfaces, magenta accent) */
+  --chabar-magenta: #ff2bd6;
+  --chabar-magenta-soft: #ff7aef;
+  --chabar-cyan: #276ef1;
+  --chabar-lime: #0b875b;
+
+  --md-primary: var(--chabar-magenta);
   --md-on-primary: #ffffff;
-  --md-primary-container: #d8e2ff;
-  --md-on-primary-container: #001a41;
+  --md-primary-container: color-mix(in srgb, var(--chabar-magenta) 14%, #ffffff);
+  --md-on-primary-container: #4a0038;
   --md-secondary: #565f71;
   --md-on-secondary: #ffffff;
-  --md-secondary-container: #dae2f9;
+  --md-secondary-container: #f1ecf4;
   --md-on-secondary-container: #131c2b;
   --md-surface: #fdfbff;
   --md-surface-dim: #ded8e1;
@@ -31,31 +36,30 @@
   --md-outline-variant: #c4c6d0;
   --md-error: #ba1a1a;
   --md-on-error: #ffffff;
-  --md-tertiary: #006874;
-  --md-on-tertiary: #ffffff;
-  --md-tertiary-container: #9eeffd;
-  --md-on-tertiary-container: #001f24;
 
-  /* App semantic aliases (used across styles.css) */
   --bg: var(--md-surface);
   --panel: var(--md-surface-container-lowest);
   --panel-soft: var(--md-surface-container-low);
   --ink: var(--md-on-surface);
   --on-ink: var(--md-on-primary);
   --muted: var(--md-on-surface-variant);
-  --line: var(--md-outline-variant);
-  --brand: var(--md-primary);
-  --brand-dark: #1e56c4;
-  --brand-hover: #1a4db3;
-  --on-brand: var(--md-on-primary);
-  --brand-soft: color-mix(in srgb, var(--md-primary) 12%, transparent);
+  --line: color-mix(in srgb, var(--chabar-magenta) 22%, #c4c6d0);
+  --brand: var(--chabar-magenta);
+  --brand-dark: #c400a8;
+  --brand-hover: #ff5ae3;
+  --on-brand: #ffffff;
+  --brand-soft: rgba(255, 43, 214, 0.14);
   --surface: var(--md-surface-container);
   --surface-2: var(--md-surface-container-high);
-  --ok: #146c2e;
+  --ok: #0b875b;
   --warn: #7d5700;
   --danger: var(--md-error);
 
-  /* MD3 shape */
+  --neon-cyan: var(--chabar-cyan);
+  --neon-lime: var(--chabar-lime);
+  --neon-magenta: var(--chabar-magenta);
+
+  /* MD3 shape (keep rounded MD3 vibe) */
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
@@ -63,25 +67,18 @@
   --radius-pill: 9999px;
   --menu-radius: var(--radius-lg);
 
-  /* MD3 elevation */
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
   --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
   --shadow-click: 0 1px 2px rgba(0, 0, 0, 0.12);
   --shadow-click-hover: 0 2px 4px rgba(0, 0, 0, 0.14);
   --menu-shadow: 0 4px 8px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.1);
 
-  /* Controls */
   --control-font: 0.875rem;
   --control-pad-y: 0.625rem;
   --control-pad-x: 1.5rem;
   --control-row-min: 2.5rem;
   --icon-btn-size: 2.5rem;
   --icon-btn-svg: 1.25rem;
-
-  /* Legacy neon aliases → MD3 (for old rules) */
-  --neon-cyan: var(--md-primary);
-  --neon-lime: var(--ok);
-  --neon-magenta: var(--md-primary);
 }
 
 html,
@@ -89,7 +86,7 @@ body {
   background: var(--md-surface);
   background-attachment: fixed;
   color: var(--md-on-surface);
-  font-family: Roboto, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: Roboto, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 html[data-theme="dark"],
@@ -97,67 +94,79 @@ html[data-theme="dark"] body,
 .app-shell[data-theme="dark"] {
   color-scheme: dark;
 
-  --md-primary: #adc6ff;
-  --md-on-primary: #002e69;
-  --md-primary-container: #004494;
-  --md-on-primary-container: #d8e2ff;
-  --md-secondary: #bec6dc;
-  --md-on-secondary: #283041;
-  --md-secondary-container: #3e4759;
-  --md-on-secondary-container: #dae2f9;
-  --md-surface: #1a1c1e;
-  --md-surface-dim: #1a1c1e;
-  --md-surface-bright: #3a3c3e;
-  --md-surface-container-lowest: #0f1113;
-  --md-surface-container-low: #1a1c1e;
-  --md-surface-container: #1e2022;
-  --md-surface-container-high: #292a2d;
-  --md-surface-container-highest: #343537;
-  --md-on-surface: #e2e2e6;
-  --md-on-surface-variant: #c4c6d0;
-  --md-outline: #8e9099;
-  --md-outline-variant: #44474e;
-  --md-error: #ffb4ab;
-  --md-on-error: #690005;
-  --md-tertiary: #4dd8eb;
-  --md-on-tertiary: #00363d;
-  --md-tertiary-container: #004f58;
-  --md-on-tertiary-container: #9eeffd;
+  /* Chabar dark neon palette */
+  --chabar-magenta: #ff2bd6;
+  --chabar-cyan: #00f6ff;
+  --chabar-lime: #b8ff00;
+
+  --md-primary: var(--chabar-magenta);
+  --md-on-primary: #1a0020;
+  --md-primary-container: rgba(255, 43, 214, 0.22);
+  --md-on-primary-container: #ffd6f7;
+  --md-secondary: #c4a8e8;
+  --md-on-secondary: #16001f;
+  --md-secondary-container: rgba(0, 246, 255, 0.14);
+  --md-on-secondary-container: #e8f8ff;
+  --md-surface: #14001f;
+  --md-surface-dim: #0c0014;
+  --md-surface-bright: #2a0a42;
+  --md-surface-container-lowest: #0c0014;
+  --md-surface-container-low: #1a0030;
+  --md-surface-container: #1f0730;
+  --md-surface-container-high: #2a0a42;
+  --md-surface-container-highest: #3b1060;
+  --md-on-surface: #f7f2ff;
+  --md-on-surface-variant: #c4a8e8;
+  --md-outline: rgba(255, 61, 206, 0.45);
+  --md-outline-variant: rgba(255, 61, 206, 0.28);
+  --md-error: #ff3d6e;
+  --md-on-error: #1a0020;
 
   --bg: var(--md-surface);
-  --panel: var(--md-surface-container-high);
-  --panel-soft: var(--md-surface-container);
-  --ink: var(--md-on-surface);
-  --on-ink: var(--md-on-primary);
-  --muted: var(--md-on-surface-variant);
-  --line: var(--md-outline-variant);
-  --brand: var(--md-primary);
-  --brand-dark: var(--md-primary);
-  --brand-hover: color-mix(in srgb, var(--md-primary) 88%, white);
-  --on-brand: var(--md-on-primary);
-  --brand-soft: color-mix(in srgb, var(--md-primary) 18%, transparent);
-  --surface: var(--md-surface-container);
-  --surface-2: var(--md-surface-container-high);
-  --ok: #6dd58c;
-  --warn: #f9cf6b;
-  --danger: var(--md-error);
+  --panel: #1f0730;
+  --panel-soft: #2a0a42;
+  --ink: #f7f2ff;
+  --on-ink: #16001f;
+  --muted: #c4a8e8;
+  --line: rgba(255, 61, 206, 0.4);
+  --brand: var(--chabar-magenta);
+  --brand-dark: #ff7aef;
+  --brand-hover: #ff5ae3;
+  --on-brand: #1a0020;
+  --brand-soft: rgba(255, 43, 214, 0.22);
+  --surface: #2a0a42;
+  --surface-2: #3b1060;
+  --ok: var(--chabar-lime);
+  --warn: #ffe600;
+  --danger: #ff3d6e;
 
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
-  --shadow-soft: 0 2px 6px rgba(0, 0, 0, 0.28);
-  --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --neon-cyan: var(--chabar-cyan);
+  --neon-lime: var(--chabar-lime);
+  --neon-magenta: var(--chabar-magenta);
 
-  --neon-cyan: var(--md-primary);
-  --neon-lime: var(--ok);
-  --neon-magenta: var(--md-primary);
+  --shadow:
+    0 0 0 1px rgba(255, 43, 214, 0.35),
+    0 12px 0 rgba(0, 246, 255, 0.18),
+    0 22px 48px rgba(255, 43, 214, 0.28);
+  --shadow-soft:
+    0 0 0 1px rgba(0, 246, 255, 0.28),
+    0 10px 0 rgba(184, 255, 0, 0.12),
+    0 18px 40px rgba(0, 0, 0, 0.45);
+  --menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 html[data-theme="dark"],
 html[data-theme="dark"] body {
-  background: var(--md-surface);
-  color: var(--md-on-surface);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(0, 246, 255, 0.35), transparent 30%),
+    radial-gradient(circle at 90% 10%, rgba(255, 43, 214, 0.32), transparent 32%),
+    radial-gradient(circle at 40% 110%, rgba(184, 255, 0, 0.16), transparent 42%),
+    #000008;
+  background-attachment: fixed;
+  color: #f4fbff;
 }
 
 .app-shell[data-theme="dark"] {
-  background: var(--md-surface);
-  color: var(--md-on-surface);
+  background: transparent;
+  color: var(--ink);
 }

@@ -6,6 +6,8 @@ import { useT } from "./i18n/I18nProvider.jsx";
 import { parseDate, sameMonth, startOfToday } from "./calculations.js";
 import { joinUrlForToken, qrImageUrlForJoin } from "./joinLink.js";
 import FadeScroll from "./FadeScroll.jsx";
+import { GOOGLE_CALENDAR_SYNC } from "./featureFlags.js";
+import GoogleCalendarPanel from "./GoogleCalendarPanel.jsx";
 
 const WEEKDAYS = ["P", "U", "S", "Č", "P", "S", "N"];
 const SIDE_RATIO = 0.88;
@@ -1143,7 +1145,26 @@ export default function BandPage({
                 open={sideSection === "settings"}
                 onToggle={toggleSideSection}
               >
-                <p className="band-home-note">{t("band.settingsSoon")}</p>
+                {isAllBands ? (
+                  <p className="band-home-note">{t("band.selectForSettings")}</p>
+                ) : GOOGLE_CALENDAR_SYNC ? (
+                  <GoogleCalendarPanel
+                    mode="band"
+                    bandId={activeBandId}
+                    initialData={detail?.googleCalendar}
+                    showToast={showToast}
+                    onChanged={async () => {
+                      try {
+                        const data = await api(`/api/bands/${activeBandId}`, { bandId: activeBandId });
+                        setDetail(data);
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                  />
+                ) : (
+                  <p className="band-home-note">{t("band.settingsSoon")}</p>
+                )}
               </BandAccordionSection>
             </div>
           </div>

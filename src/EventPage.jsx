@@ -25,6 +25,12 @@ import FadeScroll from "./FadeScroll.jsx";
 import { api } from "./api.js";
 import { parseMapsVenueInput, resolveMapsUrl } from "./mapsLink.js";
 import { useT } from "./i18n/I18nProvider.jsx";
+import {
+  buildDuplicateConfirmMessage,
+  findScheduleDuplicates,
+  hasScheduleDuplicates,
+  sameCalendarDay,
+} from "./scheduleConflicts.js";
 
 const TABS = [
   { id: "osnovno", labelKey: "event.tab.osnovno" },
@@ -52,12 +58,17 @@ export default function EventPage({
   event,
   band = null,
   bands = [],
+  events = [],
   profile = null,
   onBack,
   onUpdate,
   onRefreshSchedule,
   leaveSignal = 0,
   showToast,
+  initialTab = "osnovno",
+  initialTechSubTab = "",
+  initialShowSubTab = "",
+  initialDetailsOpen = false,
 }) {
   const t = useT();
   const { confirm } = useConfirm();
@@ -85,10 +96,15 @@ export default function EventPage({
 
   useEffect(() => {
     backRef.current?.focus({ preventScroll: true });
-    setTechSubTab(TECH_SUBTABS[0].id);
-    setTechRiderMounted(false);
-    setShowSubTab(SHOW_SUBTABS[0].id);
-  }, [event?.id]);
+    const nextTab = initialTab || "osnovno";
+    const nextTech = initialTechSubTab || TECH_SUBTABS[0].id;
+    const nextShow = initialShowSubTab || SHOW_SUBTABS[0].id;
+    setTab(nextTab);
+    setTechSubTab(nextTech);
+    setTechRiderMounted(nextTech === "technical-rider" || nextTab === "tehnicki");
+    setShowSubTab(nextShow);
+    setDetailsOpen(Boolean(initialDetailsOpen));
+  }, [event?.id, initialTab, initialTechSubTab, initialShowSubTab, initialDetailsOpen]);
 
   useEffect(() => {
     if (techSubTab === "technical-rider") setTechRiderMounted(true);
@@ -329,6 +345,29 @@ export default function EventPage({
     if (!dirtyRef.current) {
       setEditing(false);
       return true;
+    }
+
+    const initial = initialForm;
+    const dateOrBandChanged =
+      bandId !== initial.bandId ||
+      !sameCalendarDay(date, initial.date);
+    if (dateOrBandChanged) {
+      const duplicates = findScheduleDuplicates({
+        events,
+        bandId,
+        date,
+        excludeEventId: eventRef.current?.id,
+      });
+      if (hasScheduleDuplicates(duplicates)) {
+        const proceed = await confirm({
+          title: t("schedule.duplicateTitle"),
+          message: buildDuplicateConfirmMessage(t, { ...duplicates, date }),
+          confirmLabel: t("schedule.duplicateProceed"),
+          cancelLabel: t("common.cancel"),
+          danger: true,
+        });
+        if (!proceed) return false;
+      }
     }
 
     if (askConfirm) {

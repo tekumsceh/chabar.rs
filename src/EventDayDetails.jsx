@@ -206,7 +206,12 @@ export default function EventDayDetails({
 
       {!readOnly ? (
         <div className="event-day-details-actions">
-          <button type="button" className="danger" onClick={cancel} disabled={saving || loading || !dirty}>
+          <button
+            type="button"
+            className="termin-form-ghost"
+            onClick={cancel}
+            disabled={saving || loading || !dirty}
+          >
             {t("common.cancel")}
           </button>
           <button type="submit" disabled={saving || loading || !dirty}>
