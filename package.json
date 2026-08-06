@@ -27,7 +27,7 @@
     "db:migrate:tech-default": "node scripts/apply-band-tech-rider-default.js",
     "db:migrate:tech-notes": "node scripts/apply-tech-rider-notes.js",
     "db:migrate:payment-allocations": "node scripts/apply-payment-allocations.js",
-    "db:migrate:payment-lines": "node scripts/apply-payment-allocation-lines.js",
+    "db:migrate:member-default-fee": "node scripts/apply-band-member-default-fee.js",
     "db:migrate:day-details": "node scripts/apply-event-day-details.js",
     "db:migrate:bands": "node scripts/migrate-bands-ownership.js",
     "db:migrate:finance": "node scripts/migrate-member-finance.js",

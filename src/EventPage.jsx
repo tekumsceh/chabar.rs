@@ -817,8 +817,25 @@ export default function EventPage({
                       }
                     : current,
                 );
+              } else {
+                const data = await api(`/api/events/${event.id}/finance`, {
+                  bandId: financeBandId,
+                });
+                setFinanceBundle(data);
               }
               await onRefreshSchedule?.();
+            }}
+            onDefaultChanged={async (memberId, defaultPriceEur) => {
+              setFinanceBundle((current) =>
+                current
+                  ? {
+                      ...current,
+                      members: current.members.map((member) =>
+                        member.id === memberId ? { ...member, defaultPriceEur } : member,
+                      ),
+                    }
+                  : current,
+              );
             }}
           />
           <EventExpensesPanel

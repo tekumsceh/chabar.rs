@@ -646,6 +646,34 @@ export function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+/**
+ * Schedule list order: past/today closest first (today → older), future dates at the bottom
+ * (nearest future first). Invalid dates sink to the end, stable by original index.
+ */
+export function compareScheduleProximity(a, b, { today = startOfToday(), invert = false } = {}) {
+  const todayMs = today.getTime();
+  const aParsed = a.parsedDate instanceof Date ? a.parsedDate : parseDate(a.date);
+  const bParsed = b.parsedDate instanceof Date ? b.parsedDate : parseDate(b.date);
+  const aOk = Boolean(a.hasDate ?? a.date) && !Number.isNaN(aParsed.getTime());
+  const bOk = Boolean(b.hasDate ?? b.date) && !Number.isNaN(bParsed.getTime());
+
+  if (!aOk && !bOk) return (a.index ?? 0) - (b.index ?? 0);
+  if (!aOk) return 1;
+  if (!bOk) return -1;
+
+  const aMs = aParsed.getTime();
+  const bMs = bParsed.getTime();
+  const aFuture = aMs > todayMs;
+  const bFuture = bMs > todayMs;
+
+  if (aFuture !== bFuture) return aFuture ? 1 : -1;
+
+  if (aFuture) {
+    return invert ? bMs - aMs : aMs - bMs;
+  }
+  return invert ? aMs - bMs : bMs - aMs;
+}
+
 export function todayText() {
   const now = new Date();
   return `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}.`;

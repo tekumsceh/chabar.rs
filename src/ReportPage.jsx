@@ -379,33 +379,51 @@ export default function ReportPage({
                       </div>
                     </button>
                     <div className="finansije-row-trail">
-                      {row.done && row.paymentClass === "paid" ? (
-                        <span className="finansije-paid-badge" title={t("report.payPaid")}>
-                          {t("report.paidBadge")}
-                        </span>
-                      ) : isPartial ? (
-                        <span className="finansije-partial-badge" title={t("report.paidPartial", {
-                          paid: formatEur(Math.max(0, row.totalEur - owed)),
-                          total: formatEur(row.totalEur),
-                        })}>
-                          {t("report.payPartial")}
-                        </span>
-                      ) : null}
-                      {row.done && owed > 0 && onPayEvent ? (
-                        <button
-                          type="button"
-                          className="finansije-pay-btn"
-                          disabled={Boolean(payingEventId)}
-                          aria-label={t("report.payBtnAria", { amount: formatEur(owed) })}
-                          title={formatEur(owed)}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onPayEvent(row.id, row.bandId);
-                          }}
-                        >
-                          {rowPaying ? "…" : t("report.payBtn")}
-                        </button>
-                      ) : null}
+                      <div className="finansije-row-slot finansije-row-slot-status">
+                        {row.done && row.paymentClass === "paid" ? (
+                          <span className="finansije-paid-badge" title={t("report.payPaid")}>
+                            {t("report.paidBadge")}
+                          </span>
+                        ) : isPartial ? (
+                          <span
+                            className="finansije-partial-badge"
+                            title={t("report.paidPartial", {
+                              paid: formatEur(Math.max(0, row.totalEur - owed)),
+                              total: formatEur(row.totalEur),
+                            })}
+                          >
+                            {t("report.payPartial")}
+                          </span>
+                        ) : (
+                          <span className="finansije-row-slot-spacer" aria-hidden="true" />
+                        )}
+                      </div>
+                      <div className="finansije-row-slot finansije-row-slot-pay">
+                        {row.done && owed > 0 && onPayEvent ? (
+                          <button
+                            type="button"
+                            className="finansije-pay-btn"
+                            disabled={Boolean(payingEventId)}
+                            aria-label={t("report.payBtnAria", { amount: formatEur(owed) })}
+                            title={formatEur(owed)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onPayEvent(row.id, row.bandId);
+                            }}
+                          >
+                            {rowPaying ? (
+                              "…"
+                            ) : (
+                              <>
+                                <PayBtnIcon />
+                                <span>{t("report.payBtn")}</span>
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <span className="finansije-row-slot-spacer" aria-hidden="true" />
+                        )}
+                      </div>
                       <span
                         className={`finansije-row-amount raspored-fee raspored-fee-${amountTone}`}
                         title={
@@ -421,14 +439,16 @@ export default function ReportPage({
                       >
                         {row.hasDate ? formatEurCeil(displayEur) : "—"}
                       </span>
-                      <div className="raspored-actions">
-                        <FinanceRowMenu
-                          row={row}
-                          owed={owed}
-                          onOpenDetail={() => setSelectedId(row.id)}
-                          onPay={() => onPayEvent?.(row.id, row.bandId)}
-                          payDisabled={Boolean(payingEventId)}
-                        />
+                      <div className="finansije-row-slot finansije-row-slot-menu">
+                        <div className="raspored-actions">
+                          <FinanceRowMenu
+                            row={row}
+                            owed={owed}
+                            onOpenDetail={() => setSelectedId(row.id)}
+                            onPay={() => onPayEvent?.(row.id, row.bandId)}
+                            payDisabled={Boolean(payingEventId)}
+                          />
+                        </div>
                       </div>
                     </div>
                   </li>
@@ -631,7 +651,12 @@ function FinanceDetailModal({
                       {row.done ? (
                         <div className="finance-detail-line-meta">
                           {isPaid ? (
-                            <span className="finansije-paid-badge is-compact">{t("report.paidBadge")}</span>
+                            <>
+                              <span className="finance-detail-line-status">{t("report.payPaid")}</span>
+                              <div className="finance-detail-line-pay-slot">
+                                <span className="finansije-paid-badge is-compact">{t("report.paidBadge")}</span>
+                              </div>
+                            </>
                           ) : (
                             <>
                               <span className="finance-detail-line-status">
@@ -643,18 +668,29 @@ function FinanceDetailModal({
                                   : t("report.lineUnpaid")}
                                 {lineOwed > 0 ? t("report.remains", { amount: formatEur(lineOwed) }) : null}
                               </span>
-                              {lineOwed > 0 && onPayLine ? (
-                                <button
-                                  type="button"
-                                  className="finansije-pay-btn is-compact"
-                                  disabled={Boolean(payingLineKey)}
-                                  onClick={() =>
-                                    onPayLine(row.id, row.bandId, line.lineKind, line.expenseKey || "")
-                                  }
-                                >
-                                  {payingLineKey === lineKey ? "…" : t("report.payBtn")}
-                                </button>
-                              ) : null}
+                              <div className="finance-detail-line-pay-slot">
+                                {lineOwed > 0 && onPayLine ? (
+                                  <button
+                                    type="button"
+                                    className="finansije-pay-btn is-compact"
+                                    disabled={Boolean(payingLineKey)}
+                                    onClick={() =>
+                                      onPayLine(row.id, row.bandId, line.lineKind, line.expenseKey || "")
+                                    }
+                                  >
+                                    {payingLineKey === lineKey ? (
+                                      "…"
+                                    ) : (
+                                      <>
+                                        <PayBtnIcon />
+                                        <span>{t("report.payBtn")}</span>
+                                      </>
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span className="finansije-row-slot-spacer" aria-hidden="true" />
+                                )}
+                              </div>
                             </>
                           )}
                         </div>
@@ -1087,6 +1123,34 @@ function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PayBtnIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 10h16v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18v-8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 10 6.2 6.8A1.5 1.5 0 0 1 7.5 6h9a1.5 1.5 0 0 1 1.3.8L20 10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 14.5h.01"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

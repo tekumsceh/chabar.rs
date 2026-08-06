@@ -63,8 +63,8 @@ export default function ScheduleToolbar({
           <button
             type="button"
             className={`raspored-icon-btn raspored-sort-btn ${dateSort === "asc" ? "is-asc" : "is-desc"}`}
-            aria-label={dateSort === "desc" ? "Novo → staro" : "Staro → novo"}
-            title={dateSort === "desc" ? "Novo → staro" : "Staro → novo"}
+            aria-label={dateSort === "desc" ? t("schedule.sortClosest") : t("schedule.sortFarthest")}
+            title={dateSort === "desc" ? t("schedule.sortClosest") : t("schedule.sortFarthest")}
             onClick={() => onDateSortChange(dateSort === "desc" ? "asc" : "desc")}
           >
             <SortArrowIcon className="raspored-sort-arrow" />

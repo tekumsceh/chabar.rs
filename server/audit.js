@@ -87,3 +87,15 @@ export function snapshotMemberFinance(row) {
     transportRsd: Number(row.transport_rsd ?? row.transportRsd ?? 0),
   };
 }
+
+export function snapshotBandMember(row) {
+  if (!row) return null;
+  const rawDefault = row.default_price_eur ?? row.defaultPriceEur;
+  return {
+    bandId: row.band_id ?? row.bandId ?? null,
+    userId: row.user_id ?? row.userId ?? null,
+    memberRole: row.member_role ?? row.memberRole ?? null,
+    defaultPriceEur:
+      rawDefault == null || rawDefault === "" ? null : Number(rawDefault),
+  };
+}

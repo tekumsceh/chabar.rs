@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
 import { useConfirm } from "./confirmDialog.jsx";
-import { useT } from "./i18n/I18nProvider.jsx";
-import { parseDate, sameMonth, startOfToday } from "./calculations.js";
+import BandMemberFeesPanel from "./BandMemberFeesPanel.jsx";
+import { parseDate, sameMonth, startOfToday, formatEur } from "./calculations.js";
 import { joinUrlForToken, qrImageUrlForJoin } from "./joinLink.js";
 import FadeScroll from "./FadeScroll.jsx";
 import { GOOGLE_CALENDAR_SYNC } from "./featureFlags.js";
 import GoogleCalendarPanel from "./GoogleCalendarPanel.jsx";
+import { useT } from "./i18n/I18nProvider.jsx";
 
 const WEEKDAYS = ["P", "U", "S", "Č", "P", "S", "N"];
 const SIDE_RATIO = 0.88;
@@ -53,7 +54,7 @@ export default function BandPage({
     const today = startOfToday();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
-  /** Active panel inside swipe «Upravljanje»: invite | kick | roles | transfer | delete */
+  /** Active panel inside swipe «Upravljanje»: invite | kick | roles | fees | transfer | delete */
   const [managePanel, setManagePanel] = useState("");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -255,6 +256,7 @@ export default function BandPage({
   const canInvite = Boolean(permissions.canInvite) && !isAllBands;
   const canKick = Boolean(permissions.canKick) && !isAllBands;
   const canAssignRoles = Boolean(permissions.canAssignRoles) && !isAllBands;
+  const canManageFees = canAssignRoles;
   const canTransfer = Boolean(permissions.canTransfer) && !isAllBands;
   const canDelete = Boolean(permissions.canDelete) && !isAllBands;
   const isOwner = Boolean(permissions.isOwner) && !isAllBands;
@@ -783,6 +785,11 @@ export default function BandPage({
                           {member.email ? <small>{member.email}</small> : null}
                         </span>
                         <span className="band-home-side-role">{bandRoleT(t, member.memberRole)}</span>
+                        {canManageFees && member.defaultPriceEur != null ? (
+                          <span className="band-home-side-fee" title={t("finance.defaultShort")}>
+                            {formatEur(member.defaultPriceEur)}
+                          </span>
+                        ) : null}
                       </li>
                     ))}
                     {invites.map((invite) => (
@@ -843,6 +850,15 @@ export default function BandPage({
                       >
                         {t("band.rolesAndInvites")}
                         <small>{canAssignRoles ? t("band.rolesHint") : t("band.ownerLeadOnly")}</small>
+                      </button>
+                      <button
+                        type="button"
+                        className={`band-home-side-action ${managePanel === "fees" ? "is-active" : ""}`}
+                        disabled={!canManageFees}
+                        onClick={() => toggleManagePanel("fees")}
+                      >
+                        {t("band.memberFees")}
+                        <small>{canManageFees ? t("band.feesHintShort") : t("band.ownerLeadOnly")}</small>
                       </button>
                       {canTransfer ? (
                         <button
@@ -1021,6 +1037,21 @@ export default function BandPage({
                           <p className="band-home-note">{t("band.noOtherMembers")}</p>
                         ) : null}
                       </div>
+                    ) : null}
+
+                    {managePanel === "fees" && canManageFees ? (
+                      <BandMemberFeesPanel
+                        bandId={activeBandId}
+                        members={members}
+                        busy={busy}
+                        showToast={showToast}
+                        onSaved={async () => {
+                          const data = await api(`/api/bands/${activeBandId}`, {
+                            bandId: activeBandId,
+                          });
+                          setDetail(data);
+                        }}
+                      />
                     ) : null}
 
                     {managePanel === "transfer" && canTransfer ? (

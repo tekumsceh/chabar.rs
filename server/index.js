@@ -29,8 +29,10 @@ import {
   removeBandMember,
   rotateInviteLink,
   transferBandOwnership,
+  updateMemberDefaultFee,
   updateMemberInvitePrivilege,
   updateMemberRole,
+  getBandFeeAudit,
 } from "./bands.js";
 import { normalizeInvitePreference, ownerBandLimit } from "../shared/bandLimits.js";
 import { searchUsers } from "./users.js";
@@ -586,6 +588,22 @@ app.patch(
   requireBandMember,
   updateMemberInvitePrivilege,
 );
+app.patch(
+  "/api/bands/:id/members/:userId/default-fee",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  requireBandAdmin,
+  updateMemberDefaultFee,
+);
+app.get(
+  "/api/bands/:id/fee-audit",
+  requireAuth,
+  bandIdFromParams,
+  requireBandMember,
+  requireBandAdmin,
+  getBandFeeAudit,
+);
 app.delete(
   "/api/bands/:id/members/:userId",
   requireAuth,
@@ -1011,14 +1029,15 @@ app.delete("/api/events/:id", requireAuth, requireBandMember, async (req, res, n
   }
 });
 function mapMemberFinanceRow(row) {
+  const rawDefault = row.default_price_eur;
   return {
     id: row.user_id,
     name: row.display_name || row.email?.split("@")[0] || "Član",
     memberRole: row.member_role,
     priceEur: Number(row.price_eur) || 0,
     transportRsd: Number(row.transport_rsd) || 0,
-    // TBD: per-member default fee storage + settings UI
-    defaultPriceEur: null,
+    defaultPriceEur:
+      rawDefault == null || rawDefault === "" ? null : Number(rawDefault),
   };
 }
 
@@ -1060,7 +1079,7 @@ async function loadEventFinanceBundle(eventId, bandId, { viewerUserId = "" } = {
   const band = await getBandMeta(bandId);
   const [membersResult, expensesResult] = await Promise.all([
     query(
-      `SELECT bm.user_id, bm.member_role, p.email, p.display_name,
+      `SELECT bm.user_id, bm.member_role, bm.default_price_eur, p.email, p.display_name,
               COALESCE(f.price_eur, 0) AS price_eur,
               COALESCE(f.transport_rsd, 0) AS transport_rsd
        FROM band_members bm
@@ -1215,6 +1234,79 @@ app.put(
         priceEur,
         transportRsd,
       });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/api/events/:id/member-finance/apply-defaults",
+  requireAuth,
+  requireBandMember,
+  requireBandAdmin,
+  async (req, res, next) => {
+    try {
+      const eventId = Number(req.params.id);
+      if (!eventId) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      const event = await query(
+        `SELECT id, event_date_text FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+        { id: eventId, bandId: req.bandId },
+      );
+      if (!event.rows[0]) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      if (isPastEventDate(event.rows[0].event_date_text)) {
+        return res.status(403).json({
+          error: "Forbidden",
+          detail: "Prošli termini su zaključani — honorari se ne menjaju.",
+        });
+      }
+
+      const band = await getBandMeta(req.bandId);
+      if (band?.kind === "personal") {
+        return res.status(403).json({
+          error: "Forbidden",
+          detail: "Podrazumevani honorari važe samo za grupne bendove.",
+        });
+      }
+
+      const requestedIds = Array.isArray(req.body?.userIds)
+        ? req.body.userIds.map((id) => String(id || "").trim()).filter(Boolean)
+        : null;
+
+      const membersResult = await query(
+        `SELECT bm.user_id, bm.default_price_eur,
+                COALESCE(f.transport_rsd, 0) AS transport_rsd
+         FROM band_members bm
+         LEFT JOIN event_member_finance f
+           ON f.event_id = :eventId AND f.user_id = bm.user_id
+         WHERE bm.band_id = :bandId
+           AND bm.default_price_eur IS NOT NULL`,
+        { eventId, bandId: req.bandId },
+      );
+
+      let rows = membersResult.rows.filter((row) => Number(row.default_price_eur) >= 0);
+      if (requestedIds?.length) {
+        const idSet = new Set(requestedIds);
+        rows = rows.filter((row) => idSet.has(row.user_id));
+      }
+
+      const applied = [];
+      for (const row of rows) {
+        const priceEur = Number(row.default_price_eur) || 0;
+        const transportRsd = Number(row.transport_rsd) || 0;
+        await upsertMemberFinance(eventId, row.user_id, priceEur, transportRsd, {
+          bandId: req.bandId,
+          actorUserId: req.user.id,
+        });
+        applied.push({ userId: row.user_id, priceEur });
+      }
+
+      res.json({ eventId, applied });
     } catch (error) {
       next(error);
     }
@@ -3369,7 +3461,7 @@ app.get("/api/audit", requireAuth, requireBandMember, async (req, res, next) => 
         detail: "entityType i entityId su obavezni.",
       });
     }
-    if (!["event", "payment", "event_member_finance"].includes(entityType)) {
+    if (!["event", "payment", "event_member_finance", "band_member"].includes(entityType)) {
       return res.status(400).json({ error: "Invalid entityType" });
     }
 

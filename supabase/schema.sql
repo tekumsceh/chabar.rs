@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS band_members (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('owner', 'lead', 'member', 'saradnik')),
   can_edit_setlist BOOLEAN NOT NULL DEFAULT FALSE,
+  default_price_eur NUMERIC(12,2),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (band_id, user_id)
 );

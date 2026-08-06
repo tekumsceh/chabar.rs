@@ -17,6 +17,7 @@ import {
 } from "../shared/bandLimits.js";
 import { isBandLead } from "../shared/roles.js";
 import { notifyBandEvent, actorLabel } from "./notifications.js";
+import { snapshotBandMember, writeAudit } from "./audit.js";
 
 function makeInviteToken() {
   return crypto.randomBytes(18).toString("base64url");
@@ -342,7 +343,8 @@ export async function getBandHome(req, res, next) {
 
     const [membersResult, eventsResult, invitesResult] = await Promise.all([
       query(
-        `SELECT bm.user_id, bm.member_role, bm.can_invite, p.email, p.display_name
+        `SELECT bm.user_id, bm.member_role, bm.can_invite, bm.default_price_eur,
+                p.email, p.display_name
          FROM band_members bm
          JOIN profiles p ON p.id = bm.user_id
          WHERE bm.band_id = :bandId
@@ -383,6 +385,8 @@ export async function getBandHome(req, res, next) {
         email: manage ? row.email || "" : undefined,
         memberRole: row.member_role,
         canInvite: row.can_invite !== false,
+        defaultPriceEur:
+          row.default_price_eur == null ? null : Number(row.default_price_eur),
       })),
       events: eventsResult.rows.map((row) => ({
         id: row.id,
@@ -688,6 +692,158 @@ export async function updateMemberInvitePrivilege(req, res, next) {
       { canInvite, bandId: req.bandId, userId: targetUserId },
     );
     res.json({ userId: targetUserId, canInvite });
+  } catch (error) {
+    next(error);
+  }
+}
+
+function parseDefaultPriceEur(body) {
+  if (body?.defaultPriceEur === null || body?.defaultPriceEur === "") return null;
+  if (body?.defaultPriceEur === undefined) return undefined;
+  const value = Number(String(body.defaultPriceEur).trim().replace(",", "."));
+  if (!Number.isFinite(value) || value < 0) return NaN;
+  return value;
+}
+
+/** Owner/lead: set or clear per-member default honorar for the band. */
+export async function updateMemberDefaultFee(req, res, next) {
+  try {
+    if (!canManage(req.memberRole)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Samo vlasnik ili lead može podešavati podrazumevane honorare.",
+      });
+    }
+
+    const bandMeta = await query(`SELECT kind FROM bands WHERE id = :bandId LIMIT 1`, {
+      bandId: req.bandId,
+    });
+    if (!bandMeta.rows[0] || bandMeta.rows[0].kind === "personal") {
+      return res.status(400).json({
+        error: "Invalid band",
+        detail: "Podrazumevani honorari važe samo za grupne bendove.",
+      });
+    }
+
+    const targetUserId = String(req.params.userId || "").trim();
+    if (!targetUserId) {
+      return res.status(400).json({ error: "Missing user" });
+    }
+
+    const defaultPriceEur = parseDefaultPriceEur(req.body);
+    if (defaultPriceEur === undefined) {
+      return res.status(400).json({
+        error: "Invalid amount",
+        detail: "Unesi iznos ili null za brisanje podrazumevanog honorara.",
+      });
+    }
+    if (Number.isNaN(defaultPriceEur)) {
+      return res.status(400).json({
+        error: "Invalid amount",
+        detail: "Iznos ne može biti negativan.",
+      });
+    }
+
+    const beforeResult = await query(
+      `SELECT band_id, user_id, member_role, default_price_eur
+       FROM band_members
+       WHERE band_id = :bandId AND user_id = :userId
+       LIMIT 1`,
+      { bandId: req.bandId, userId: targetUserId },
+    );
+    if (!beforeResult.rows[0]) {
+      return res.status(404).json({ error: "Not found", detail: "Član nije pronađen." });
+    }
+
+    const before = snapshotBandMember(beforeResult.rows[0]);
+    const unchanged =
+      (before?.defaultPriceEur ?? null) === (defaultPriceEur ?? null) ||
+      (before?.defaultPriceEur != null &&
+        defaultPriceEur != null &&
+        Number(before.defaultPriceEur) === Number(defaultPriceEur));
+
+    if (!unchanged) {
+      await query(
+        `UPDATE band_members SET default_price_eur = :defaultPriceEur
+         WHERE band_id = :bandId AND user_id = :userId`,
+        { defaultPriceEur, bandId: req.bandId, userId: targetUserId },
+      );
+
+      const afterResult = await query(
+        `SELECT band_id, user_id, member_role, default_price_eur
+         FROM band_members
+         WHERE band_id = :bandId AND user_id = :userId
+         LIMIT 1`,
+        { bandId: req.bandId, userId: targetUserId },
+      );
+      const after = snapshotBandMember(afterResult.rows[0]);
+      await writeAudit({
+        entityType: "band_member",
+        entityId: `${req.bandId}:${targetUserId}`,
+        bandId: req.bandId,
+        actorUserId: req.user.id,
+        action: before?.defaultPriceEur == null && after?.defaultPriceEur != null ? "insert" : "update",
+        before,
+        after,
+      });
+
+      const who = await actorLabel(req.user.id);
+      await notifyBandEvent({
+        bandId: req.bandId,
+        type: "finance_changed",
+        actorUserId: req.user.id,
+        audience: "finance",
+        subjectUserId: targetUserId,
+        message: defaultPriceEur == null
+          ? `${who} je uklonio/la podrazumevani honorar`
+          : `${who} je postavio/la podrazumevani honorar`,
+        payload: { page: "band", bandId: req.bandId },
+      });
+    }
+
+    res.json({ userId: targetUserId, defaultPriceEur });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Owner/lead: recent fee default + per-date honorar audit for transparency. */
+export async function getBandFeeAudit(req, res, next) {
+  try {
+    if (!canManage(req.memberRole)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        detail: "Samo vlasnik ili lead može pregledati istoriju honorara.",
+      });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const result = await query(
+      `SELECT a.id, a.entity_type, a.entity_id, a.action, a.before_json, a.after_json, a.created_at,
+              a.actor_user_id,
+              COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), 'Korisnik') AS actor_name
+       FROM transaction_audit a
+       LEFT JOIN profiles p ON p.id = a.actor_user_id
+       WHERE a.band_id = :bandId
+         AND a.entity_type IN ('band_member', 'event_member_finance')
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT :limit`,
+      { bandId: req.bandId, limit },
+    );
+
+    res.json({
+      entries: result.rows.map((row) => ({
+        id: row.id,
+        entityType: row.entity_type,
+        entityId: row.entity_id,
+        action: row.action,
+        before: row.before_json,
+        after: row.after_json,
+        createdAt: row.created_at,
+        actorUserId: row.actor_user_id,
+        actorName: row.actor_name,
+      })),
+    });
   } catch (error) {
     next(error);
   }

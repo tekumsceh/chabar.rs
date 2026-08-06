@@ -5,6 +5,7 @@ import {
   parseDate,
   sameMonth,
   startOfToday,
+  compareScheduleProximity,
   todayText,
 } from "./calculations.js";
 import { bandInitials, resolveBandColor } from "./bandDisplay.js";
@@ -74,7 +75,7 @@ export default function SchedulePage({
   const [filter, setFilter] = useState("upcoming");
   const [layoutView, setLayoutView] = useState(readScheduleLayout);
   const [eventOpenFocus, setEventOpenFocus] = useState(null);
-  /** desc = present → past (default); asc = past → present */
+  /** desc = closest first (default); asc = reverse within past / future groups */
   const [dateSort, setDateSort] = useState("desc");
   const [listPage, setListPage] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
@@ -98,15 +99,9 @@ export default function SchedulePage({
   const rows = useMemo(() => enrichScheduleRows(events), [events]);
   const filteredRows = useMemo(() => {
     const filtered = rows.filter((row) => matchesScheduleFilter(row, search, filter));
-    const direction = dateSort === "desc" ? -1 : 1;
-    return [...filtered].sort((a, b) => {
-      const aOk = a.hasDate && !Number.isNaN(a.parsedDate.getTime());
-      const bOk = b.hasDate && !Number.isNaN(b.parsedDate.getTime());
-      if (!aOk && !bOk) return 0;
-      if (!aOk) return 1;
-      if (!bOk) return -1;
-      return (a.parsedDate.getTime() - b.parsedDate.getTime()) * direction;
-    });
+    const today = startOfToday();
+    const invert = dateSort === "asc";
+    return [...filtered].sort((a, b) => compareScheduleProximity(a, b, { today, invert }));
   }, [rows, search, filter, dateSort]);
 
   useEffect(() => {
