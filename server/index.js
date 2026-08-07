@@ -82,7 +82,7 @@ import {
 import { rateLimit } from "./rateLimit.js";
 import { getCommunityLyricsById, searchCommunityLyrics } from "./lyricsLookup.js";
 import { canEditSetlist, isBandLead, isBandSaradnik } from "../shared/roles.js";
-import { parseDate, startOfToday } from "../src/calculations.js";
+import { isPastEventDate, parseDate, startOfToday } from "../src/calculations.js";
 import { normalizeConsoleIds, resolveConsoleLimits } from "../src/mixingConsoles.js";
 import {
   attachAllocationsToPayments,
@@ -4016,13 +4016,6 @@ async function getPersonalBandId(userId) {
     { userId },
   );
   return result.rows[0]?.id || null;
-}
-
-/** Serbian DD.MM.YYYY. text → comparable date; invalid → not past (don't block). Today is editable. */
-function isPastEventDate(dateText) {
-  const eventDate = parseDate(dateText);
-  if (Number.isNaN(eventDate.getTime())) return false;
-  return eventDate < startOfToday();
 }
 
 /**

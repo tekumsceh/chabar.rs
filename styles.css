@@ -851,7 +851,6 @@ button.status-icon-edit:hover {
 .menu-select-bar-trigger,
 .field-select-trigger,
 .band-home-side-action,
-.profile-hub-tile,
 .profile-hub-accept,
 .profile-hub-decline,
 .profile-hub-notice-btn,
@@ -881,7 +880,6 @@ button.status-icon-edit:hover {
 .menu-select-bar-trigger:hover:not(:disabled),
 .field-select-trigger:hover:not(:disabled),
 .band-home-side-action:hover:not(:disabled),
-.profile-hub-tile:hover:not(:disabled),
 .profile-hub-accept:hover:not(:disabled),
 .profile-hub-decline:hover:not(:disabled),
 .profile-hub-notice-btn:hover:not(:disabled),
@@ -963,12 +961,6 @@ button.status-icon-edit:hover {
   background: color-mix(in srgb, var(--brand) 14%, transparent) !important;
   border-color: color-mix(in srgb, var(--brand) 28%, transparent) !important;
   color: var(--brand-dark, var(--brand)) !important;
-}
-
-.profile-hub-tile.is-danger {
-  background: color-mix(in srgb, var(--danger) 10%, transparent) !important;
-  border-color: color-mix(in srgb, var(--danger) 28%, transparent) !important;
-  color: var(--danger) !important;
 }
 
 .profile-hub-decline {
@@ -3239,44 +3231,94 @@ td input[data-field="note"] {
 }
 
 .profile-hub-backdrop {
+  animation: profile-hub-backdrop-in 180ms ease;
   background: rgba(0, 0, 0, 0.42);
   inset: 0;
   position: fixed;
   z-index: 80;
 }
 
-.profile-hub {
-  background: var(--panel);
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  border-radius: 1rem 1rem 0 0;
-  bottom: calc(3.35rem + env(safe-area-inset-bottom, 0px));
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.14);
+@keyframes profile-hub-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.profile-hub-anchor {
+  bottom: calc(3.65rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
   display: flex;
-  flex-direction: column;
-  left: 0;
-  max-height: min(72vh, 34rem);
+  justify-content: flex-end;
+  left: 50%;
+  max-width: var(--app-content-max);
+  padding-left: var(--app-content-pad-x);
+  padding-right: var(--app-content-pad-x);
+  pointer-events: none;
   position: fixed;
-  right: 0;
+  transform: translateX(-50%);
+  width: 100%;
   z-index: 85;
 }
 
-.profile-hub-user {
+.profile-hub {
+  animation: profile-hub-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: 1.1rem;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  max-height: min(72vh, 34rem);
+  max-width: min(100%, 19.5rem);
+  min-width: min(100%, 16.5rem);
+  overflow: hidden;
+  pointer-events: auto;
+  transform-origin: bottom right;
+  width: 19.5rem;
+}
+
+@keyframes profile-hub-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.profile-hub-header {
   align-items: center;
   display: flex;
-  gap: 0.65rem;
-  padding: 0.85rem 1rem 0.55rem;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.9rem;
+}
+
+.profile-hub-user-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .profile-hub-avatar {
   align-items: center;
   background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+  border: 2px solid color-mix(in srgb, var(--line) 45%, transparent);
   border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   display: inline-flex;
   flex-shrink: 0;
-  height: 2.6rem;
+  height: 3rem;
   justify-content: center;
   overflow: hidden;
-  width: 2.6rem;
+  width: 3rem;
 }
 
 .profile-hub-avatar-img {
@@ -3294,93 +3336,152 @@ td input[data-field="note"] {
 }
 
 .profile-hub-name {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   line-height: 1.2;
   margin: 0;
 }
 
 .profile-hub-email {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.25;
-  margin: 0.12rem 0 0;
+  margin: 0.18rem 0 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.profile-hub-grid {
-  display: grid;
-  gap: 0.45rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 0.35rem 0.75rem 0.85rem;
+.profile-hub-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0.2rem 0.45rem;
 }
 
-.profile-hub-tile {
-  align-items: center;
-  border-radius: 0.75rem !important;
+.profile-hub-menu-footer {
+  padding-bottom: 0.45rem;
+}
+
+.profile-hub-divider {
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+  height: 1px;
+  margin: 0.1rem 0.85rem 0.15rem;
+}
+
+.profile-hub-menu li {
+  margin: 0;
+}
+
+.profile-hub-item {
+  align-items: center !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0.55rem !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
   display: flex !important;
-  flex-direction: column;
-  gap: 0.28rem;
-  justify-content: center;
-  min-height: 4.6rem;
-  padding: 0.55rem 0.35rem !important;
-  position: relative;
-  text-align: center;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  gap: 0.65rem;
+  justify-content: flex-start !important;
+  min-height: 2.75rem;
+  padding: 0.62rem 0.72rem !important;
+  text-align: left !important;
+  transform: none !important;
+  width: 100%;
+}
+
+.profile-hub-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 6%, transparent) !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
   transform: none !important;
 }
 
-.profile-hub-tile-icon {
+.profile-hub-item.is-danger {
+  color: #f87171 !important;
+}
+
+.profile-hub-item.is-danger .profile-hub-item-icon {
+  color: #f87171;
+}
+
+.profile-hub-item.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, #f87171 10%, transparent) !important;
+  color: #fca5a5 !important;
+}
+
+.profile-hub-item-icon {
   align-items: center;
-  color: var(--ink);
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
   display: inline-flex;
-  height: 1.35rem;
+  flex-shrink: 0;
+  height: 1.2rem;
   justify-content: center;
-  width: 1.35rem;
+  width: 1.2rem;
 }
 
-.profile-hub-tile-icon svg {
-  height: 1.25rem;
-  width: 1.25rem;
+.profile-hub-item-icon svg {
+  height: 1.15rem;
+  width: 1.15rem;
 }
 
-.profile-hub-tile-label {
-  font-size: 0.62rem;
+.profile-hub-item-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.profile-hub-item-label {
+  font-weight: 560;
+  line-height: 1.2;
+}
+
+.profile-hub-item-hint {
+  color: #5eead4;
+  font-size: 0.7rem;
   font-weight: 650;
   line-height: 1.15;
 }
 
-.profile-hub-tile-hint {
-  color: #15803d;
-  font-size: 0.58rem;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.profile-hub-tile-badge {
+.profile-hub-item-badge {
   align-items: center;
   background: var(--brand);
   border-radius: 999px;
   color: var(--on-brand);
   display: inline-flex;
-  font-size: 0.55rem;
+  flex-shrink: 0;
+  font-size: 0.62rem;
   font-weight: 700;
-  height: 1rem;
+  height: 1.1rem;
   justify-content: center;
-  min-width: 1rem;
-  padding: 0 0.22rem;
-  position: absolute;
-  right: 0.35rem;
-  top: 0.35rem;
+  min-width: 1.1rem;
+  padding: 0 0.32rem;
+}
+
+.profile-hub-item-chevron {
+  align-items: center;
+  color: color-mix(in srgb, var(--muted) 85%, transparent);
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.profile-hub-item-chevron svg {
+  height: 0.9rem;
+  width: 0.9rem;
 }
 
 .profile-hub-subhead {
   align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   display: grid;
   gap: 0.35rem;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  padding: 0.55rem 0.65rem 0.35rem;
+  padding: 0.65rem 0.55rem 0.55rem;
 }
 
 .profile-hub-back {
@@ -3438,7 +3539,7 @@ td input[data-field="note"] {
 .profile-hub-list {
   list-style: none;
   margin: 0;
-  padding: 0 0.65rem 0.85rem;
+  padding: 0 0.55rem 0.55rem;
 }
 
 .profile-hub-list-row {
@@ -3506,7 +3607,7 @@ td input[data-field="note"] {
 .profile-hub-band-list {
   list-style: none;
   margin: 0;
-  padding: 0 0.65rem 0.85rem;
+  padding: 0 0.55rem 0.55rem;
 }
 
 .profile-hub-band-item {
@@ -3551,10 +3652,6 @@ td input[data-field="note"] {
 
 .profile-hub-band-badge.is-manage {
   color: var(--brand-dark);
-}
-
-.app-shell[data-theme="dark"] .profile-hub {
-  background: color-mix(in srgb, var(--panel, #070816) 96%, #000);
 }
 
 .settings-page .page-header {
@@ -6416,14 +6513,16 @@ html[data-theme="dark"] body {
 
 .app-shell[data-theme="dark"] .menu-select-list,
 .app-shell[data-theme="dark"] .user-menu-panel,
-.app-shell[data-theme="dark"] .date-row-menu-list {
+.app-shell[data-theme="dark"] .date-row-menu-list,
+.app-shell[data-theme="dark"] .profile-hub {
   background: var(--panel);
   border-color: color-mix(in srgb, var(--line) 80%, transparent);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 .app-shell[data-theme="dark"] .menu-select-item:hover,
-.app-shell[data-theme="dark"] .user-menu-item:hover:not(:disabled) {
+.app-shell[data-theme="dark"] .user-menu-item:hover:not(:disabled),
+.app-shell[data-theme="dark"] .profile-hub-item:hover:not(:disabled) {
   background: color-mix(in srgb, #fff 8%, transparent) !important;
   color: var(--ink) !important;
 }
@@ -6433,9 +6532,10 @@ html[data-theme="dark"] body {
   color: var(--ink) !important;
 }
 
-.app-shell[data-theme="dark"] .user-menu-item-danger:hover {
-  background: color-mix(in srgb, var(--danger, #fb7185) 12%, transparent) !important;
-  color: #fda4af !important;
+.app-shell[data-theme="dark"] .user-menu-item-danger:hover,
+.app-shell[data-theme="dark"] .profile-hub-item.is-danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.12) !important;
+  color: #fca5a5 !important;
 }
 
 .app-shell[data-theme="dark"] .raspored-chip {
@@ -6604,7 +6704,8 @@ html[data-theme="dark"] body {
 .app-shell .user-menu-panel,
 .app-shell .menu-select-list,
 .app-shell .date-row-menu-list,
-.app-shell .field-select-list {
+.app-shell .field-select-list,
+.app-shell .profile-hub {
   box-shadow: var(--menu-shadow) !important;
   transform: none;
 }

@@ -1,0 +1,747 @@
+/**
+ * Chabar dark UI — Gemini-inspired glass system app-wide.
+ * Loaded last. Uses html[data-theme="dark"] + .app-shell[data-theme="dark"].
+ */
+
+html[data-theme="dark"],
+.app-shell[data-theme="dark"] {
+  --chabar-glass-bg: rgba(20, 16, 34, 0.65);
+  --chabar-glass-bg-strong: rgba(26, 20, 44, 0.82);
+  --chabar-glass-bg-soft: rgba(16, 12, 28, 0.52);
+  --chabar-glass-border: rgba(255, 255, 255, 0.11);
+  --chabar-glass-border-strong: rgba(255, 255, 255, 0.16);
+  --chabar-glass-blur: blur(18px) saturate(1.25);
+  --chabar-text-primary: rgba(255, 255, 255, 0.94);
+  --chabar-text-secondary: rgba(255, 255, 255, 0.58);
+  --chabar-text-muted: rgba(196, 168, 232, 0.72);
+  --chabar-accent-teal: var(--neon-cyan, #00f6ff);
+  --chabar-accent-lime: var(--neon-lime, #b8ff00);
+  --chabar-radius-card: 14px;
+  --chabar-shadow-card: 0 10px 36px rgba(0, 0, 0, 0.42);
+}
+
+/* —— App shell + pages —— */
+.app-shell[data-theme="dark"] {
+  background: transparent;
+  color: var(--chabar-text-primary);
+}
+
+.app-shell[data-theme="dark"] .app-page,
+.app-shell[data-theme="dark"] .raspored,
+.app-shell[data-theme="dark"] .settings-page,
+.app-shell[data-theme="dark"] .login-page {
+  background: transparent;
+}
+
+.app-shell[data-theme="dark"] .app-alert,
+.app-shell[data-theme="dark"] .app-alert-global {
+  backdrop-filter: blur(12px);
+  background: rgba(120, 24, 48, 0.55);
+  border: 1px solid rgba(255, 100, 120, 0.35);
+  border-radius: 10px !important;
+  color: #ffd6de;
+}
+
+/* —— Shared glass surfaces —— */
+html[data-theme="dark"] .login-card,
+.app-shell[data-theme="dark"] .legal-body,
+.app-shell[data-theme="dark"] .settings-card,
+.app-shell[data-theme="dark"] .panel,
+.app-shell[data-theme="dark"] .summary-card,
+.app-shell[data-theme="dark"] .toolbar,
+.app-shell[data-theme="dark"] .modal-panel,
+.app-shell[data-theme="dark"] .confirm-dialog-panel,
+.app-shell[data-theme="dark"] .finance-detail-panel,
+.app-shell[data-theme="dark"] .finansije-bulk-pay-panel,
+.app-shell[data-theme="dark"] .profile-hub,
+.app-shell[data-theme="dark"] .user-menu-panel,
+.app-shell[data-theme="dark"] .menu-select-list,
+.app-shell[data-theme="dark"] .global-search-list,
+.app-shell[data-theme="dark"] .date-row-menu-list,
+.app-shell[data-theme="dark"] .app-tabbar-add-menu,
+.app-shell[data-theme="dark"] .band-home-side,
+.app-shell[data-theme="dark"] .band-cal,
+.app-shell[data-theme="dark"] .band-manage-panel,
+.app-shell[data-theme="dark"] .band-fees-panel,
+.app-shell[data-theme="dark"] .event-page-panel,
+.app-shell[data-theme="dark"] .legal-card {
+  backdrop-filter: var(--chabar-glass-blur);
+  -webkit-backdrop-filter: var(--chabar-glass-blur);
+  background: var(--chabar-glass-bg) !important;
+  border: 1px solid var(--chabar-glass-border) !important;
+  border-radius: var(--chabar-radius-card) !important;
+  box-shadow: var(--chabar-shadow-card) !important;
+  color: var(--chabar-text-primary);
+}
+
+html[data-theme="dark"] .modal-backdrop,
+.app-shell[data-theme="dark"] .modal-backdrop,
+.app-shell[data-theme="dark"] .profile-hub-backdrop,
+.app-shell[data-theme="dark"] .confirm-backdrop {
+  background: rgba(2, 1, 8, 0.72) !important;
+  backdrop-filter: blur(6px);
+}
+
+.app-shell[data-theme="dark"] .app-topbar {
+  background: transparent;
+  border-bottom: 0;
+  padding-bottom: 0.55rem;
+}
+
+/* —— Typography —— */
+.app-shell[data-theme="dark"] .page-header-title,
+.app-shell[data-theme="dark"] .event-page-title,
+.app-shell[data-theme="dark"] .band-home-title,
+.app-shell[data-theme="dark"] .panel-heading h2,
+.app-shell[data-theme="dark"] .settings-card h2,
+html[data-theme="dark"] .login-card h1 {
+  color: var(--chabar-text-primary);
+}
+
+.app-shell[data-theme="dark"] .page-header,
+.app-shell[data-theme="dark"] .event-page-head,
+.app-shell[data-theme="dark"] .band-home-top,
+.app-shell[data-theme="dark"] .finance-detail-head,
+.app-shell[data-theme="dark"] .modal-head {
+  background: transparent;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-theme="dark"] .band-home-sub,
+.app-shell[data-theme="dark"] .event-page-band,
+.app-shell[data-theme="dark"] .event-page-sub,
+.app-shell[data-theme="dark"] .settings-row-hint,
+.app-shell[data-theme="dark"] .settings-note,
+.app-shell[data-theme="dark"] .settings-note-muted,
+.app-shell[data-theme="dark"] .band-home-note,
+.app-shell[data-theme="dark"] .finance-detail-kicker,
+html[data-theme="dark"] .login-subtitle,
+html[data-theme="dark"] .login-welcome {
+  color: var(--chabar-text-secondary);
+}
+
+/* —— Band filter chips —— */
+.app-shell[data-theme="dark"] .band-pill {
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  background: rgba(16, 12, 28, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+  padding: 0.48rem 0.95rem;
+}
+
+.app-shell[data-theme="dark"] .band-pill.has-accent:not(.is-active) {
+  border-color: color-mix(in srgb, var(--band-pill-accent) 72%, rgba(255, 255, 255, 0.18));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 12px color-mix(in srgb, var(--band-pill-accent) 22%, transparent);
+}
+
+.app-shell[data-theme="dark"] .band-pill:hover:not(.is-active) {
+  background: rgba(24, 18, 40, 0.72);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.app-shell[data-theme="dark"] .band-pill.is-active {
+  background: rgba(58, 26, 98, 0.92);
+  border-color: rgba(168, 108, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 18px rgba(120, 60, 210, 0.35);
+  color: #fff;
+}
+
+.app-shell[data-theme="dark"] .band-pill.is-all.is-active {
+  background: rgba(48, 20, 88, 0.95);
+  border-color: rgba(150, 90, 255, 0.5);
+}
+
+.app-shell[data-theme="dark"] .band-pill-dot {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--band-pill-accent) 55%, transparent);
+}
+
+/* —— Icon / tool buttons —— */
+.app-shell[data-theme="dark"] .raspored-icon-btn,
+.app-shell[data-theme="dark"] .page-header-back,
+.app-shell[data-theme="dark"] .event-page-back,
+.app-shell[data-theme="dark"] .band-home-back,
+.app-shell[data-theme="dark"] .band-home-info,
+.app-shell[data-theme="dark"] .band-cal-nav-btn,
+.app-shell[data-theme="dark"] .menu-select-bar-trigger,
+.app-shell[data-theme="dark"] .date-row-menu-trigger,
+.app-shell[data-theme="dark"] .modal-close,
+.app-shell[data-theme="dark"] .user-avatar-btn {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.app-shell[data-theme="dark"] .raspored-icon-btn:hover:not(:disabled),
+.app-shell[data-theme="dark"] .page-header-back:hover,
+.app-shell[data-theme="dark"] .event-page-back:hover,
+.app-shell[data-theme="dark"] .band-home-back:hover,
+.app-shell[data-theme="dark"] .band-cal-nav-btn:hover:not(:disabled),
+.app-shell[data-theme="dark"] .menu-select-bar-trigger:hover,
+.app-shell[data-theme="dark"] .date-row-menu-trigger:hover,
+.app-shell[data-theme="dark"] .modal-close:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
+}
+
+.app-shell[data-theme="dark"] .raspored-icon-btn.is-active-filter {
+  background: rgba(0, 246, 255, 0.14) !important;
+  border-color: rgba(0, 246, 255, 0.35) !important;
+  color: var(--chabar-accent-teal) !important;
+}
+
+/* —— Tabs —— */
+.app-shell[data-theme="dark"] .event-page-tabs-shell,
+.app-shell[data-theme="dark"] .event-page-subtabs,
+.app-shell[data-theme="dark"] .finansije-tabs {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px !important;
+  padding: 0.2rem;
+}
+
+.app-shell[data-theme="dark"] .event-page-tab,
+.app-shell[data-theme="dark"] .event-page-subtab,
+.app-shell[data-theme="dark"] .finansije-tab {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  color: var(--chabar-text-secondary) !important;
+  box-shadow: none !important;
+}
+
+.app-shell[data-theme="dark"] .event-page-tab.is-active,
+.app-shell[data-theme="dark"] .event-page-subtab.is-active,
+.app-shell[data-theme="dark"] .finansije-tab.is-active {
+  background: rgba(0, 246, 255, 0.12) !important;
+  color: var(--chabar-accent-teal) !important;
+}
+
+/* —— Forms + inputs —— */
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+.app-shell[data-theme="dark"] input,
+.app-shell[data-theme="dark"] select,
+.app-shell[data-theme="dark"] textarea {
+  backdrop-filter: blur(8px);
+  background: rgba(8, 6, 18, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 10px !important;
+  color: var(--chabar-text-primary) !important;
+}
+
+html[data-theme="dark"] input::placeholder,
+.app-shell[data-theme="dark"] input::placeholder,
+.app-shell[data-theme="dark"] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] select:focus,
+html[data-theme="dark"] textarea:focus,
+.app-shell[data-theme="dark"] input:focus,
+.app-shell[data-theme="dark"] select:focus,
+.app-shell[data-theme="dark"] textarea:focus {
+  border-color: rgba(0, 246, 255, 0.45) !important;
+  box-shadow: 0 0 0 2px rgba(0, 246, 255, 0.15) !important;
+}
+
+html[data-theme="dark"] .login-google,
+.app-shell[data-theme="dark"] .login-google {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: var(--chabar-text-primary) !important;
+}
+
+/* —— Primary / action buttons —— */
+html[data-theme="dark"] button[type="submit"]:not(.icon):not(.band-pill):not(.schedule-event-card-link),
+.app-shell[data-theme="dark"] button[type="submit"]:not(.icon):not(.band-pill):not(.schedule-event-card-link),
+.app-shell[data-theme="dark"] .finansije-pay-btn,
+.app-shell[data-theme="dark"] .confirm-btn-primary,
+.app-shell[data-theme="dark"] .profile-hub-accept,
+.app-shell[data-theme="dark"] .band-fees-save {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--chabar-accent-teal) 92%, #fff 8%),
+    color-mix(in srgb, var(--chabar-accent-teal) 72%, #000 12%)
+  ) !important;
+  border: 1px solid color-mix(in srgb, var(--chabar-accent-teal) 55%, #000 18%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 12px rgba(0, 246, 255, 0.28) !important;
+  color: #041018 !important;
+  font-weight: 700;
+}
+
+.app-shell[data-theme="dark"] .termin-form-secondary,
+.app-shell[data-theme="dark"] .termin-form-ghost,
+.app-shell[data-theme="dark"] .event-finance-toolbar-btn,
+.app-shell[data-theme="dark"] .finansije-bulk-pay-btn,
+.app-shell[data-theme="dark"] .finansije-year-btn,
+.app-shell[data-theme="dark"] .settings-lab-link,
+.app-shell[data-theme="dark"] .settings-legal-link,
+.app-shell[data-theme="dark"] .profile-hub-decline,
+.app-shell[data-theme="dark"] .profile-hub-notice-btn,
+.app-shell[data-theme="dark"] .band-home-side-action:not(.band-home-side-action-danger) {
+  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: none !important;
+  color: var(--chabar-text-primary) !important;
+}
+
+.app-shell[data-theme="dark"] .event-finance-toolbar-btn-accent {
+  background: rgba(184, 255, 0, 0.12) !important;
+  border-color: rgba(184, 255, 0, 0.28) !important;
+  color: var(--chabar-accent-lime) !important;
+}
+
+.app-shell[data-theme="dark"] .termin-form-ghost:hover:not(:disabled),
+.app-shell[data-theme="dark"] .event-finance-toolbar-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.app-shell[data-theme="dark"] button.danger,
+.app-shell[data-theme="dark"] .confirm-btn-danger,
+.app-shell[data-theme="dark"] .band-home-side-action-danger,
+.app-shell[data-theme="dark"] .profile-hub-decline {
+  background: rgba(255, 61, 110, 0.18) !important;
+  border-color: rgba(255, 61, 110, 0.4) !important;
+  color: #ffb3c4 !important;
+}
+
+/* —— Settings —— */
+.app-shell[data-theme="dark"] .settings-row {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-theme="dark"] .settings-theme-option {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: var(--chabar-text-secondary) !important;
+}
+
+.app-shell[data-theme="dark"] .settings-theme-option.is-active {
+  background: rgba(0, 246, 255, 0.14) !important;
+  border-color: rgba(0, 246, 255, 0.35) !important;
+  color: var(--chabar-accent-teal) !important;
+}
+
+.app-shell[data-theme="dark"] .settings-switch-track {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.app-shell[data-theme="dark"] .settings-switch.is-on .settings-switch-track {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--chabar-accent-teal) 85%, #0a2540),
+    color-mix(in srgb, var(--chabar-accent-teal) 55%, #061018)
+  ) !important;
+  border-color: rgba(0, 246, 255, 0.5) !important;
+  box-shadow: 0 0 14px rgba(0, 246, 255, 0.35) !important;
+}
+
+/* —— Profile hub —— */
+.app-shell[data-theme="dark"] .profile-hub {
+  background: rgba(18, 14, 30, 0.78) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow:
+    0 22px 56px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.app-shell[data-theme="dark"] .profile-hub-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-theme="dark"] .profile-hub-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--chabar-text-primary) !important;
+}
+
+.app-shell[data-theme="dark"] .profile-hub-item.is-danger {
+  color: #f87171 !important;
+}
+
+.app-shell[data-theme="dark"] .profile-hub-item.is-danger .profile-hub-item-icon {
+  color: #f87171;
+}
+
+.app-shell[data-theme="dark"] .profile-hub-item.is-danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.12) !important;
+  color: #fca5a5 !important;
+}
+
+.app-shell[data-theme="dark"] .profile-hub-item-hint {
+  color: #7ee7d2;
+}
+
+.app-shell[data-theme="dark"] .profile-hub-list-row,
+.app-shell[data-theme="dark"] .profile-hub-band-item {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* —— Band page —— */
+.app-shell[data-theme="dark"] .band-home-main {
+  background: transparent;
+}
+
+.app-shell[data-theme="dark"] .band-cal-day {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.app-shell[data-theme="dark"] .band-cal-day.is-today {
+  background: rgba(0, 246, 255, 0.12);
+  border-color: rgba(0, 246, 255, 0.3);
+}
+
+.app-shell[data-theme="dark"] .band-cal-day.has-events {
+  background: rgba(184, 255, 0, 0.08);
+}
+
+.app-shell[data-theme="dark"] .band-accordion-section,
+.app-shell[data-theme="dark"] .band-share-actions .band-home-side-action {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-theme="dark"] .band-home-side-action.is-active {
+  background: rgba(0, 246, 255, 0.12) !important;
+  border-color: rgba(0, 246, 255, 0.32) !important;
+  color: var(--chabar-accent-teal) !important;
+}
+
+.app-shell[data-theme="dark"] .band-member-row,
+.app-shell[data-theme="dark"] .band-fees-row,
+.app-shell[data-theme="dark"] .event-finance-row {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+/* —— Finansije —— */
+.app-shell[data-theme="dark"] .finansije-year-meta-bar {
+  backdrop-filter: blur(12px);
+  background: rgba(16, 12, 28, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px !important;
+}
+
+.app-shell[data-theme="dark"] .finansije-mode-tag {
+  color: var(--chabar-accent-lime);
+}
+
+.app-shell[data-theme="dark"] .finansije-panel-full,
+.app-shell[data-theme="dark"] .raspored-panel {
+  background: transparent !important;
+}
+
+.app-shell[data-theme="dark"] .raspored-date {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chabar-text-primary);
+  text-shadow: none;
+}
+
+.app-shell[data-theme="dark"] .raspored-city {
+  color: var(--chabar-text-primary);
+}
+
+.app-shell[data-theme="dark"] .raspored-band {
+  color: var(--chabar-text-secondary);
+}
+
+/* —— Schedule cards —— */
+.app-shell[data-theme="dark"] .schedule-home-chrome {
+  margin-bottom: 0.75rem;
+}
+
+.app-shell[data-theme="dark"] .raspored-card-grid {
+  gap: 0.85rem;
+  padding-bottom: 0.5rem;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card {
+  backdrop-filter: var(--chabar-glass-blur);
+  -webkit-backdrop-filter: var(--chabar-glass-blur);
+  background: var(--chabar-glass-bg);
+  border: 1px solid var(--chabar-glass-border);
+  border-radius: var(--chabar-radius-card) !important;
+  box-shadow: var(--chabar-shadow-card);
+  min-height: clamp(8rem, 26vh, 12.5rem);
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card.is-next {
+  background: var(--chabar-glass-bg-strong);
+  border-color: rgba(184, 255, 0, 0.22);
+  box-shadow:
+    var(--chabar-shadow-card),
+    inset 3px 0 0 var(--band-accent, var(--chabar-accent-lime));
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card.is-past {
+  opacity: 0.72;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-date-day {
+  color: #fff;
+  font-size: 1.42rem;
+  font-weight: 800;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-date-month {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-city {
+  color: #fff;
+  font-size: 1.06rem;
+  font-weight: 700;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-band {
+  color: color-mix(in srgb, var(--band-accent, #c084fc) 88%, #fff);
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-note {
+  color: var(--chabar-text-secondary);
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-links {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-link {
+  border-radius: 10px !important;
+  color: var(--chabar-accent-lime) !important;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-link svg {
+  filter: drop-shadow(0 0 5px rgba(184, 255, 0, 0.45));
+  height: 1.2rem;
+  width: 1.2rem;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-link.is-filled {
+  color: #d8ff66 !important;
+}
+
+.app-shell[data-theme="dark"] .schedule-event-card-link:hover,
+.app-shell[data-theme="dark"] .schedule-event-card-link:focus-visible {
+  background: rgba(184, 255, 0, 0.1) !important;
+  color: #eaff80 !important;
+}
+
+/* —— List rows —— */
+.app-shell[data-theme="dark"] .raspored-row {
+  backdrop-filter: blur(14px);
+  background: var(--chabar-glass-bg-soft);
+  border-color: rgba(255, 255, 255, 0.08);
+  border-radius: 12px !important;
+}
+
+.app-shell[data-theme="dark"] .raspored-row:hover {
+  background: var(--chabar-glass-bg);
+  border-color: rgba(184, 255, 0, 0.18);
+  box-shadow:
+    inset 3px 0 0 var(--chabar-accent-lime),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.app-shell[data-theme="dark"] .raspored-row.is-settled {
+  opacity: 0.55;
+}
+
+.app-shell[data-theme="dark"] .raspored-empty,
+.app-shell[data-theme="dark"] .event-finance-status {
+  color: var(--chabar-text-secondary);
+}
+
+/* —— Event page extras —— */
+.app-shell[data-theme="dark"] .event-page {
+  background: transparent;
+}
+
+.app-shell[data-theme="dark"] .event-page-fields dt {
+  color: var(--chabar-text-secondary);
+}
+
+.app-shell[data-theme="dark"] .event-page-fields dd.is-set {
+  color: var(--chabar-accent-lime);
+}
+
+.app-shell[data-theme="dark"] .event-page-full-details {
+  backdrop-filter: blur(12px);
+  background: var(--chabar-glass-bg-soft);
+  border: 1px solid var(--chabar-glass-border);
+  border-radius: 12px !important;
+  color: var(--chabar-text-primary);
+}
+
+.app-shell[data-theme="dark"] .event-finance-icon-btn-accent {
+  background: rgba(184, 255, 0, 0.14) !important;
+  border: 1px solid rgba(184, 255, 0, 0.28) !important;
+  color: var(--chabar-accent-lime) !important;
+}
+
+.app-shell[data-theme="dark"] .event-finance-icon-btn:not(.event-finance-icon-btn-accent) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* —— Finance badges —— */
+.app-shell[data-theme="dark"] .finansije-paid-badge {
+  background: rgba(184, 255, 0, 0.14);
+  border: 1px solid rgba(184, 255, 0, 0.32);
+  color: var(--chabar-accent-lime);
+}
+
+.app-shell[data-theme="dark"] .finansije-partial-badge {
+  background: rgba(255, 230, 0, 0.12);
+  border: 1px solid rgba(255, 230, 0, 0.28);
+  color: #ffe600;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-unpaid {
+  background: rgba(255, 61, 110, 0.14) !important;
+  color: #ff8fa8 !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-paid {
+  background: rgba(184, 255, 0, 0.12) !important;
+  color: var(--chabar-accent-lime) !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-partial {
+  background: rgba(255, 230, 0, 0.12) !important;
+  color: #ffe600 !important;
+}
+
+/* —— Bottom nav + FAB —— */
+.app-shell[data-theme="dark"] .app-tabbar {
+  backdrop-filter: blur(22px) saturate(1.35);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  background: rgba(6, 4, 14, 0.78);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-item {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-item.is-active {
+  color: var(--chabar-accent-teal) !important;
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-item.is-active span {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-add {
+  background: var(--chabar-accent-teal) !important;
+  box-shadow:
+    0 0 0 4px rgba(0, 246, 255, 0.14),
+    0 4px 22px rgba(0, 246, 255, 0.48) !important;
+  color: #041018 !important;
+  height: 3.05rem !important;
+  margin-top: -0.75rem;
+  min-height: 3.05rem !important;
+  width: 3.05rem !important;
+}
+
+.app-shell[data-theme="dark"] .app-tabbar-add:hover,
+.app-shell[data-theme="dark"] .app-tabbar-add.is-open {
+  background: color-mix(in srgb, var(--chabar-accent-teal) 90%, #fff 10%) !important;
+  box-shadow:
+    0 0 0 5px rgba(0, 246, 255, 0.2),
+    0 6px 28px rgba(0, 246, 255, 0.58) !important;
+  color: #041018 !important;
+}
+
+/* —— Login —— */
+html[data-theme="dark"] .login-page {
+  background: transparent;
+}
+
+html[data-theme="dark"] .login-card {
+  color: var(--chabar-text-primary);
+}
+
+html[data-theme="dark"] .login-divider {
+  color: var(--chabar-text-secondary);
+}
+
+html[data-theme="dark"] .login-switch,
+html[data-theme="dark"] .login-legal a {
+  color: var(--chabar-accent-teal);
+}
+
+html[data-theme="dark"] .legal-page,
+html[data-theme="dark"] .legal-header {
+  background: transparent;
+  color: var(--chabar-text-primary);
+}
+
+html[data-theme="dark"] .legal-back {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+html[data-theme="dark"] .legal-placeholder {
+  color: var(--chabar-text-secondary);
+}
+
+/* —— Menu / search dropdown items —— */
+.app-shell[data-theme="dark"] .menu-select-option:hover,
+.app-shell[data-theme="dark"] .menu-select-option.is-active,
+.app-shell[data-theme="dark"] .global-search-option:hover,
+.app-shell[data-theme="dark"] .global-search-option.is-active,
+.app-shell[data-theme="dark"] .date-row-menu-list button:hover,
+.app-shell[data-theme="dark"] .app-tabbar-add-item:hover {
+  background: rgba(0, 246, 255, 0.1) !important;
+  color: var(--chabar-text-primary) !important;
+}
+
+.app-shell[data-theme="dark"] .app-topbar-search {
+  backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+/* —— Tech rider / tables (minimal glass rows) —— */
+.app-shell[data-theme="dark"] .tech-rider-row,
+.app-shell[data-theme="dark"] .setlist-row,
+.app-shell[data-theme="dark"] .finance-detail-lines li {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-theme="dark"] .finance-detail-line-status {
+  color: var(--chabar-text-secondary);
+}
+
+/* —— Skeleton loaders —— */
+.app-shell[data-theme="dark"] .sk-block,
+.app-shell[data-theme="dark"] .raspored-row-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  ) !important;
+}

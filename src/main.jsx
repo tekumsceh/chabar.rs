@@ -8,6 +8,7 @@ import { initFadeScrollbars } from "./fadeScrollbar.js";
 import "../styles/md3-tokens.css";
 import "../styles.css";
 import "../styles/md3-overrides.css";
+import "../styles/gemini-dark-ui.css";
 
 // www and apex are different origins — OAuth PKCE breaks across them.
 if (typeof window !== "undefined" && window.location.hostname === "www.chabar.rs") {

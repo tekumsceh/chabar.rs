@@ -1,12 +1,6 @@
 import "dotenv/config";
 import { query, pool } from "../server/db.js";
-import { parseDate, startOfToday } from "../src/calculations.js";
-
-function isPastEventDate(dateText) {
-  const eventDate = parseDate(dateText);
-  if (Number.isNaN(eventDate.getTime())) return false;
-  return eventDate < startOfToday();
-}
+import { isPastEventDate, parseDate } from "../src/calculations.js";
 
 const defaults = await query(
   `SELECT band_id, console_ids, notes FROM band_tech_rider_defaults ORDER BY band_id`,

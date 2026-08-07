@@ -4,13 +4,7 @@
  */
 import "dotenv/config";
 import { query, pool } from "../server/db.js";
-import { parseDate, startOfToday } from "../src/calculations.js";
-
-function isPastEventDate(dateText) {
-  const eventDate = parseDate(dateText);
-  if (Number.isNaN(eventDate.getTime())) return false;
-  return eventDate < startOfToday();
-}
+import { isPastEventDate, parseDate } from "../src/calculations.js";
 
 function normalizeOrigin(value) {
   if (value === "default" || value === "custom") return value;

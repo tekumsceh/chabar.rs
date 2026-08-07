@@ -34,7 +34,7 @@ export default function BandPills({
       <div className="band-pills-scroll" ref={scrollRef}>
         <button
           type="button"
-          className={`band-pill ${active === allBandsId ? "is-active" : ""}`}
+          className={`band-pill band-pill-all ${active === allBandsId ? "is-active is-all" : ""}`}
           aria-pressed={active === allBandsId}
           onClick={() => onSelectBand?.(allBandsId)}
         >
@@ -47,7 +47,7 @@ export default function BandPills({
             <button
               key={band.id}
               type="button"
-              className={`band-pill ${isActive ? "is-active" : ""}`}
+              className={`band-pill ${color ? "has-accent" : ""} ${isActive ? "is-active" : ""}`}
               aria-pressed={isActive}
               onClick={() => onSelectBand?.(band.id)}
               style={color ? { "--band-pill-accent": color } : undefined}

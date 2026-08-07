@@ -41,6 +41,16 @@ function normalizePage(page) {
 const ACTIVE_BAND_KEY = "ioorganize.activeBandId.v2";
 const SCHEDULE_CACHE_STORAGE_KEY = "ioorganize.scheduleCache.v1";
 const THEME_KEY = "ioorganize.theme";
+
+function readInitialTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+  } catch {
+    /* ignore */
+  }
+  return "dark";
+}
 const FINANCE_MODE_KEY = "ioorganize.financeMode";
 const ALL_BANDS_ID = "__all__";
 
@@ -84,7 +94,7 @@ export default function App() {
   }
 
   const activePage = normalizePage(page);
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || "light");
+  const [theme, setTheme] = useState(readInitialTheme);
   const [financeMode, setFinanceMode] = useState(() => localStorage.getItem(FINANCE_MODE_KEY) || "member");
   const [events, setEvents] = useState([]);
   const [financeEvents, setFinanceEvents] = useState([]);
@@ -1224,6 +1234,7 @@ export default function App() {
           setProfileHubOpen(false);
           setPage("settings");
         }}
+        onOpenLegal={setPage}
         onSignOut={handleSignOut}
       />
 

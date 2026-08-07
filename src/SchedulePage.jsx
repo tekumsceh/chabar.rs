@@ -5,6 +5,7 @@ import {
   parseDate,
   sameMonth,
   startOfToday,
+  isPastEventDate,
   compareScheduleProximity,
   todayText,
 } from "./calculations.js";
@@ -39,9 +40,11 @@ const SCHEDULE_LAYOUT_KEY = "chabar.scheduleLayout";
 
 function readScheduleLayout() {
   try {
-    return localStorage.getItem(SCHEDULE_LAYOUT_KEY) === "card" ? "card" : "list";
+    const stored = localStorage.getItem(SCHEDULE_LAYOUT_KEY);
+    if (stored === "list") return "list";
+    return "card";
   } catch {
-    return "list";
+    return "card";
   }
 }
 
@@ -789,15 +792,12 @@ function MoreDotsIcon() {
 }
 
 function enrichScheduleRows(events) {
-  const calculationDate = startOfToday();
-
   return events
     .filter((event) => !isFinancialOnlyEntry(event))
     .map((event) => {
       const hasDate = Boolean(String(event.date || "").trim());
       const parsedDate = parseDate(event.date);
-      const done =
-        hasDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() <= calculationDate.getTime();
+      const done = hasDate && !Number.isNaN(parsedDate.getTime()) && isPastEventDate(parsedDate);
 
       return {
         ...event,

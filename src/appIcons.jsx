@@ -149,6 +149,21 @@ export function ChevronRightIcon() {
   );
 }
 
+export function ShieldIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 3.5l7 2.8v5.2c0 4.2-2.8 7.8-7 9-4.2-1.2-7-4.8-7-9V6.3l7-2.8z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M9.5 12.2l1.8 1.8 3.5-3.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function ListLayoutIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">

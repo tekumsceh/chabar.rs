@@ -4,7 +4,7 @@
  */
 
 /* —— MD3 buttons (filled tonal default) —— */
-button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-tile):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab) {
+button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab) {
   background: var(--md-primary-container);
   border: 0;
   border-radius: var(--radius-pill);

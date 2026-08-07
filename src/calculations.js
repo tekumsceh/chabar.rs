@@ -346,7 +346,7 @@ function compareFinanceRows(a, b) {
  */
 export function calculate(events, payments, settings, allocationRows = null, financeContext = null) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
-  // Held/dospeo = calendar today inclusive (not settings.asOfDate — that can lag).
+  // Held/dospeo = day after the gig (not settings.asOfDate — that can lag).
   const calculationDate = startOfToday();
   const ctx = financeContext || { mode: "member", userId: "" };
 
@@ -395,7 +395,7 @@ export function calculate(events, payments, settings, allocationRows = null, fin
   const enriched = (events || []).map((event, index) => {
     const parsedDate = parseDate(event.date);
     const hasDate = Boolean(String(event.date || "").trim()) && !Number.isNaN(parsedDate.getTime());
-    const done = hasDate && parsedDate.getTime() <= calculationDate.getTime();
+    const done = hasDate && isPastEventDate(parsedDate);
     const priceEur = numberValue(event.priceEur);
     const rate = hasDate ? rateForDate(parsedDate, settings) : DEFAULT_RATE;
     const expenseItems = financeExpenseItems(event);
@@ -644,6 +644,16 @@ export function parseDate(value) {
 export function startOfToday() {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+/**
+ * Held / locked / dospeo — true from the calendar day after the gig date.
+ * Same-day events stay open and editable until local midnight.
+ */
+export function isPastEventDate(dateValue) {
+  const parsed = dateValue instanceof Date ? dateValue : parseDate(dateValue);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() < startOfToday().getTime();
 }
 
 /**
