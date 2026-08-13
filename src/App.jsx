@@ -1200,6 +1200,11 @@ export default function App() {
           focusTab={reportFocusTab}
           onFocusTabConsumed={() => setReportFocusTab(null)}
           onBack={goToSchedule}
+          onOpenLiveEvent={(eventId) => {
+            setProfileHubOpen(false);
+            setPage("schedule");
+            setScheduleFocusEventId(eventId);
+          }}
           onPayEvent={payFinanceEvent}
           onPayLine={payFinanceLine}
           onBulkPay={bulkPayFinance}

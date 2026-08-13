@@ -51,6 +51,7 @@ export default function ReportPage({
   focusTab = null,
   onFocusTabConsumed,
   onBack,
+  onOpenLiveEvent,
   onPayEvent,
   onPayLine,
   onBulkPay,
@@ -355,6 +356,7 @@ export default function ReportPage({
                 const amountTone = feeAmountTone(row);
                 const isSettled = financeDue && row.done && row.paymentClass === "paid";
                 const isPartial = financeDue && row.done && row.paymentClass === "partial";
+                const isLive = Boolean(row.hasDate && !row.done);
                 const owed = financeDue ? financeRemainingEur(row) : 0;
                 const displayEur =
                   financeDue && row.paymentClass === "partial" ? owed : row.totalEur;
@@ -362,16 +364,28 @@ export default function ReportPage({
                 return (
                   <li
                     key={row.id}
-                    className={`raspored-row raspored-row-finance ${isSettled ? "is-finance-settled" : ""}${isPartial ? " is-partial" : ""}`}
+                    className={`raspored-row raspored-row-finance ${isSettled ? "is-finance-settled" : ""}${isPartial ? " is-partial" : ""}${isLive ? " is-live" : ""}`}
                     style={color ? { "--band-accent": color } : undefined}
                   >
                     <button
                       type="button"
                       className="raspored-row-button raspored-row-open"
-                      onClick={() => setSelectedId(row.id)}
-                      aria-label={t("report.detail", {
-                        label: `${row.date || ""} ${row.city || ""} ${bandLabel}`.trim(),
-                      })}
+                      onClick={() => {
+                        if (isLive && onOpenLiveEvent) {
+                          onOpenLiveEvent(row.id);
+                          return;
+                        }
+                        setSelectedId(row.id);
+                      }}
+                      aria-label={
+                        isLive
+                          ? t("schedule.openEvent", {
+                              label: `${row.date || ""} ${row.city || ""} ${bandLabel}`.trim(),
+                            })
+                          : t("report.detail", {
+                              label: `${row.date || ""} ${row.city || ""} ${bandLabel}`.trim(),
+                            })
+                      }
                     >
                       <time className="raspored-date" dateTime={dateParts.dateTime || undefined}>
                         <span className="raspored-date-day">{dateParts.day}</span>
@@ -833,9 +847,9 @@ function matchesFilters(row, search, status) {
 
   if (query && !haystack.includes(query)) return false;
   if (status === "done") return Boolean(row.done) && isFinanceDueRow(row);
-  if (status === "future") return row.hasDate && !row.done;
+  if (status === "future") return row.hasDate && !row.held && !row.done;
   if (status === "paid") return Boolean(row.done) && row.paymentClass === "paid";
-  if (status === "unpaid") return Boolean(row.done) && isFinanceDueRow(row) && row.paymentClass !== "paid";
+  if (status === "unpaid") return isFinanceDueRow(row) && row.paymentClass !== "paid";
   return true;
 }
 

@@ -6057,6 +6057,11 @@ button.date-row-menu-item svg {
   min-width: 0;
 }
 
+.finansije .raspored-row-finance.is-live {
+  box-shadow: inset 3px 0 0 var(--band-accent, var(--brand));
+  opacity: 1;
+}
+
 .finansije .raspored-row-finance.is-finance-settled .raspored-row-open {
   opacity: 0.9;
 }
