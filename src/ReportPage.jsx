@@ -10,6 +10,7 @@ import {
   formatEur,
   formatRsd,
   formatScheduleDateParts,
+  isFinanceDueRow,
   memberPayeeExpenseEur,
   numberValue,
   waterfallClaimEur,
@@ -19,6 +20,7 @@ import FieldSelect from "./FieldSelect.jsx";
 import MenuSelect from "./MenuSelect.jsx";
 import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import FadeScroll from "./FadeScroll.jsx";
+import FinanceHistoryModal from "./FinanceHistoryModal.jsx";
 import PageHeader from "./PageHeader.jsx";
 import { useT } from "./i18n/I18nProvider.jsx";
 
@@ -68,6 +70,7 @@ export default function ReportPage({
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
   const [bulkAmount, setBulkAmount] = useState("");
   const [bulkCurrency, setBulkCurrency] = useState("EUR");
+  const [historyRow, setHistoryRow] = useState(null);
 
   useEffect(() => {
     if (focusEventId == null || focusEventId === "") return;
@@ -88,7 +91,7 @@ export default function ReportPage({
 
   const DATES_PAGE_SIZE = 20;
 
-  // Row colors + Potražuje share one global payment waterfall (calculate).
+  // Row colors + Potražuje: spreadsheet model (held − uplate; event-level badges).
   const calculations = useMemo(
     () => calculate(events, payments, settings, null, { mode: financeMode, userId }),
     [events, payments, settings, financeMode, userId],
@@ -158,12 +161,11 @@ export default function ReportPage({
   }, [payments, viewYear, activeBandId, allBandsId]);
 
   /**
-   * Potražuje = unpaid remainders on past rows (band/year/search), after the
-   * global uplate waterfall — not held minus scoped uplate (that breaks per band).
+   * Filtered Potražuje = sum of row remainders on held rows in view (matches slices of global claim).
    */
   const claimEur = useMemo(() => {
     const pastRows = bandRows.filter((row) => {
-      if (!row.done || !row.hasDate) return false;
+      if (!isFinanceDueRow(row)) return false;
       if (yearFromDate(row.date, row.parsedDate) !== viewYear) return false;
       return matchesFilters(row, search, "all");
     });
@@ -349,16 +351,17 @@ export default function ReportPage({
                 const bandLabel = financeBandLabel(band, row, t);
                 const color = resolveBandColor(band, row.bandId || bandLabel);
                 const dateParts = formatScheduleDateParts(row.date);
+                const financeDue = isFinanceDueRow(row);
                 const amountTone = feeAmountTone(row);
-                const isSettled = row.done && row.paymentClass === "paid";
-                const isPartial = row.done && row.paymentClass === "partial";
-                const owed = financeRemainingEur(row);
+                const isSettled = financeDue && row.paymentClass === "paid";
+                const isPartial = financeDue && row.paymentClass === "partial";
+                const owed = financeDue ? financeRemainingEur(row) : 0;
                 const displayEur = isPartial ? owed : row.totalEur;
                 const rowPaying = payingEventId === row.id;
                 return (
                   <li
                     key={row.id}
-                    className={`raspored-row raspored-row-finance ${isSettled ? "is-settled" : ""}${isPartial ? " is-partial" : ""}`}
+                    className={`raspored-row raspored-row-finance ${isSettled ? "is-finance-settled" : ""}${isPartial ? " is-partial" : ""}`}
                     style={color ? { "--band-accent": color } : undefined}
                   >
                     <button
@@ -380,11 +383,11 @@ export default function ReportPage({
                     </button>
                     <div className="finansije-row-trail">
                       <div className="finansije-row-slot finansije-row-slot-status">
-                        {row.done && row.paymentClass === "paid" ? (
+                        {financeDue && row.paymentClass === "paid" ? (
                           <span className="finansije-paid-badge" title={t("report.payPaid")}>
-                            {t("report.paidBadge")}
+                            {t("report.paidBadgeShort")}
                           </span>
-                        ) : isPartial ? (
+                        ) : financeDue && isPartial ? (
                           <span
                             className="finansije-partial-badge"
                             title={t("report.paidPartial", {
@@ -392,14 +395,14 @@ export default function ReportPage({
                               total: formatEur(row.totalEur),
                             })}
                           >
-                            {t("report.payPartial")}
+                            {t("report.partialBadgeShort")}
                           </span>
                         ) : (
                           <span className="finansije-row-slot-spacer" aria-hidden="true" />
                         )}
                       </div>
                       <div className="finansije-row-slot finansije-row-slot-pay">
-                        {row.done && owed > 0 && onPayEvent ? (
+                        {financeDue && owed > 0 && onPayEvent ? (
                           <button
                             type="button"
                             className="finansije-pay-btn"
@@ -414,37 +417,40 @@ export default function ReportPage({
                             {rowPaying ? (
                               "…"
                             ) : (
-                              <>
-                                <PayBtnIcon />
-                                <span>{t("report.payBtn")}</span>
-                              </>
+                              t("report.payBtn")
                             )}
                           </button>
                         ) : (
                           <span className="finansije-row-slot-spacer" aria-hidden="true" />
                         )}
                       </div>
-                      <span
-                        className={`finansije-row-amount raspored-fee raspored-fee-${amountTone}`}
-                        title={
-                          row.hasDate
-                            ? isPartial
-                              ? `${payStatusLabel(row, t)} · ${t("report.paidPartial", {
-                                  paid: formatEur(Math.max(0, row.totalEur - owed)),
-                                  total: formatEur(row.totalEur),
-                                })}`
-                              : `${payStatusLabel(row, t)} · ${formatEur(row.totalEur)}`
-                            : undefined
-                        }
-                      >
-                        {row.hasDate ? formatEurCeil(displayEur) : "—"}
-                      </span>
+                      {financeDue ? (
+                        <span
+                          className={`finansije-row-amount raspored-fee raspored-fee-${amountTone}`}
+                          title={
+                            row.hasDate
+                              ? isPartial
+                                ? `${payStatusLabel(row, t)} · ${t("report.paidPartial", {
+                                    paid: formatEur(Math.max(0, row.totalEur - owed)),
+                                    total: formatEur(row.totalEur),
+                                  })}`
+                                : `${payStatusLabel(row, t)} · ${formatEur(row.totalEur)}`
+                              : undefined
+                          }
+                        >
+                          {row.hasDate ? formatEurCeil(displayEur) : "—"}
+                        </span>
+                      ) : (
+                        <span className="finansije-row-amount is-empty" aria-hidden="true" />
+                      )}
                       <div className="finansije-row-slot finansije-row-slot-menu">
                         <div className="raspored-actions">
                           <FinanceRowMenu
                             row={row}
+                            financeDue={financeDue}
                             owed={owed}
                             onOpenDetail={() => setSelectedId(row.id)}
+                            onOpenHistory={() => setHistoryRow(row)}
                             onPay={() => onPayEvent?.(row.id, row.bandId)}
                             payDisabled={Boolean(payingEventId)}
                           />
@@ -527,6 +533,14 @@ export default function ReportPage({
           onClose={() => setSelectedId(null)}
           onPayLine={onPayLine}
           payingLineKey={payingLineKey}
+        />
+      ) : null}
+
+      {historyRow ? (
+        <FinanceHistoryModal
+          row={historyRow}
+          band={bandsById.get(historyRow.bandId)}
+          onClose={() => setHistoryRow(null)}
         />
       ) : null}
 
@@ -623,7 +637,7 @@ function FinanceDetailModal({
           <section className="finance-detail-section">
             <p className={`finance-detail-status finance-detail-status-${row.paymentClass || "future"}`}>
               {payStatusLabel(row, t)}
-              {row.done && remaining > 0 ? t("report.remains", { amount: formatEur(remaining) }) : null}
+              {isFinanceDueRow(row) && remaining > 0 ? t("report.remains", { amount: formatEur(remaining) }) : null}
             </p>
           </section>
 
@@ -648,7 +662,7 @@ function FinanceDetailModal({
                         </span>
                         <strong>{lineAmountLabel(line)}</strong>
                       </div>
-                      {row.done ? (
+                      {isFinanceDueRow(row) ? (
                         <div className="finance-detail-line-meta">
                           {isPaid ? (
                             <>
@@ -681,10 +695,7 @@ function FinanceDetailModal({
                                     {payingLineKey === lineKey ? (
                                       "…"
                                     ) : (
-                                      <>
-                                        <PayBtnIcon />
-                                        <span>{t("report.payBtn")}</span>
-                                      </>
+                                      t("report.payBtn")
                                     )}
                                   </button>
                                 ) : (
@@ -704,7 +715,7 @@ function FinanceDetailModal({
             </ul>
           </section>
 
-          {row.done ? (
+          {isFinanceDueRow(row) ? (
             <section className="finance-detail-section">
               <h3>{t("report.payment")}</h3>
               <p className={`finance-detail-paynote finance-detail-paynote-${bandPay.kind}`}>
@@ -780,7 +791,7 @@ function formatNumberish(value) {
 
 /** Short note: did the band receive money for this date (not a full payment ledger). */
 function bandPaymentNote(row, totalEur, remaining, t) {
-  if (!row.done || row.paymentClass === "unpaid" || row.paymentClass === "future") {
+  if (!isFinanceDueRow(row) || row.paymentClass === "unpaid" || row.paymentClass === "future" || row.paymentClass === "none") {
     return { kind: "none", text: t("report.noPayments") };
   }
 
@@ -820,24 +831,23 @@ function matchesFilters(row, search, status) {
   const haystack = [row.date, row.city, row.venue, row.bandName].join(" ").toLowerCase();
 
   if (query && !haystack.includes(query)) return false;
-  if (status === "done") return row.done;
+  if (status === "done") return isFinanceDueRow(row);
   if (status === "future") return row.hasDate && !row.done;
   if (status === "paid") return row.paymentClass === "paid";
-  if (status === "unpaid") return row.done && row.paymentClass !== "paid";
+  if (status === "unpaid") return isFinanceDueRow(row) && row.paymentClass !== "paid";
   return true;
 }
 
 function payStatusLabel(row, t) {
-  if (!row.done) return t("report.payOpen");
+  if (!isFinanceDueRow(row)) return t("report.payOpen");
   if (row.paymentClass === "paid") return t("report.payPaid");
   if (row.paymentClass === "partial") return t("report.payPartial");
   if (row.paymentClass === "unpaid") return t("report.payUnpaid");
   return t("report.payOpen");
 }
 
-/** Amount color: paid green, partial yellow, held unpaid red, future/open brand. */
 function feeAmountTone(row) {
-  if (!row.done) return "open";
+  if (!isFinanceDueRow(row)) return "open";
   if (row.paymentClass === "paid") return "paid";
   if (row.paymentClass === "partial") return "partial";
   return "unpaid";
@@ -920,13 +930,13 @@ function BulkPayModal({
   );
 }
 
-function FinanceRowMenu({ row, onOpenDetail, onPay, owed = 0, payDisabled = false }) {
+function FinanceRowMenu({ row, financeDue = true, onOpenDetail, onOpenHistory, onPay, owed = 0, payDisabled = false }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const idleTimerRef = useRef(0);
   const menuId = useId();
-  const needsPay = row.done && owed > 0;
+  const needsPay = financeDue && owed > 0;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -1002,25 +1012,25 @@ function FinanceRowMenu({ row, onOpenDetail, onPay, owed = 0, payDisabled = fals
                   onPay?.();
                 }}
               >
-                {t("report.payThisDate")}
-                <small>{formatEur(owed)}</small>
+                {t("report.payBtn")}
               </button>
             </li>
           ) : null}
-          {!row.done ? (
-            <li role="none">
-              <div className="date-row-menu-item is-status" role="menuitem" aria-disabled="true">
-                {t("report.futureNotDue")}
-              </div>
-            </li>
-          ) : null}
-          {row.done && row.paymentClass === "paid" ? (
-            <li role="none">
-              <div className="date-row-menu-item is-status is-fee-set" role="menuitem" aria-disabled="true">
-                {t("report.payPaid")}
-              </div>
-            </li>
-          ) : null}
+          <li role="none">
+            <button
+              type="button"
+              className="date-row-menu-item"
+              role="menuitem"
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+                onOpenHistory?.();
+              }}
+            >
+              <HistoryIcon />
+              {t("finance.auditOpen")}
+            </button>
+          </li>
           <li role="none">
             <button
               type="button"
@@ -1047,6 +1057,21 @@ function MoreDotsIcon() {
       <circle cx="12" cy="6" r="1.6" fill="currentColor" />
       <circle cx="12" cy="12" r="1.6" fill="currentColor" />
       <circle cx="12" cy="18" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 8v4l2.5 2.5M21 12a9 9 0 1 1-2.64-6.36"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -1123,34 +1148,6 @@ function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PayBtnIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M4 10h16v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18v-8Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M4 10 6.2 6.8A1.5 1.5 0 0 1 7.5 6h9a1.5 1.5 0 0 1 1.3.8L20 10"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 14.5h.01"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
     </svg>
   );
 }

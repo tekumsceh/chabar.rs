@@ -1,7 +1,22 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import { formatEur, numberValue } from "./calculations.js";
-import { useT } from "./i18n/I18nProvider.jsx";
+import FinanceAuditList from "./FinanceAuditList.jsx";
+import { useI18n, useT } from "./i18n/I18nProvider.jsx";
+
+function enrichAuditEntry(entry, members) {
+  if (entry.memberName) return entry;
+  let userId = entry.memberUserId || null;
+  if (!userId && entry.entityType === "event_member_finance") {
+    userId = String(entry.entityId || "").split(":")[1] || null;
+  }
+  if (!userId && entry.entityType === "band_member") {
+    userId = entry.after?.userId || entry.before?.userId || entry.entityId || null;
+  }
+  if (!userId) return entry;
+  const member = members.find((item) => item.id === userId);
+  return member ? { ...entry, memberName: member.name } : entry;
+}
 
 function hasValidDraft(raw) {
   const trimmed = String(raw ?? "").trim();
@@ -21,35 +36,6 @@ function draftsFromMembers(list) {
   return nextDrafts;
 }
 
-function formatAuditLine(entry, t) {
-  const before = entry.before || {};
-  const after = entry.after || {};
-  if (entry.entityType === "band_member") {
-    const prev = before.defaultPriceEur;
-    const next = after.defaultPriceEur;
-    if (next == null) {
-      return t("finance.auditDefaultCleared", {
-        amount: prev != null ? formatEur(prev) : "—",
-      });
-    }
-    return t("finance.auditDefaultSet", {
-      amount: formatEur(next),
-    });
-  }
-  if (entry.entityType === "event_member_finance") {
-    const prev = before.priceEur;
-    const next = after.priceEur;
-    if (entry.action === "insert") {
-      return t("finance.auditEventFeeSet", { amount: formatEur(next) });
-    }
-    return t("finance.auditEventFeeChanged", {
-      from: formatEur(prev),
-      to: formatEur(next),
-    });
-  }
-  return entry.action;
-}
-
 /**
  * Band management: per-member default honorari + recent audit log.
  */
@@ -62,6 +48,7 @@ export default function BandMemberFeesPanel({
   onSaved,
 }) {
   const t = useT();
+  const { locale } = useI18n();
   const [drafts, setDrafts] = useState(() => draftsFromMembers(members));
   const [savingId, setSavingId] = useState("");
   const [audit, setAudit] = useState([]);
@@ -85,7 +72,9 @@ export default function BandMemberFeesPanel({
       setAuditLoading(true);
       try {
         const data = await api(`/api/bands/${bandId}/fee-audit?limit=40`, { bandId });
-        if (!cancelled) setAudit(data.entries || []);
+        if (!cancelled) {
+          setAudit((data.entries || []).map((entry) => enrichAuditEntry(entry, members)));
+        }
       } catch {
         if (!cancelled) setAudit([]);
       } finally {
@@ -186,32 +175,15 @@ export default function BandMemberFeesPanel({
       </ul>
 
       {!readOnly ? (
-        <div className="band-fees-audit">
-          <h4>{t("finance.auditTitle")}</h4>
-          {auditLoading ? (
-            <p className="band-home-note">{t("finance.auditLoading")}</p>
-          ) : audit.length ? (
-            <ul className="band-fees-audit-list">
-              {audit.map((entry) => (
-                <li key={entry.id}>
-                  <time dateTime={entry.createdAt}>
-                    {new Date(entry.createdAt).toLocaleString(undefined, {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </time>
-                  <span>{entry.actorName}</span>
-                  <span>{formatAuditLine(entry, t)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="band-home-note">{t("finance.auditEmpty")}</p>
-          )}
-        </div>
+        <FinanceAuditList
+          entries={audit}
+          loading={auditLoading}
+          locale={locale}
+          title={t("finance.auditTitle")}
+          loadingMessage={t("finance.auditLoading")}
+          emptyMessage={t("finance.auditEmpty")}
+          t={t}
+        />
       ) : null}
     </div>
   );

@@ -4,7 +4,7 @@
  */
 
 /* —— MD3 buttons (filled tonal default) —— */
-button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab) {
+button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab):not(.finansije-pay-btn) {
   background: var(--md-primary-container);
   border: 0;
   border-radius: var(--radius-pill);
@@ -24,14 +24,13 @@ button:not(.icon):not(:disabled):hover {
 
 button.primary,
 button[type="submit"]:not(.icon),
-.finansije-pay-btn,
 .confirm-btn-primary {
   background: var(--md-primary) !important;
   color: var(--md-on-primary) !important;
 }
 
 .app-shell[data-theme="dark"] button.primary,
-.app-shell[data-theme="dark"] .finansije-pay-btn {
+.app-shell[data-theme="dark"] .confirm-btn-primary {
   background: var(--brand) !important;
   color: var(--on-brand) !important;
 }
@@ -225,40 +224,39 @@ textarea:focus {
 }
 
 /* —— Finance chips / badges —— */
-.finansije-paid-badge {
-  background: color-mix(in srgb, var(--ok) 16%, transparent);
+.finansije-paid-badge,
+.finansije-partial-badge {
+  background: transparent;
   border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--ok);
+  border-radius: 0;
+  color: var(--muted);
   font-weight: 500;
   text-transform: none;
 }
 
 .finansije-partial-badge {
-  background: color-mix(in srgb, var(--warn) 18%, transparent);
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--warn);
-  font-weight: 500;
-  text-transform: none;
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
 }
 
+.finansije .raspored-fee-paid,
+.finansije .raspored-fee-partial,
+.finansije .raspored-fee-unpaid,
+.finansije .raspored-fee-open {
+  background: transparent !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  font-weight: 650;
+}
+
+.finansije .raspored-fee-open,
 .finansije .raspored-fee-paid {
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
-  border-radius: var(--radius-sm);
-  color: var(--ok) !important;
+  color: var(--muted) !important;
+  font-weight: 600;
 }
 
 .finansije .raspored-fee-partial {
-  background: color-mix(in srgb, var(--warn) 16%, transparent);
-  border-radius: var(--radius-sm);
-  color: var(--warn) !important;
-}
-
-.finansije .raspored-fee-unpaid {
-  background: color-mix(in srgb, var(--md-error) 12%, transparent);
-  border-radius: var(--radius-sm);
-  color: var(--md-error) !important;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted)) !important;
 }
 
 /* —— Settings switch —— */

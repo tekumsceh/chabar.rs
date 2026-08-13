@@ -6,6 +6,7 @@ import {
   financeLineKey,
   financeRemainingEur,
   flattenPaymentAllocations,
+  isFinanceDueRow,
   numberValue,
   positiveNumber,
   round,
@@ -94,8 +95,9 @@ export async function createPaymentWithAllocations({
   amount,
   currency,
   exchangeRate,
-  allocations,
+  allocations = [],
   actorUserId,
+  auditMeta = null,
 }) {
   const created = await tx(
     `INSERT INTO payments (user_id, band_id, sort_order, payment_date_text, amount, currency, exchange_rate)
@@ -140,6 +142,8 @@ export async function createPaymentWithAllocations({
     savedAllocations.push({ eventId: item.eventId, amountEur, lineKind, expenseKey });
   }
 
+  const allocatedEur = savedAllocations.reduce((sum, row) => sum + Number(row.amountEur || 0), 0);
+
   await writeAudit(
     {
       entityType: "payment",
@@ -151,7 +155,12 @@ export async function createPaymentWithAllocations({
       after: {
         ...snapshotPayment(row),
         exchangeRate: Number(row.exchange_rate) || null,
+        currency,
         allocations: savedAllocations,
+        allocatedEur: round(allocatedEur),
+        requestedAmount: auditMeta?.requestedAmount ?? Number(amount),
+        requestedAmountEur: auditMeta?.requestedAmountEur ?? null,
+        unallocatedEur: auditMeta?.unallocatedEur ?? null,
       },
     },
     tx,
@@ -201,14 +210,7 @@ export function payLinePlan(events, payments, settings, eventId, lineKind, expen
   return {
     owedEur,
     line,
-    allocations: [
-      {
-        eventId: row.id,
-        lineKind: line.lineKind,
-        expenseKey: line.expenseKey || "",
-        amountEur: owedEur,
-      },
-    ],
+    allocations: [],
   };
 }
 
@@ -244,33 +246,20 @@ export function payEventPlan(events, payments, settings, eventId, financeContext
     err.status = 404;
     throw err;
   }
-  if (!row.done) {
-    const err = new Error("Budući termini se ne plaćaju.");
+  if (!isFinanceDueRow(row)) {
+    const err = new Error("Nema postavljenog iznosa za ovaj datum.");
     err.status = 400;
     throw err;
   }
 
-  const allocations = [];
-  let owedEur = 0;
-  for (const line of row.financeLines || []) {
-    const lineOwed = financeLineRemainingEur(line);
-    if (lineOwed <= 0) continue;
-    owedEur += lineOwed;
-    allocations.push({
-      eventId: row.id,
-      lineKind: line.lineKind,
-      expenseKey: line.expenseKey || "",
-      amountEur: lineOwed,
-    });
-  }
-
+  const owedEur = financeRemainingEur(row);
   if (owedEur <= 0) {
     const err = new Error("Datum je već plaćen.");
     err.status = 400;
     throw err;
   }
 
-  return { owedEur, allocations };
+  return { owedEur, allocations: [] };
 }
 
 export function bulkPayPlan(events, payments, settings, amount, currency, exchangeRate, financeContext) {
@@ -285,14 +274,17 @@ export function bulkPayPlan(events, payments, settings, amount, currency, exchan
     throw err;
   }
   const plan = simulateBulkPayAllocations(calc.rows, amountEur);
-  if (!plan.allocations.length) {
-    const err = new Error("Nema neplaćenih stavki za ovu uplatu.");
-    err.status = 400;
-    throw err;
-  }
-  const allocatedEur = plan.allocations.reduce((sum, row) => sum + Number(row.amountEur), 0);
-  const paymentAmount = eurToPaymentAmount(allocatedEur, currency, exchangeRate);
-  return { ...plan, paymentAmount, amountEur: allocatedEur };
+  const previewAllocatedEur = plan.allocations.reduce((sum, row) => sum + Number(row.amountEur), 0);
+  const requestedAmount = round(numberValue(amount));
+  const paymentCurrency = String(currency).toUpperCase() === "RSD" ? "RSD" : "EUR";
+  return {
+    ...plan,
+    paymentAmount: requestedAmount,
+    paymentCurrency,
+    requestedAmountEur: round(amountEur),
+    previewAllocatedEur: round(previewAllocatedEur),
+    unallocatedEur: round(Math.max(0, amountEur - previewAllocatedEur)),
+  };
 }
 
 export function paymentSummaryText(plan) {

@@ -358,7 +358,7 @@ main,
   display: flex !important;
   font-size: var(--control-font) !important;
   font-weight: 500 !important;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 0.45rem;
   min-height: var(--control-row-min);
@@ -366,6 +366,27 @@ main,
   text-align: left;
   transform: none !important;
   width: 100%;
+}
+
+.user-menu-item > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.user-menu-count {
+  align-items: center;
+  background: var(--neon-magenta, #ff2bd6);
+  color: #1a0020;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  height: 1.2rem;
+  justify-content: center;
+  margin-left: auto;
+  min-width: 1.2rem;
+  padding: 0 0.35rem;
 }
 
 .user-menu-item:hover:not(:disabled) {
@@ -394,19 +415,6 @@ main,
   background: var(--line);
   height: 1px;
   margin: 0.35rem 0.4rem;
-}
-
-.user-menu-count {
-  align-items: center;
-  background: var(--neon-magenta, #ff2bd6);
-  color: #1a0020;
-  display: inline-flex;
-  font-size: 0.68rem;
-  font-weight: 800;
-  height: 1.2rem;
-  justify-content: center;
-  min-width: 1.2rem;
-  padding: 0 0.35rem;
 }
 
 .user-menu-header-row {
@@ -1179,13 +1187,27 @@ button.status-icon-edit:hover {
   font-size: var(--control-font) !important;
   font-weight: 500 !important;
   gap: 0.45rem;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
   min-height: var(--control-row-min);
   padding: var(--control-pad-y) var(--control-pad-x) !important;
   text-align: left !important;
   text-transform: none !important;
   transform: none !important;
   width: 100%;
+}
+
+.field-select-item > svg {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.field-select-item-main {
+  align-items: center;
+  display: inline-flex;
+  flex: 1 1 auto;
+  gap: 0.4rem;
+  min-width: 0;
+  text-align: left;
 }
 
 .field-select-item:hover:not(:disabled) {
@@ -1212,13 +1234,6 @@ button.status-icon-edit:hover {
 .field-select-item:disabled {
   cursor: not-allowed;
   opacity: 0.4;
-}
-
-.field-select-item-main {
-  align-items: center;
-  display: inline-flex;
-  gap: 0.4rem;
-  min-width: 0;
 }
 
 .finansije-year-select-wrap .field-select {
@@ -2360,6 +2375,81 @@ td input[data-field="note"] {
   overflow: hidden;
 }
 
+.app-shell-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.ptr-indicator {
+  align-items: center;
+  color: var(--text-muted, #5f6368);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  left: 50%;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0.35rem;
+  transform: translate(-50%, calc(-100% + var(--ptr-pull, 0px)));
+  transition: opacity 0.12s ease;
+  z-index: 120;
+}
+
+.app-shell-inner.is-ptr-active .ptr-indicator {
+  opacity: clamp(0.35, calc(var(--ptr-progress, 0) + 0.25), 1);
+}
+
+.ptr-indicator-icon {
+  align-items: center;
+  background: var(--panel, rgba(255, 255, 255, 0.92));
+  border-radius: 999px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  display: inline-flex;
+  height: 2.1rem;
+  justify-content: center;
+  transform: rotate(calc(var(--ptr-progress, 0) * 180deg));
+  width: 2.1rem;
+}
+
+.ptr-indicator-icon svg {
+  height: 1.15rem;
+  width: 1.15rem;
+}
+
+.ptr-indicator-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.app-shell-inner.is-ptr-refreshing .ptr-indicator-icon {
+  transform: none;
+}
+
+.ptr-spinner {
+  animation: ptr-spin 0.75s linear infinite;
+}
+
+@keyframes ptr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-shell-inner:has(.app-shell[data-theme="dark"]) .ptr-indicator {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.app-shell-inner:has(.app-shell[data-theme="dark"]) .ptr-indicator-icon {
+  background: rgba(28, 24, 40, 0.92);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+}
+
 .app-topbar {
   align-items: stretch;
   box-sizing: border-box;
@@ -2541,7 +2631,7 @@ td input[data-field="note"] {
   cursor: pointer;
   display: flex;
   gap: 0.55rem;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 0.48rem 0.55rem;
   text-align: left;
   width: 100%;
@@ -2554,9 +2644,11 @@ td input[data-field="note"] {
 
 .global-search-option-text {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.08rem;
   min-width: 0;
+  text-align: left;
 }
 
 .global-search-option-text strong {
@@ -2582,6 +2674,7 @@ td input[data-field="note"] {
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  margin-left: auto;
   text-transform: uppercase;
 }
 
@@ -3796,6 +3889,7 @@ td input[data-field="note"] {
   font-size: var(--control-font) !important;
   font-weight: 500 !important;
   gap: 0.45rem;
+  justify-content: flex-start;
   line-height: 1.25;
   min-height: var(--control-row-min);
   padding: var(--control-pad-y) var(--control-pad-x) !important;
@@ -3827,23 +3921,20 @@ button.date-row-menu-item:focus-visible {
 }
 
 .date-row-menu-item.is-pay {
-  color: #b91c1c;
-  display: flex;
-  flex-direction: column;
-  font-weight: 800;
-  gap: 0.08rem;
-}
-
-.date-row-menu-item.is-pay small {
-  color: color-mix(in srgb, #b91c1c 72%, var(--muted));
-  font-size: 0.72rem;
-  font-weight: 700;
+  color: var(--ink) !important;
+  font-weight: 600 !important;
 }
 
 button.date-row-menu-item.is-pay:hover,
 button.date-row-menu-item.is-pay:focus-visible {
-  background: color-mix(in srgb, #ef4444 12%, transparent);
-  color: #991b1b;
+  background: color-mix(in srgb, var(--ink) 6%, transparent) !important;
+  color: var(--ink) !important;
+}
+
+button.date-row-menu-item svg {
+  flex-shrink: 0;
+  height: 1rem;
+  width: 1rem;
 }
 
 .date-row-menu-item.is-status {
@@ -4872,12 +4963,17 @@ button.date-row-menu-item.is-pay:focus-visible {
   font-size: var(--control-font) !important;
   font-weight: 500 !important;
   gap: 0.55rem;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
   min-height: var(--control-row-min);
   padding: var(--control-pad-y) var(--control-pad-x) !important;
   text-align: left;
   transform: none !important;
   width: 100%;
+}
+
+.menu-select-item > svg {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .menu-select-item:hover {
@@ -5220,6 +5316,91 @@ button.date-row-menu-item.is-pay:focus-visible {
   max-width: 36rem;
 }
 
+.finance-history-panel {
+  max-height: min(88vh, 36rem);
+  max-width: 34rem;
+}
+
+.finance-history-head {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem 0.75rem;
+  position: relative;
+}
+
+.finance-history-head h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  padding-right: 2rem;
+}
+
+.finance-history-sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.finance-history-close {
+  position: absolute;
+  right: 0.65rem;
+  top: 0.65rem;
+}
+
+.finance-history-body {
+  padding: 0.65rem 1rem 0.85rem;
+}
+
+.finance-changelog-wrap {
+  min-width: 0;
+}
+
+.finance-changelog-wrap.is-event {
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+}
+
+.finance-changelog-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.45rem;
+  text-transform: uppercase;
+}
+
+.finance-changelog-list {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.finance-changelog-line {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+  padding: 0.38rem 0;
+  word-break: break-word;
+}
+
+.finance-changelog-line:last-child {
+  border-bottom: 0;
+}
+
+.finance-changelog-empty {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.finance-changelog-empty.is-error {
+  color: var(--danger, #be123c);
+}
+
 .finance-detail-head {
   align-items: flex-start;
   border-bottom: 1px solid var(--line);
@@ -5237,7 +5418,9 @@ button.date-row-menu-item.is-pay:focus-visible {
 }
 
 .modal-panel > .fade-scroll-wrap:has(.finance-detail-body),
-.finance-detail-panel > .fade-scroll-wrap {
+.modal-panel > .fade-scroll-wrap:has(.finance-history-body),
+.finance-detail-panel > .fade-scroll-wrap,
+.finance-history-panel > .fade-scroll-wrap {
   flex: 1;
   min-height: 0;
 }
@@ -5273,20 +5456,17 @@ button.date-row-menu-item.is-pay:focus-visible {
   margin: 0;
 }
 
-.finance-detail-status-paid {
-  color: #15803d;
-}
-
-.finance-detail-status-partial {
-  color: #b45309;
+.finance-detail-status-paid,
+.finance-detail-status-partial,
+.finance-detail-status-unpaid,
+.finance-detail-status-future,
+.finance-detail-status-none {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .finance-detail-status-unpaid {
-  color: #b91c1c;
-}
-
-.finance-detail-status-future {
-  color: var(--muted);
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
 }
 
 .finance-detail-empty {
@@ -5369,41 +5549,32 @@ button.date-row-menu-item.is-pay:focus-visible {
 }
 
 .finance-detail-paynote {
-  border-radius: 0.55rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+  background: transparent;
+  border-radius: 0;
+  font-size: 0.84rem;
+  font-weight: 500;
   margin: 0;
-  padding: 0.7rem 0.85rem;
+  padding: 0.55rem 0 0;
 }
 
-.finance-detail-paynote-none {
-  background: var(--surface);
+.finance-detail-paynote-none,
+.finance-detail-paynote-paid,
+.finance-detail-paynote-partial {
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   color: var(--muted);
 }
 
-.finance-detail-paynote-paid {
-  background: #dcfce7;
-  color: #166534;
-}
-
+.finance-detail-paynote-unpaid,
 .finance-detail-paynote-partial {
-  background: #fef9c3;
-  color: #854d0e;
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
 }
 
-.app-shell[data-theme="dark"] .finance-detail-paynote-none {
-  background: #1c2531;
-  color: #a0acbd;
-}
-
-.app-shell[data-theme="dark"] .finance-detail-paynote-paid {
-  background: #14352c;
-  color: #6ee7b7;
-}
-
-.app-shell[data-theme="dark"] .finance-detail-paynote-partial {
-  background: #3a2e14;
-  color: #fde68a;
+.app-shell[data-theme="dark"] .finance-detail-paynote-none,
+.app-shell[data-theme="dark"] .finance-detail-paynote-paid,
+.app-shell[data-theme="dark"] .finance-detail-paynote-partial,
+.app-shell[data-theme="dark"] .finance-detail-paynote-unpaid {
+  background: transparent;
+  color: var(--muted);
 }
 
 .event-comments-panel {
@@ -5594,9 +5765,9 @@ button.date-row-menu-item.is-pay:focus-visible {
 .finansije .raspored-row-finance,
 .finansije .raspored-row-pay {
   align-items: center;
-  gap: 0.35rem 0.45rem;
-  min-height: 3.1rem;
-  padding: 0.45rem 0.65rem !important;
+  gap: 0.28rem 0.35rem;
+  min-height: 2.45rem;
+  padding: 0.32rem 0.55rem !important;
 }
 
 .finansije .raspored-row-finance {
@@ -5604,11 +5775,14 @@ button.date-row-menu-item.is-pay:focus-visible {
 }
 
 .finansije-row-trail {
+  --fin-col-status: 2.55rem;
+  --fin-col-amount: 4rem;
+  --fin-col-menu: 1.35rem;
   align-items: center;
   display: grid;
   flex-shrink: 0;
-  gap: 0.35rem;
-  grid-template-columns: 4.1rem 3.85rem 4.85rem 2rem;
+  gap: 0.22rem 0.28rem;
+  grid-template-columns: var(--fin-col-status) max-content var(--fin-col-amount) var(--fin-col-menu);
   justify-items: stretch;
 }
 
@@ -5616,26 +5790,37 @@ button.date-row-menu-item.is-pay:focus-visible {
   align-items: center;
   display: flex;
   justify-content: center;
-  min-height: 1.85rem;
+  min-height: 1.35rem;
   min-width: 0;
 }
 
 .finansije-row-slot-status {
   justify-content: flex-end;
+  width: var(--fin-col-status);
 }
 
 .finansije-row-slot-pay {
-  justify-content: center;
+  justify-content: flex-end;
+  width: auto;
 }
 
 .finansije-row-slot-menu {
   justify-content: center;
+  width: var(--fin-col-menu);
 }
 
 .finansije-row-slot-spacer {
   display: block;
-  height: 1.85rem;
+  height: 1.35rem;
   width: 100%;
+}
+
+.finansije-row-slot-status .finansije-row-slot-spacer {
+  width: 2.2rem;
+}
+
+.finansije-row-slot-pay .finansije-row-slot-spacer {
+  width: 1.75rem;
 }
 
 .finansije-row-trail .raspored-actions {
@@ -5643,103 +5828,103 @@ button.date-row-menu-item.is-pay:focus-visible {
 }
 
 .finansije-row-trail .finansije-row-amount {
+  box-sizing: border-box;
   flex-shrink: 0;
   justify-self: end;
-  min-width: 4.5rem;
+  max-width: var(--fin-col-amount);
+  min-width: var(--fin-col-amount);
   text-align: right;
+  width: var(--fin-col-amount);
 }
 
-.finansije-paid-badge {
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
-  border-radius: 999px;
-  color: var(--ok);
+.finansije-paid-badge,
+.finansije-partial-badge {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  color: var(--muted);
+  display: inline-flex;
   flex-shrink: 0;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  line-height: 1;
-  padding: 0.28rem 0.45rem;
-  text-transform: uppercase;
+  font-size: 0.56rem;
+  font-weight: 500;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1.2;
+  padding: 0;
+  text-align: center;
+  text-transform: none;
   white-space: nowrap;
 }
 
 .finansije-partial-badge {
-  background: color-mix(in srgb, #f59e0b 16%, transparent);
-  border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
-  border-radius: 999px;
-  color: #b45309;
-  flex-shrink: 0;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  line-height: 1;
-  padding: 0.28rem 0.45rem;
-  text-transform: uppercase;
-  white-space: nowrap;
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
 }
 
+.finansije-row-amount.is-empty {
+  visibility: hidden;
+}
+
+/* Trailing text action (Material / Splitwise-style — muted link, not a button) */
 .finansije-pay-btn {
   align-items: center;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--brand) 94%, #fff 6%),
-    color-mix(in srgb, var(--brand) 76%, #000 12%)
-  );
-  border: 1px solid color-mix(in srgb, var(--brand) 55%, #000 18%);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent),
-    0 2px 8px color-mix(in srgb, var(--brand) 32%, transparent);
-  color: #fff;
+  appearance: none;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: color-mix(in srgb, var(--muted) 90%, var(--ink)) !important;
   cursor: pointer;
   display: inline-flex;
   flex-shrink: 0;
-  font-size: 0.66rem;
-  font-weight: 800;
-  gap: 0.22rem;
+  font-size: 0.58rem;
+  font-weight: 500;
+  gap: 0;
   justify-content: center;
-  letter-spacing: 0.05em;
-  line-height: 1;
-  min-height: 1.85rem;
-  min-width: 3.55rem;
-  padding: 0.34rem 0.55rem;
-  text-shadow: 0 1px 0 color-mix(in srgb, #000 22%, transparent);
-  text-transform: uppercase;
-  transition:
-    background 140ms ease,
-    box-shadow 140ms ease,
-    transform 80ms ease;
-  width: 100%;
+  letter-spacing: 0;
+  line-height: 1.2;
+  min-height: 0;
+  min-width: 0;
+  padding: 0.18rem 0.06rem;
+  text-decoration: none;
+  text-shadow: none;
+  text-transform: none;
+  transform: none !important;
+  transition: color 120ms ease;
+  width: auto;
 }
 
 .finansije-pay-btn svg {
-  flex-shrink: 0;
-  height: 0.9rem;
-  opacity: 0.95;
-  width: 0.9rem;
+  display: none;
 }
 
-.finansije-pay-btn:hover:not(:disabled) {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--brand) 88%, #fff 12%),
-    color-mix(in srgb, var(--brand) 70%, #000 10%)
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent),
-    0 3px 10px color-mix(in srgb, var(--brand) 40%, transparent);
+.finansije-pay-btn:hover:not(:disabled),
+.finansije-pay-btn:focus-visible:not(:disabled) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+  transform: none !important;
 }
 
 .finansije-pay-btn:active:not(:disabled) {
-  box-shadow:
-    inset 0 1px 2px color-mix(in srgb, #000 18%, transparent),
-    0 1px 4px color-mix(in srgb, var(--brand) 24%, transparent);
-  transform: translateY(1px);
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 0.82;
+  transform: none !important;
 }
 
 .finansije-pay-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.32;
+}
+
+.finansije-row-trail .finansije-pay-btn {
+  font-size: 0.56rem;
+  padding-block: 0.14rem;
 }
 
 .finansije-bulk-pay-btn {
@@ -5806,8 +5991,12 @@ button.date-row-menu-item.is-pay:focus-visible {
 }
 
 .finansije-paid-badge.is-compact {
-  font-size: 0.58rem;
-  padding: 0.22rem 0.38rem;
+  font-size: 0.52rem;
+  padding: 0.1rem 0.28rem;
+}
+
+.finance-detail-lines-payable {
+  --fin-col-amount: 4rem;
 }
 
 .finance-detail-lines-payable li {
@@ -5817,23 +6006,30 @@ button.date-row-menu-item.is-pay:focus-visible {
 
 .finance-detail-line-main {
   align-items: baseline;
-  display: flex;
+  display: grid;
   gap: 0.5rem;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) var(--fin-col-amount, 4rem);
+}
+
+.finance-detail-line-main strong {
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .finance-detail-line-meta {
   align-items: center;
   display: grid;
-  gap: 0.5rem;
-  grid-template-columns: minmax(0, 1fr) 3.55rem;
+  gap: 0.35rem;
+  grid-template-columns: minmax(0, 1fr) max-content;
 }
 
 .finance-detail-line-pay-slot {
   align-items: center;
   display: flex;
   justify-content: flex-end;
-  min-height: 1.75rem;
+  min-height: 1.35rem;
 }
 
 .finance-detail-line-status {
@@ -5842,17 +6038,18 @@ button.date-row-menu-item.is-pay:focus-visible {
 }
 
 .finansije-pay-btn.is-compact {
-  font-size: 0.62rem;
-  gap: 0.18rem;
-  min-height: 1.75rem;
-  min-width: 3.55rem;
-  padding: 0.28rem 0.45rem;
-  width: 100%;
+  font-size: 0.58rem;
+  padding: 0.14rem 0.06rem;
 }
 
-.finansije-pay-btn.is-compact svg {
-  height: 0.82rem;
-  width: 0.82rem;
+.app-shell[data-theme="dark"] .finansije-pay-btn {
+  color: color-mix(in srgb, var(--muted) 86%, #fff) !important;
+}
+
+.app-shell[data-theme="dark"] .finansije-pay-btn:hover:not(:disabled),
+.app-shell[data-theme="dark"] .finansije-pay-btn:focus-visible:not(:disabled) {
+  background: transparent !important;
+  color: color-mix(in srgb, var(--ink) 92%, #fff) !important;
 }
 
 .finansije .raspored-row-finance > .raspored-row-open {
@@ -5860,29 +6057,21 @@ button.date-row-menu-item.is-pay:focus-visible {
   min-width: 0;
 }
 
-.finansije .raspored-row-finance.is-settled {
-  opacity: 0.34;
+.finansije .raspored-row-finance.is-finance-settled .raspored-row-open {
+  opacity: 0.9;
 }
 
-.finansije .raspored-row-finance.is-settled:hover {
-  opacity: 0.48;
+.finansije .raspored-row-finance.is-finance-settled .finansije-row-trail {
+  opacity: 1;
 }
 
-.finansije .raspored-row-finance.is-settled .raspored-date {
-  background: color-mix(in srgb, var(--muted) 28%, transparent);
-  box-shadow: none;
+.finansije .raspored-row-finance.is-finance-settled:hover .raspored-row-open {
+  opacity: 1;
+}
+
+.finansije .raspored-row-finance.is-finance-settled .raspored-city {
   color: color-mix(in srgb, var(--muted) 88%, var(--ink));
-  text-shadow: none;
-}
-
-.finansije .raspored-row-finance.is-settled .raspored-city {
-  color: color-mix(in srgb, var(--muted) 92%, var(--ink));
-  font-weight: 600;
-}
-
-.finansije .raspored-row-finance.is-settled .raspored-band {
-  color: var(--muted);
-  opacity: 0.72;
+  font-weight: 650;
 }
 
 .finansije .raspored-row-finance .raspored-band {
@@ -5891,13 +6080,45 @@ button.date-row-menu-item.is-pay:focus-visible {
   opacity: 0.72;
 }
 
+.finansije .raspored-row-finance .date-row-menu-trigger {
+  align-items: center;
+  background: color-mix(in srgb, var(--ink) 6%, var(--panel)) !important;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent) !important;
+  border-radius: var(--menu-radius, 0.45rem) !important;
+  color: var(--ink) !important;
+  display: inline-flex;
+  height: 1.35rem;
+  justify-content: center;
+  min-height: 1.35rem;
+  min-width: 1.35rem;
+  opacity: 1;
+  width: 1.35rem;
+}
+
+.finansije .raspored-row-finance .date-row-menu-trigger svg {
+  height: 0.95rem;
+  width: 0.95rem;
+}
+
+.finansije .raspored-row-finance .date-row-menu-trigger:hover,
+.finansije .raspored-row-finance .date-row-menu-trigger.is-open {
+  background: color-mix(in srgb, var(--ink) 10%, var(--panel)) !important;
+  border-color: color-mix(in srgb, var(--line) 90%, transparent) !important;
+  color: var(--ink) !important;
+}
+
+.finansije .raspored-row-finance .date-row-menu-list {
+  background: var(--panel);
+  opacity: 1;
+}
+
 .finansije-row-amount {
-  border-radius: 0.35rem;
-  font-size: 0.86rem;
+  border-radius: 0.25rem;
+  font-size: 0.76rem;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  line-height: 1.15;
-  padding: 0.22rem 0.48rem;
+  line-height: 1.1;
+  padding: 0.08rem 0.12rem;
   white-space: nowrap;
 }
 
@@ -5953,7 +6174,15 @@ button.date-row-menu-item.is-pay:focus-visible {
 }
 
 .raspored-row-pay {
-  grid-template-columns: 2.6rem 1fr !important;
+  grid-template-columns: 2.6rem minmax(0, 1fr) !important;
+}
+
+.finansije .raspored-row-pay .raspored-fee {
+  font-size: 0.76rem;
+  justify-self: end;
+  min-width: 4rem;
+  padding: 0.08rem 0.12rem;
+  text-align: right;
 }
 
 .finansije .raspored-main {
@@ -5981,54 +6210,57 @@ button.date-row-menu-item.is-pay:focus-visible {
   white-space: nowrap;
 }
 
-.finansije .raspored-fee-paid {
-  background: color-mix(in srgb, #22c55e 18%, transparent);
-  color: #15803d !important;
-}
-
-.finansije .raspored-fee-partial {
-  background: color-mix(in srgb, #f59e0b 22%, transparent);
-  color: #b45309 !important;
-}
-
-.finansije .raspored-fee-unpaid {
-  background: color-mix(in srgb, #ef4444 16%, transparent);
-  color: #b91c1c !important;
+.finansije .raspored-fee-paid,
+.finansije .raspored-fee-partial,
+.finansije .raspored-fee-unpaid,
+.finansije .raspored-fee-open {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  font-weight: 650;
 }
 
 .finansije .raspored-fee-open {
-  background: var(--brand-soft);
-  color: var(--brand-dark) !important;
+  color: var(--muted) !important;
+  font-weight: 600;
+}
+
+.finansije .raspored-fee-paid {
+  color: var(--muted) !important;
+  font-weight: 600;
+}
+
+.finansije .raspored-fee-partial {
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted)) !important;
+}
+
+.finansije .raspored-fee-unpaid {
+  color: var(--ink) !important;
 }
 
 .pay-pill {
-  border-radius: 0.35rem;
+  background: transparent;
+  border-radius: 0;
   font-size: 0.8rem;
-  font-weight: 700;
+  font-weight: 650;
   justify-self: end;
-  padding: 0.28rem 0.55rem;
+  padding: 0;
   white-space: nowrap;
 }
 
-.pay-pill.paid {
-  background: #dcfce7;
-  color: #065f46;
-}
-
-.pay-pill.partial {
-  background: #ffedd5;
-  color: #9a3412;
-}
-
-.pay-pill.unpaid {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
+.pay-pill.paid,
+.pay-pill.partial,
+.pay-pill.unpaid,
 .pay-pill.future,
 .pay-pill.open {
-  background: var(--brand-soft);
-  color: var(--brand-dark);
+  background: transparent;
+  color: var(--ink);
+}
+
+.pay-pill.paid,
+.pay-pill.future,
+.pay-pill.open {
+  color: var(--muted);
 }
 
 /* —— Settings —— */
@@ -6584,44 +6816,33 @@ html[data-theme="dark"] body {
   transform: translateY(-6px);
 }
 
-.app-shell[data-theme="dark"] .pay-pill.paid {
-  background: rgba(184, 255, 0, 0.16);
-  color: var(--neon-lime);
-  box-shadow: 0 0 12px rgba(184, 255, 0, 0.35);
-}
-
-.app-shell[data-theme="dark"] .finansije .raspored-fee-paid {
-  background: color-mix(in srgb, var(--neon-lime, #b8ff00) 14%, transparent);
-  color: var(--neon-lime, #b8ff00) !important;
-}
-
-.app-shell[data-theme="dark"] .finansije .raspored-fee-partial {
-  background: color-mix(in srgb, var(--warn, #ffe600) 16%, transparent);
-  color: var(--warn, #ffe600) !important;
-}
-
-.app-shell[data-theme="dark"] .finansije .raspored-fee-open {
-  background: rgba(0, 246, 255, 0.14);
-  color: var(--brand-dark) !important;
-}
-
-.app-shell[data-theme="dark"] .pay-pill.partial {
-  background: rgba(255, 230, 0, 0.16);
-  color: var(--warn);
-  box-shadow: 0 0 12px rgba(255, 230, 0, 0.3);
-}
-
-.app-shell[data-theme="dark"] .pay-pill.unpaid {
-  background: rgba(255, 61, 110, 0.18);
-  color: #ff8aa8;
-  box-shadow: 0 0 12px rgba(255, 61, 110, 0.35);
-}
-
+.app-shell[data-theme="dark"] .pay-pill.paid,
+.app-shell[data-theme="dark"] .pay-pill.partial,
+.app-shell[data-theme="dark"] .pay-pill.unpaid,
 .app-shell[data-theme="dark"] .pay-pill.future,
 .app-shell[data-theme="dark"] .pay-pill.open {
-  background: rgba(0, 246, 255, 0.14);
-  color: var(--brand-dark);
-  box-shadow: 0 0 12px rgba(0, 246, 255, 0.3);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-paid,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-partial,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-unpaid,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-open {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-paid,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-open {
+  color: var(--muted) !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-fee-unpaid {
+  background: transparent !important;
+  color: var(--ink) !important;
 }
 
 @media (max-width: 860px) {
@@ -6630,29 +6851,23 @@ html[data-theme="dark"] body {
   }
 
   .finansije-row-trail {
-    gap: 0.25rem;
-    grid-template-columns: 3.35rem 3.35rem 4.1rem 1.75rem;
+    --fin-col-status: 2.35rem;
+    --fin-col-amount: 3.65rem;
+    --fin-col-menu: 1.35rem;
+    gap: 0.18rem 0.22rem;
   }
 
-  .finansije-pay-btn {
-    font-size: 0.6rem;
-    min-width: 3.1rem;
-    padding-inline: 0.4rem;
-  }
-
-  .finansije-pay-btn span {
-    display: none;
-  }
-
-  .finansije-pay-btn svg {
-    height: 1rem;
-    width: 1rem;
+  .finansije-row-slot-pay .finansije-row-slot-spacer {
+    width: 1.65rem;
   }
 
   .finansije-row-amount {
-    font-size: 0.8rem;
-    min-width: 3.75rem;
-    padding: 0.18rem 0.38rem;
+    font-size: 0.72rem;
+  }
+
+  .finansije .raspored-row-pay .raspored-fee {
+    font-size: 0.72rem;
+    min-width: 3.65rem;
   }
 }
 
@@ -7182,7 +7397,7 @@ html[data-theme="dark"] body {
   align-items: center;
   display: flex !important;
   font-weight: 650 !important;
-  justify-content: space-between;
+  justify-content: flex-start;
   opacity: 1;
   padding: 0.7rem 0.75rem !important;
   text-align: left;
@@ -7193,14 +7408,16 @@ html[data-theme="dark"] body {
   width: 100%;
 }
 
-.band-home-side-action:disabled {
-  opacity: 0.55;
-}
-
 .band-home-side-action small {
   color: var(--muted, #c4a8e8);
+  flex-shrink: 0;
   font-size: 0.68rem;
   font-weight: 600;
+  margin-left: auto;
+}
+
+.band-home-side-action:disabled {
+  opacity: 0.55;
 }
 
 .band-home-side-action.is-active {
@@ -7243,7 +7460,7 @@ html[data-theme="dark"] body {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   display: grid;
   gap: 0.45rem;
-  grid-template-columns: minmax(0, 1fr) 3.6rem auto;
+  grid-template-columns: minmax(0, 1fr) 5.5rem auto;
   min-width: 0;
   padding: 0.45rem 0;
 }
@@ -7302,51 +7519,20 @@ html[data-theme="dark"] body {
   font-weight: 600;
 }
 
-.band-fees-audit {
+.band-fees-panel .finance-changelog-wrap:not(.is-event) {
   border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   margin-top: 0.85rem;
   padding-top: 0.75rem;
 }
 
-.band-fees-audit h4 {
-  font-size: 0.82rem;
-  font-weight: 800;
-  margin: 0 0 0.5rem;
-}
-
-.band-fees-audit-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  list-style: none;
-  margin: 0;
+.band-fees-panel .finance-changelog-list {
   max-height: 14rem;
   overflow: auto;
-  padding: 0;
 }
 
-.band-fees-audit-list li {
-  display: grid;
-  font-size: 0.74rem;
-  gap: 0.15rem 0.5rem;
-  grid-template-columns: auto 1fr;
-  line-height: 1.35;
-}
-
-.band-fees-audit-list time {
-  color: var(--muted);
-  grid-column: 1;
-  white-space: nowrap;
-}
-
-.band-fees-audit-list li > span:first-of-type {
-  font-weight: 700;
-  grid-column: 2;
-}
-
-.band-fees-audit-list li > span:last-of-type {
-  color: var(--muted);
-  grid-column: 1 / -1;
+.finance-changelog-wrap.is-event .finance-changelog-list {
+  max-height: 11rem;
+  overflow: auto;
 }
 
 .band-manage-panel {
@@ -8651,7 +8837,7 @@ html[data-theme="dark"] body {
 }
 
 .event-finance-list.is-solo .event-finance-row {
-  grid-template-columns: 3.6rem var(--control-row-min, 2.15rem);
+  grid-template-columns: 3.75rem var(--control-row-min, 2.15rem);
   justify-content: flex-start;
 }
 
@@ -8660,7 +8846,7 @@ html[data-theme="dark"] body {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   display: grid;
   gap: 0.35rem;
-  grid-template-columns: minmax(0, 1fr) 3.6rem repeat(3, var(--control-row-min, 2.15rem));
+  grid-template-columns: minmax(0, 1fr) 3.75rem repeat(3, var(--control-row-min, 2.15rem));
   min-width: 0;
   padding: 0.45rem 0;
 }
@@ -8697,11 +8883,11 @@ html[data-theme="dark"] body {
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  max-width: 3.6rem;
+  max-width: 3.75rem;
   min-height: 2.15rem;
   padding: 0.3rem 0.35rem;
-  text-align: center;
-  width: 3.6rem;
+  text-align: right;
+  width: 3.75rem;
 }
 
 .event-finance-btn {
@@ -8964,16 +9150,31 @@ html[data-theme="dark"] body {
 }
 
 .app-shell[data-theme="dark"] .finansije .raspored-fee-unpaid {
-  background: color-mix(in srgb, #f97066 14%, transparent);
-  color: #fca5a5 !important;
+  background: transparent !important;
+  color: var(--ink) !important;
 }
 
-.app-shell[data-theme="dark"] .finansije .raspored-row-finance.is-settled {
-  opacity: 0.28;
+.app-shell[data-theme="dark"] .finansije .raspored-row-finance.is-finance-settled .raspored-row-open {
+  opacity: 0.92;
 }
 
-.app-shell[data-theme="dark"] .finansije .raspored-row-finance.is-settled:hover {
-  opacity: 0.42;
+.app-shell[data-theme="dark"] .finansije .raspored-row-finance .date-row-menu-trigger {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-row-finance .date-row-menu-trigger:hover,
+.app-shell[data-theme="dark"] .finansije .raspored-row-finance .date-row-menu-trigger.is-open {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important;
+}
+
+.app-shell[data-theme="dark"] .finansije .raspored-row-finance .date-row-menu-list {
+  backdrop-filter: blur(18px) saturate(1.2);
+  background: rgba(26, 20, 44, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .event-assignees {
@@ -11210,12 +11411,15 @@ body.tech-rider-is-dragging .tech-rider-drag-handle.is-draggable {
 }
 
 .tech-rider-strip-menu-item {
+  align-items: center;
   background: transparent !important;
   border: 0 !important;
   border-radius: 0.28rem !important;
   box-shadow: none !important;
   color: var(--tech-ink) !important;
+  display: flex !important;
   font-size: 0.68rem !important;
+  justify-content: flex-start;
   line-height: 1.15;
   min-height: 0 !important;
   padding: 0.28rem 0.4rem !important;

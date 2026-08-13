@@ -99,3 +99,17 @@ export function snapshotBandMember(row) {
       rawDefault == null || rawDefault === "" ? null : Number(rawDefault),
   };
 }
+
+export function snapshotExpense(row) {
+  if (!row) return null;
+  return {
+    id: row.id ?? null,
+    eventId: row.event_id ?? row.eventId ?? null,
+    bandId: row.band_id ?? row.bandId ?? null,
+    amount: Number(row.amount ?? 0),
+    currency: row.currency ?? "EUR",
+    description: row.description ?? "",
+    payeeKind: row.payee_kind ?? row.payeeKind ?? "",
+    payeeUserId: row.payee_user_id ?? row.payeeUserId ?? null,
+  };
+}

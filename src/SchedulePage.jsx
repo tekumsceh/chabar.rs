@@ -258,7 +258,7 @@ export default function SchedulePage({
   }
 
   async function requestRemove(row) {
-    const label = [row.date, row.city, row.venue].filter(Boolean).join(" — ") || t("schedule.thisEvent");
+    const label = [row.date, row.city, row.venue].filter(Boolean).join(" � ") || t("schedule.thisEvent");
     const confirmed = await confirm({
       title: t("schedule.deleteTitle"),
       message: t("schedule.deleteMessage", { label }),
@@ -403,7 +403,6 @@ export default function SchedulePage({
                   onOpen={openEvent}
                   actions={
                     <DateRowMenu
-                      feeMarked={feeMarked}
                       locked={Boolean(row.done)}
                       onDelete={() => requestRemove(row)}
                     />
@@ -439,7 +438,7 @@ export default function SchedulePage({
                   </time>
                   <div className="raspored-main">
                     <div className="raspored-main-line">
-                      <strong className="raspored-city">{row.city || "—"}</strong>
+                      <strong className="raspored-city">{row.city || "�"}</strong>
                       {row.venue ? (
                         <span className="raspored-venue">
                           <span className="raspored-venue-text">{row.venue}</span>
@@ -460,7 +459,6 @@ export default function SchedulePage({
                     <MoneyIcon />
                   </span>
                   <DateRowMenu
-                    feeMarked={feeMarked}
                     locked={Boolean(row.done)}
                     onDelete={() => requestRemove(row)}
                   />
@@ -650,7 +648,7 @@ export default function SchedulePage({
                   {t("common.cancel")}
                 </button>
                 <button type="submit" disabled={createBandBusy || !createBandName.trim() || !canCreateBand}>
-                  {createBandBusy ? "…" : t("schedule.create")}
+                  {createBandBusy ? "�" : t("schedule.create")}
                 </button>
               </div>
             </form>
@@ -667,7 +665,7 @@ function isFinancialOnlyEntry(event) {
   return note === "od prosle godine";
 }
 
-function DateRowMenu({ feeMarked, locked, onDelete }) {
+function DateRowMenu({ locked, onDelete }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -725,6 +723,8 @@ function DateRowMenu({ feeMarked, locked, onDelete }) {
     };
   }, [open]);
 
+  if (locked) return null;
+
   return (
     <div className={`date-row-menu ${open ? "is-open" : ""}`} ref={rootRef}>
       <button
@@ -745,36 +745,19 @@ function DateRowMenu({ feeMarked, locked, onDelete }) {
       {open ? (
         <ul className="date-row-menu-list" id={menuId} role="menu" aria-label={t("schedule.eventActions")}>
           <li role="none">
-            <div
-              className={`date-row-menu-item is-status ${feeMarked ? "is-fee-set" : "is-fee-unset"}`}
+            <button
+              type="button"
+              className="date-row-menu-item is-danger"
               role="menuitem"
-              aria-disabled="true"
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+                onDelete?.();
+              }}
             >
-              {feeMarked ? t("schedule.feeSet") : t("schedule.feeUnset")}
-            </div>
+              {t("schedule.deleteEvent")}
+            </button>
           </li>
-          {locked ? (
-            <li role="none">
-              <div className="date-row-menu-item is-status" role="menuitem" aria-disabled="true">
-                {t("schedule.pastLocked")}
-              </div>
-            </li>
-          ) : (
-            <li role="none">
-              <button
-                type="button"
-                className="date-row-menu-item is-danger"
-                role="menuitem"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setOpen(false);
-                  onDelete?.();
-                }}
-              >
-                {t("schedule.deleteEvent")}
-              </button>
-            </li>
-          )}
         </ul>
       ) : null}
     </div>

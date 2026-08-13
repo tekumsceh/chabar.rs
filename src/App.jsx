@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, setApiAuth } from "./api.js";
 import BandPage from "./BandPage.jsx";
-import { calculate, DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText, waterfallClaimEur } from "./calculations.js";
+import { calculate, DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText } from "./calculations.js";
 import LegalPage, { isLegalPage } from "./LegalPage.jsx";
 import LoginPage from "./LoginPage.jsx";
 import ReportPage from "./ReportPage.jsx";
@@ -23,6 +23,7 @@ import { clearAuthParamsFromUrl, waitForAuthSession, supabase } from "./supabase
 import { takePendingJoinToken } from "./joinLink.js";
 import { isBandLead } from "../shared/roles.js";
 import { ownerBandLimit } from "../shared/bandLimits.js";
+import PullToRefresh from "./PullToRefresh.jsx";
 
 const NAV_ITEMS = [
   { id: "schedule", labelKey: "nav.schedule", icon: ScheduleNavIcon },
@@ -187,8 +188,7 @@ export default function App() {
       mode: effectiveFinanceMode,
       userId: profile?.id || "",
     });
-    const pastRows = calc.rows.filter((row) => row.done && row.hasDate);
-    return waterfallClaimEur(pastRows);
+    return calc.claimEur;
   }, [financeEvents, payments, settings, effectiveFinanceMode, profile?.id]);
 
   const canManageActiveBand = Boolean(
@@ -453,7 +453,7 @@ export default function App() {
     }
   }
 
-  async function loadScheduleAndFinance({ scheduleOnly = false, bandIdOverride } = {}) {
+  async function loadScheduleAndFinance({ scheduleOnly = false, bandIdOverride, force = false, silent = false } = {}) {
     const bandId = bandIdOverride || activeBandId;
     if (!session?.access_token || !bandId) return;
 
@@ -467,7 +467,7 @@ export default function App() {
       setApiAuth({ token: session.access_token, bandId: writeBandId });
 
       // Soft band switch: paint cache immediately; skip network when already prefetched.
-      if (scheduleOnly) {
+      if (scheduleOnly && !force) {
         const cached = getCachedEvents(bandId);
         if (cached) {
           setEvents(cached);
@@ -482,7 +482,15 @@ export default function App() {
         return;
       }
 
-      setLoading(true);
+      if (scheduleOnly && force) {
+        const schedule = await api(scheduleUrl, { bandId: writeBandId });
+        if (requestId !== scheduleRequestIdRef.current) return;
+        rememberSchedule(bandId, schedule.events);
+        setEvents(schedule.events);
+        return;
+      }
+
+      if (!silent) setLoading(true);
       const [schedule, finance] = await Promise.all([
         api(scheduleUrl, { bandId: writeBandId }),
         loadFinancePayload(bandId),
@@ -505,7 +513,7 @@ export default function App() {
       if (requestId !== scheduleRequestIdRef.current) return;
       reportError(requestError, "schedule/finance load failed");
     } finally {
-      if (requestId === scheduleRequestIdRef.current && !scheduleOnly) {
+      if (requestId === scheduleRequestIdRef.current && !scheduleOnly && !silent) {
         setLoading(false);
       }
     }
@@ -581,6 +589,23 @@ export default function App() {
 
   async function loadData() {
     await loadScheduleAndFinance({ scheduleOnly: false });
+  }
+
+  async function refreshAppData() {
+    if (!session?.access_token) return;
+    invalidateScheduleCache(activeBandId);
+    prefetchStartedRef.current = false;
+    await Promise.all([
+      loadScheduleAndFinance({ scheduleOnly: false, force: true, silent: true }),
+      (async () => {
+        const me = await api("/api/me");
+        setProfile(me.profile);
+        setBands(me.bands);
+        setPendingInvites(me.pendingInvites || []);
+        setNotifications(me.notifications || []);
+      })(),
+    ]);
+    queuePrefetchSchedules();
   }
 
   function showToast(message, type = "success") {
@@ -1088,6 +1113,7 @@ export default function App() {
   const canCreateBand = ownedGroupBands < ownerLimit;
 
   return (
+    <PullToRefresh onRefresh={refreshAppData} disabled={loading || profileHubOpen || addMenuOpen}>
     <div className="app-shell" data-theme={theme}>
       <header className="app-topbar">
         <BandPills
@@ -1340,6 +1366,7 @@ export default function App() {
         </div>
       ) : null}
     </div>
+    </PullToRefresh>
   );
 }
 

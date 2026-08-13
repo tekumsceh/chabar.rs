@@ -45,7 +45,9 @@ import {
   snapshotMemberFinance,
   snapshotPayment,
   writeAudit,
+  snapshotExpense,
 } from "./audit.js";
+import { getEventFinanceAudit } from "./financeAudit.js";
 import {
   deletePushSubscription,
   actorLabel,
@@ -1158,6 +1160,26 @@ app.get("/api/events/:id/finance", requireAuth, requireBandMember, requireBandAd
   }
 });
 
+/** Append-only finance changelog for one date (honorari + troškovi). */
+app.get("/api/events/:id/finance-audit", requireAuth, requireBandMember, async (req, res, next) => {
+  try {
+    const eventId = Number(req.params.id);
+    const event = await query(
+      `SELECT id FROM events WHERE id = :id AND band_id = :bandId LIMIT 1`,
+      { id: eventId, bandId: req.bandId },
+    );
+    if (!event.rows[0]) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const limit = Number(req.query.limit) || 80;
+    const entries = await getEventFinanceAudit(eventId, req.bandId, { limit });
+    res.json({ eventId, entries });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.put(
   "/api/events/:id/member-finance/:userId",
   requireAuth,
@@ -1491,26 +1513,40 @@ app.post("/api/events/:id/expenses", requireAuth, requireBandMember, requireBand
       }
     }
 
-    const inserted = await query(
-      `INSERT INTO event_expenses
-        (event_id, band_id, amount, currency, description, payee_kind, payee_user_id, created_by)
-       VALUES
-        (:eventId, :bandId, :amount, :currency, :description, :payeeKind, :payeeUserId, :createdBy)
-       RETURNING id, event_id, band_id, amount, currency, description,
-                 payee_kind, payee_user_id, created_at`,
-      {
-        eventId,
-        bandId: req.bandId,
-        amount,
-        currency,
-        description,
-        payeeKind,
-        payeeUserId: payeeKind === "member" ? payeeUserId : null,
-        createdBy: req.user.id,
-      },
-    );
-
-    const row = inserted.rows[0];
+    const row = await withTransaction(async (tx) => {
+      const inserted = await tx(
+        `INSERT INTO event_expenses
+          (event_id, band_id, amount, currency, description, payee_kind, payee_user_id, created_by)
+         VALUES
+          (:eventId, :bandId, :amount, :currency, :description, :payeeKind, :payeeUserId, :createdBy)
+         RETURNING id, event_id, band_id, amount, currency, description,
+                   payee_kind, payee_user_id, created_at`,
+        {
+          eventId,
+          bandId: req.bandId,
+          amount,
+          currency,
+          description,
+          payeeKind,
+          payeeUserId: payeeKind === "member" ? payeeUserId : null,
+          createdBy: req.user.id,
+        },
+      );
+      const created = inserted.rows[0];
+      await writeAudit(
+        {
+          entityType: "event_expense",
+          entityId: created.id,
+          bandId: req.bandId,
+          actorUserId: req.user.id,
+          action: "insert",
+          before: null,
+          after: snapshotExpense(created),
+        },
+        tx,
+      );
+      return created;
+    });
     let payeeName = payeeKind === "band" ? "Bend" : payeeKind === "external" ? "Spoljnji" : "Član";
     if (payeeKind === "member" && payeeUserId) {
       const profile = await query(
@@ -1565,19 +1601,50 @@ app.delete(
         });
       }
 
-      const result = await query(
-        `DELETE FROM event_expenses
+      const existing = await query(
+        `SELECT id, event_id, band_id, amount, currency, description, payee_kind, payee_user_id
+         FROM event_expenses
          WHERE id = :expenseId AND event_id = :eventId AND band_id = :bandId
-         RETURNING id`,
+         LIMIT 1`,
         {
           expenseId: req.params.expenseId,
           eventId: req.params.id,
           bandId: req.bandId,
         },
       );
-      if (!result.rowCount) {
+      if (!existing.rows[0]) {
         return res.status(404).json({ error: "Not found" });
       }
+
+      await withTransaction(async (tx) => {
+        const result = await tx(
+          `DELETE FROM event_expenses
+           WHERE id = :expenseId AND event_id = :eventId AND band_id = :bandId
+           RETURNING id`,
+          {
+            expenseId: req.params.expenseId,
+            eventId: req.params.id,
+            bandId: req.bandId,
+          },
+        );
+        if (!result.rowCount) {
+          const err = new Error("Not found");
+          err.status = 404;
+          throw err;
+        }
+        await writeAudit(
+          {
+            entityType: "event_expense",
+            entityId: req.params.expenseId,
+            bandId: req.bandId,
+            actorUserId: req.user.id,
+            action: "delete",
+            before: snapshotExpense(existing.rows[0]),
+            after: null,
+          },
+          tx,
+        );
+      });
       res.status(204).end();
     } catch (error) {
       next(error);
@@ -3461,7 +3528,7 @@ app.get("/api/audit", requireAuth, requireBandMember, async (req, res, next) => 
         detail: "entityType i entityId su obavezni.",
       });
     }
-    if (!["event", "payment", "event_member_finance", "band_member"].includes(entityType)) {
+    if (!["event", "payment", "event_member_finance", "band_member", "event_expense"].includes(entityType)) {
       return res.status(400).json({ error: "Invalid entityType" });
     }
 
@@ -3750,7 +3817,7 @@ app.post("/api/finance/pay-line", requireAuth, async (req, res, next) => {
         amount: paymentAmount,
         currency: paymentCurrency,
         exchangeRate: rate,
-        allocations: plan.allocations,
+        allocations: [],
         actorUserId: req.user.id,
       }),
     );
@@ -3819,7 +3886,7 @@ app.post("/api/finance/pay-event", requireAuth, async (req, res, next) => {
         amount: paymentAmount,
         currency: paymentCurrency,
         exchangeRate: rate,
-        allocations: plan.allocations,
+        allocations: [],
         actorUserId: req.user.id,
       }),
     );
@@ -3914,16 +3981,23 @@ app.post("/api/finance/bulk-pay", requireAuth, async (req, res, next) => {
     }
 
     const plan = bulkPayPlan(events, payments, settings, amount, currency, rate, financeContext);
+    const paymentCurrency = plan.paymentCurrency || currency;
     const payment = await withTransaction(async (tx) =>
       createPaymentWithAllocations({
         tx,
         userId: req.user.id,
         bandId,
         amount: plan.paymentAmount,
-        currency,
+        currency: paymentCurrency,
         exchangeRate: rate,
-        allocations: plan.allocations,
+        allocations: [],
         actorUserId: req.user.id,
+        auditMeta: {
+          requestedAmount: plan.paymentAmount,
+          requestedAmountEur: plan.requestedAmountEur,
+          unallocatedEur: plan.unallocatedEur,
+          preview: plan.allocations,
+        },
       }),
     );
 

@@ -266,7 +266,6 @@ html[data-theme="dark"] .login-google,
 /* —— Primary / action buttons —— */
 html[data-theme="dark"] button[type="submit"]:not(.icon):not(.band-pill):not(.schedule-event-card-link),
 .app-shell[data-theme="dark"] button[type="submit"]:not(.icon):not(.band-pill):not(.schedule-event-card-link),
-.app-shell[data-theme="dark"] .finansije-pay-btn,
 .app-shell[data-theme="dark"] .confirm-btn-primary,
 .app-shell[data-theme="dark"] .profile-hub-accept,
 .app-shell[data-theme="dark"] .band-fees-save {
@@ -603,31 +602,29 @@ html[data-theme="dark"] button[type="submit"]:not(.icon):not(.band-pill):not(.sc
 }
 
 /* —— Finance badges —— */
-.app-shell[data-theme="dark"] .finansije-paid-badge {
-  background: rgba(184, 255, 0, 0.14);
-  border: 1px solid rgba(184, 255, 0, 0.32);
-  color: var(--chabar-accent-lime);
+.app-shell[data-theme="dark"] .finansije-paid-badge,
+.app-shell[data-theme="dark"] .finansije-partial-badge {
+  background: transparent;
+  border: 0;
+  color: var(--chabar-text-secondary, var(--muted));
 }
 
 .app-shell[data-theme="dark"] .finansije-partial-badge {
-  background: rgba(255, 230, 0, 0.12);
-  border: 1px solid rgba(255, 230, 0, 0.28);
-  color: #ffe600;
+  color: color-mix(in srgb, var(--chabar-text-primary, var(--ink)) 72%, var(--muted));
 }
 
-.app-shell[data-theme="dark"] .finansije .raspored-fee-unpaid {
-  background: rgba(255, 61, 110, 0.14) !important;
-  color: #ff8fa8 !important;
+.app-shell[data-theme="dark"] .finansije .raspored-fee-unpaid,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-paid,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-partial,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-open {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--chabar-text-primary, var(--ink)) !important;
 }
 
-.app-shell[data-theme="dark"] .finansije .raspored-fee-paid {
-  background: rgba(184, 255, 0, 0.12) !important;
-  color: var(--chabar-accent-lime) !important;
-}
-
-.app-shell[data-theme="dark"] .finansije .raspored-fee-partial {
-  background: rgba(255, 230, 0, 0.12) !important;
-  color: #ffe600 !important;
+.app-shell[data-theme="dark"] .finansije .raspored-fee-paid,
+.app-shell[data-theme="dark"] .finansije .raspored-fee-open {
+  color: var(--chabar-text-secondary, var(--muted)) !important;
 }
 
 /* —— Bottom nav + FAB —— */

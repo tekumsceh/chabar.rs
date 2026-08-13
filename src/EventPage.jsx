@@ -10,6 +10,7 @@ import {
 } from "./calculations.js";
 import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
+import EventFinanceAuditPanel from "./EventFinanceAuditPanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
 import EventDayDetails, {
   DAY_TIME_FIELDS,
@@ -85,7 +86,12 @@ export default function EventPage({
   const [financeBundle, setFinanceBundle] = useState(null);
   const [financeLoading, setFinanceLoading] = useState(false);
   const [financeError, setFinanceError] = useState("");
+  const [financeAuditRefresh, setFinanceAuditRefresh] = useState(0);
   const [dayDetails, setDayDetails] = useState(emptyDayDetails);
+
+  function bumpFinanceAudit() {
+    setFinanceAuditRefresh((value) => value + 1);
+  }
   const lastLeaveSignalRef = useRef(leaveSignal);
   const editingRef = useRef(editing);
   const dirtyRef = useRef(false);
@@ -824,6 +830,7 @@ export default function EventPage({
                 setFinanceBundle(data);
               }
               await onRefreshSchedule?.();
+              bumpFinanceAudit();
             }}
             onDefaultChanged={async (memberId, defaultPriceEur) => {
               setFinanceBundle((current) =>
@@ -855,7 +862,13 @@ export default function EventPage({
             }}
             onChanged={async () => {
               await onRefreshSchedule?.();
+              bumpFinanceAudit();
             }}
+          />
+          <EventFinanceAuditPanel
+            eventId={event.id}
+            bandId={financeBandId}
+            refreshKey={financeAuditRefresh}
           />
           </FadeScroll>
         </section>
