@@ -177,7 +177,7 @@ export default function ReportPage({
     const futureRows = bandRows.filter((row) => {
       const year = yearFromDate(row.date, row.parsedDate);
       if (year !== viewYear) return false;
-      if (!row.hasDate || row.done) return false;
+      if (!row.hasDate || row.held || row.done) return false;
       return matchesFilters(row, search, "all");
     });
     return expectedFutureEur(futureRows);
@@ -353,10 +353,11 @@ export default function ReportPage({
                 const dateParts = formatScheduleDateParts(row.date);
                 const financeDue = isFinanceDueRow(row);
                 const amountTone = feeAmountTone(row);
-                const isSettled = financeDue && row.paymentClass === "paid";
-                const isPartial = financeDue && row.paymentClass === "partial";
+                const isSettled = financeDue && row.done && row.paymentClass === "paid";
+                const isPartial = financeDue && row.done && row.paymentClass === "partial";
                 const owed = financeDue ? financeRemainingEur(row) : 0;
-                const displayEur = isPartial ? owed : row.totalEur;
+                const displayEur =
+                  financeDue && row.paymentClass === "partial" ? owed : row.totalEur;
                 const rowPaying = payingEventId === row.id;
                 return (
                   <li
@@ -387,7 +388,7 @@ export default function ReportPage({
                           <span className="finansije-paid-badge" title={t("report.payPaid")}>
                             {t("report.paidBadgeShort")}
                           </span>
-                        ) : financeDue && isPartial ? (
+                        ) : financeDue && row.paymentClass === "partial" ? (
                           <span
                             className="finansije-partial-badge"
                             title={t("report.paidPartial", {
@@ -831,15 +832,15 @@ function matchesFilters(row, search, status) {
   const haystack = [row.date, row.city, row.venue, row.bandName].join(" ").toLowerCase();
 
   if (query && !haystack.includes(query)) return false;
-  if (status === "done") return isFinanceDueRow(row);
+  if (status === "done") return Boolean(row.done) && isFinanceDueRow(row);
   if (status === "future") return row.hasDate && !row.done;
-  if (status === "paid") return row.paymentClass === "paid";
-  if (status === "unpaid") return isFinanceDueRow(row) && row.paymentClass !== "paid";
+  if (status === "paid") return Boolean(row.done) && row.paymentClass === "paid";
+  if (status === "unpaid") return Boolean(row.done) && isFinanceDueRow(row) && row.paymentClass !== "paid";
   return true;
 }
 
 function payStatusLabel(row, t) {
-  if (!isFinanceDueRow(row)) return t("report.payOpen");
+  if (!isFinanceDueRow(row) || !row.done) return t("report.payOpen");
   if (row.paymentClass === "paid") return t("report.payPaid");
   if (row.paymentClass === "partial") return t("report.payPartial");
   if (row.paymentClass === "unpaid") return t("report.payUnpaid");
@@ -847,7 +848,7 @@ function payStatusLabel(row, t) {
 }
 
 function feeAmountTone(row) {
-  if (!isFinanceDueRow(row)) return "open";
+  if (!isFinanceDueRow(row) || !row.done) return "open";
   if (row.paymentClass === "paid") return "paid";
   if (row.paymentClass === "partial") return "partial";
   return "unpaid";

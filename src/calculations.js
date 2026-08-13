@@ -9,10 +9,14 @@ export const LEGACY_RATE_THROUGH_TEXT = "20.07.2026.";
 
 const POOL_EPS = 0.000001;
 
-/** Calendar held + something to settle (fee and/or expenses). Not dospeo if total is 0. */
+/**
+ * Counts toward Potražuje / pay waterfall: calendar day has started (incl. today)
+ * and there is something to settle. Not dospelo-past until after midnight.
+ */
 export function isFinanceDueRow(row) {
   if (row?.financeDue != null) return Boolean(row.financeDue);
-  return Boolean(row?.done && row?.hasDate && numberValue(row?.totalEur) > POOL_EPS);
+  const held = row?.held != null ? row.held : row?.done;
+  return Boolean(held && row?.hasDate && numberValue(row?.totalEur) > POOL_EPS);
 }
 
 export function financeLineKey(eventId, lineKind, expenseKey = "") {
@@ -338,7 +342,8 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
   const enriched = (events || []).map((event, index) => {
     const parsedDate = parseDate(event.date);
     const hasDate = Boolean(String(event.date || "").trim()) && !Number.isNaN(parsedDate.getTime());
-    const done = hasDate && isFinanceHeldDate(parsedDate, calculationDate);
+    const held = hasDate && isFinanceHeldDate(parsedDate, calculationDate);
+    const done = hasDate && isPastEventDate(parsedDate);
     const priceEur = numberValue(event.priceEur);
     const rate = hasDate ? rateForDate(parsedDate, settings) : DEFAULT_RATE;
     const expenseItems = financeExpenseItems(event);
@@ -350,6 +355,7 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
       index,
       hasDate,
       parsedDate: hasDate ? parsedDate : new Date(Number.NaN),
+      held,
       done,
       priceEur,
       expenseItems,
@@ -369,11 +375,11 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
     if (ctx.mode === "band" && row.financeLines.length) {
       row.totalEur = round(row.financeLines.reduce((sum, line) => sum + numberValue(line.totalEur), 0));
     }
-    row.financeDue = row.done && numberValue(row.totalEur) > POOL_EPS;
+    row.financeDue = row.held && numberValue(row.totalEur) > POOL_EPS;
     if (row.financeDue) {
       strictEur += row.totalEur;
       strictDin += memberPayeeExpenseRsd(row.expenseItems);
-    } else if (!row.done) {
+    } else if (!row.held) {
       futureCount += 1;
     }
   }
@@ -382,7 +388,7 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
   applyEventLevelPaymentSettlement(enriched, paidEur);
 
   for (const row of enriched) {
-    if (row.done && row.hasDate && !row.financeDue) {
+    if (row.held && row.hasDate && !row.financeDue) {
       row.paymentStatus = "";
       row.paymentClass = "none";
     }
@@ -527,7 +533,7 @@ export function unpaidClaimEur(rows, payments, settingsOrRate) {
 /** Sum of set amounts on future (not yet held) dates — Očekivano. */
 export function expectedFutureEur(rows) {
   return (rows || []).reduce((sum, row) => {
-    if (!row?.hasDate || row.done) return sum;
+    if (!row?.hasDate || row.held || row.done) return sum;
     return sum + Math.max(0, numberValue(row.totalEur));
   }, 0);
 }
@@ -569,8 +575,8 @@ export function startOfToday() {
 }
 
 /**
- * Finance dospeo (spreadsheet parity): gig counts from its calendar day onward.
- * Uses datum <= today — same as Excel done column for Potražuje / waterfall.
+ * Gig day has started: fees count toward Potražuje from local midnight of the gig date.
+ * Today’s dates are held, but not “past” until the following midnight.
  */
 export function isFinanceHeldDate(dateValue, today = startOfToday()) {
   const parsed = dateValue instanceof Date ? dateValue : parseDate(dateValue);
@@ -580,8 +586,8 @@ export function isFinanceHeldDate(dateValue, today = startOfToday()) {
 }
 
 /**
- * Edit lock — true from the calendar day after the gig date.
- * Same-day events stay editable until local midnight; finance may still count them as held.
+ * Past after local midnight of the gig date (date < start of today).
+ * Edit lock + Novac “dospel” styling; same-day events stay current until midnight.
  */
 export function isPastEventDate(dateValue) {
   const parsed = dateValue instanceof Date ? dateValue : parseDate(dateValue);
