@@ -1,14 +1,13 @@
 /**
- * Material Design 3 structure + Chabar brand colors (neon magenta / cyan / lime).
- * Maps MD3 semantics onto legacy app variables (--brand, --panel, --neon-*, etc.).
+ * Chabar tokens — neon palette with quiet surfaces.
+ * Magenta = brand + primary CTA. Cyan = focus / today. Lime = paid/success data.
  */
 
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap");
 
 :root {
   color-scheme: light;
 
-  /* Chabar brand (light surfaces, magenta accent) */
   --chabar-magenta: #ff2bd6;
   --chabar-magenta-soft: #ff7aef;
   --chabar-cyan: #276ef1;
@@ -16,24 +15,24 @@
 
   --md-primary: var(--chabar-magenta);
   --md-on-primary: #ffffff;
-  --md-primary-container: color-mix(in srgb, var(--chabar-magenta) 14%, #ffffff);
+  --md-primary-container: color-mix(in srgb, var(--chabar-magenta) 12%, #ffffff);
   --md-on-primary-container: #4a0038;
   --md-secondary: #565f71;
   --md-on-secondary: #ffffff;
   --md-secondary-container: #f1ecf4;
   --md-on-secondary-container: #131c2b;
-  --md-surface: #fdfbff;
+  --md-surface: #f7f6f9;
   --md-surface-dim: #ded8e1;
   --md-surface-bright: #fdfbff;
   --md-surface-container-lowest: #ffffff;
-  --md-surface-container-low: #f7f2fa;
-  --md-surface-container: #f1ecf4;
-  --md-surface-container-high: #ece6f0;
-  --md-surface-container-highest: #e6e0e9;
+  --md-surface-container-low: #f4f2f6;
+  --md-surface-container: #eeecf1;
+  --md-surface-container-high: #e8e6ec;
+  --md-surface-container-highest: #e2e0e6;
   --md-on-surface: #1a1c1e;
-  --md-on-surface-variant: #44474e;
-  --md-outline: #74777f;
-  --md-outline-variant: #c4c6d0;
+  --md-on-surface-variant: #5c5f66;
+  --md-outline: #c8c6cc;
+  --md-outline-variant: #dcdadf;
   --md-error: #ba1a1a;
   --md-on-error: #ffffff;
 
@@ -41,42 +40,43 @@
   --panel: var(--md-surface-container-lowest);
   --panel-soft: var(--md-surface-container-low);
   --ink: var(--md-on-surface);
-  --on-ink: var(--md-on-primary);
+  --on-ink: #ffffff;
   --muted: var(--md-on-surface-variant);
-  --line: color-mix(in srgb, var(--chabar-magenta) 22%, #c4c6d0);
+  --line: rgba(26, 28, 30, 0.12);
   --brand: var(--chabar-magenta);
   --brand-dark: #c400a8;
   --brand-hover: #ff5ae3;
   --on-brand: #ffffff;
-  --brand-soft: rgba(255, 43, 214, 0.14);
+  --brand-soft: rgba(255, 43, 214, 0.12);
   --surface: var(--md-surface-container);
   --surface-2: var(--md-surface-container-high);
-  --ok: #0b875b;
+  --ok: var(--chabar-lime);
   --warn: #7d5700;
   --danger: var(--md-error);
 
   --neon-cyan: var(--chabar-cyan);
   --neon-lime: var(--chabar-lime);
   --neon-magenta: var(--chabar-magenta);
+  --focus-ring: var(--chabar-cyan);
 
-  /* MD3 shape (keep rounded MD3 vibe) */
   --radius: 12px;
   --radius-sm: 8px;
-  --radius-lg: 16px;
-  --radius-xl: 28px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 9999px;
-  --menu-radius: var(--radius-lg);
+  --menu-radius: 12px;
 
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
-  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
-  --shadow-click: 0 1px 2px rgba(0, 0, 0, 0.12);
-  --shadow-click-hover: 0 2px 4px rgba(0, 0, 0, 0.14);
-  --menu-shadow: 0 4px 8px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-click: none;
+  --shadow-click-hover: none;
+  --menu-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
 
+  --font: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --control-font: 0.875rem;
-  --control-pad-y: 0.625rem;
-  --control-pad-x: 1.5rem;
-  --control-row-min: 2.5rem;
+  --control-pad-y: 0.5rem;
+  --control-pad-x: 0.95rem;
+  --control-row-min: 2.25rem;
   --icon-btn-size: 2.5rem;
   --icon-btn-svg: 1.25rem;
 }
@@ -86,7 +86,11 @@ body {
   background: var(--md-surface);
   background-attachment: fixed;
   color: var(--md-on-surface);
-  font-family: Roboto, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: -0.011em;
+  line-height: 1.45;
 }
 
 html[data-theme="dark"],
@@ -94,48 +98,47 @@ html[data-theme="dark"] body,
 .app-shell[data-theme="dark"] {
   color-scheme: dark;
 
-  /* Chabar dark neon palette */
   --chabar-magenta: #ff2bd6;
   --chabar-cyan: #00f6ff;
   --chabar-lime: #b8ff00;
 
   --md-primary: var(--chabar-magenta);
   --md-on-primary: #1a0020;
-  --md-primary-container: rgba(255, 43, 214, 0.22);
+  --md-primary-container: rgba(255, 43, 214, 0.18);
   --md-on-primary-container: #ffd6f7;
   --md-secondary: #c4a8e8;
   --md-on-secondary: #16001f;
-  --md-secondary-container: rgba(0, 246, 255, 0.14);
+  --md-secondary-container: rgba(0, 246, 255, 0.1);
   --md-on-secondary-container: #e8f8ff;
-  --md-surface: #14001f;
-  --md-surface-dim: #0c0014;
-  --md-surface-bright: #2a0a42;
-  --md-surface-container-lowest: #0c0014;
-  --md-surface-container-low: #1a0030;
-  --md-surface-container: #1f0730;
-  --md-surface-container-high: #2a0a42;
-  --md-surface-container-highest: #3b1060;
-  --md-on-surface: #f7f2ff;
-  --md-on-surface-variant: #c4a8e8;
-  --md-outline: rgba(255, 61, 206, 0.45);
-  --md-outline-variant: rgba(255, 61, 206, 0.28);
+  --md-surface: #0a0618;
+  --md-surface-dim: #05030c;
+  --md-surface-bright: #1a0a28;
+  --md-surface-container-lowest: #080510;
+  --md-surface-container-low: #12081c;
+  --md-surface-container: #160a22;
+  --md-surface-container-high: #1c0e2a;
+  --md-surface-container-highest: #241236;
+  --md-on-surface: #f4f0fa;
+  --md-on-surface-variant: rgba(244, 240, 250, 0.58);
+  --md-outline: rgba(255, 255, 255, 0.14);
+  --md-outline-variant: rgba(255, 255, 255, 0.08);
   --md-error: #ff3d6e;
   --md-on-error: #1a0020;
 
   --bg: var(--md-surface);
-  --panel: #1f0730;
-  --panel-soft: #2a0a42;
-  --ink: #f7f2ff;
+  --panel: #160a22;
+  --panel-soft: #1c0e2a;
+  --ink: #f4f0fa;
   --on-ink: #16001f;
-  --muted: #c4a8e8;
-  --line: rgba(255, 61, 206, 0.4);
+  --muted: rgba(244, 240, 250, 0.58);
+  --line: rgba(255, 255, 255, 0.12);
   --brand: var(--chabar-magenta);
   --brand-dark: #ff7aef;
   --brand-hover: #ff5ae3;
   --on-brand: #1a0020;
-  --brand-soft: rgba(255, 43, 214, 0.22);
-  --surface: #2a0a42;
-  --surface-2: #3b1060;
+  --brand-soft: rgba(255, 43, 214, 0.16);
+  --surface: #1c0e2a;
+  --surface-2: #241236;
   --ok: var(--chabar-lime);
   --warn: #ffe600;
   --danger: #ff3d6e;
@@ -143,28 +146,20 @@ html[data-theme="dark"] body,
   --neon-cyan: var(--chabar-cyan);
   --neon-lime: var(--chabar-lime);
   --neon-magenta: var(--chabar-magenta);
+  --focus-ring: var(--chabar-cyan);
 
-  --shadow:
-    0 0 0 1px rgba(255, 43, 214, 0.35),
-    0 12px 0 rgba(0, 246, 255, 0.18),
-    0 22px 48px rgba(255, 43, 214, 0.28);
-  --shadow-soft:
-    0 0 0 1px rgba(0, 246, 255, 0.28),
-    0 10px 0 rgba(184, 255, 0, 0.12),
-    0 18px 40px rgba(0, 0, 0, 0.45);
-  --menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.28);
+  --menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 html[data-theme="dark"],
 html[data-theme="dark"] body {
   background:
-    radial-gradient(circle at 12% 0%, rgba(0, 246, 255, 0.28), transparent 34%),
-    radial-gradient(circle at 88% 8%, rgba(255, 43, 214, 0.26), transparent 36%),
-    radial-gradient(circle at 50% 100%, rgba(88, 40, 160, 0.42), transparent 48%),
-    radial-gradient(circle at 35% 55%, rgba(184, 255, 0, 0.08), transparent 40%),
-    linear-gradient(180deg, #0a0618 0%, #05030c 55%, #020108 100%);
+    radial-gradient(ellipse at 50% -20%, rgba(255, 43, 214, 0.1), transparent 42%),
+    #0a0618;
   background-attachment: fixed;
-  color: #f4fbff;
+  color: var(--ink);
 }
 
 .app-shell[data-theme="dark"] {

@@ -1,9 +1,41 @@
 import react from "@vitejs/plugin-react";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+const altDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "alt");
+
+function serveAltPrototype() {
+  const types = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".svg": "image/svg+xml",
+  };
+  return {
+    name: "serve-alt-prototype",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || !req.url.startsWith("/alt")) return next();
+        const raw = req.url.split("?")[0];
+        const rel = raw === "/alt" || raw === "/alt/" ? "index.html" : raw.replace(/^\/alt\/?/, "");
+        const file = path.resolve(altDir, rel);
+        if (!file.startsWith(altDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+          return next();
+        }
+        res.setHeader("Content-Type", types[path.extname(file)] || "application/octet-stream");
+        res.setHeader("Cache-Control", "no-store");
+        fs.createReadStream(file).pipe(res);
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    serveAltPrototype(),
     react(),
     VitePWA({
       registerType: "autoUpdate",

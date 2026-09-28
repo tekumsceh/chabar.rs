@@ -142,6 +142,10 @@ app.use(
 );
 app.use(express.json({ limit: "256kb" }));
 
+if (process.env.NODE_ENV !== "production") {
+  app.use("/alt", express.static(path.join(__dirname, "../alt")));
+}
+
 app.get("/api/health", async (_req, res) => {
   await query("SELECT 1");
   res.json({ ok: true, database: "supabase-postgres" });

@@ -32,37 +32,35 @@ select {
 
 button {
   align-items: center;
-  background: color-mix(in srgb, var(--brand) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
-  border-radius: 0.6rem;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   box-shadow: none;
-  color: var(--brand-dark, var(--brand));
+  color: var(--ink);
   cursor: pointer;
   display: inline-flex;
   font: inherit;
   font-size: var(--control-font);
-  font-weight: 650;
+  font-weight: 600;
   gap: 0.35rem;
   justify-content: center;
   letter-spacing: -0.01em;
   line-height: 1.1;
   min-height: var(--control-row-min);
   padding: var(--control-pad-y) var(--control-pad-x);
+  text-transform: none;
   transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    color 160ms ease,
-    transform 120ms ease,
-    filter 160ms ease;
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
   white-space: nowrap;
 }
 
 button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--brand) 22%, transparent);
-  border-color: color-mix(in srgb, var(--brand) 38%, transparent);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 16%, transparent);
-  color: var(--brand-dark, var(--brand));
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-color: var(--line);
+  box-shadow: none;
+  color: var(--ink);
   transform: none;
 }
 
@@ -125,9 +123,9 @@ button.icon:hover:not(:disabled) {
 
 input,
 select {
-  background: #fff;
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--menu-radius);
+  border-radius: var(--radius-sm);
   color: var(--ink);
   font-size: var(--control-font);
   min-height: var(--control-row-min);
@@ -168,10 +166,10 @@ main,
 
 .top-nav-brand {
   color: var(--brand-dark);
-  font-size: 0.95rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-transform: none;
 }
 
 .top-nav-links {
@@ -614,10 +612,10 @@ main,
 .login-kicker {
   color: var(--brand);
   font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0 0 0.35rem;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .login-form {
@@ -1281,10 +1279,10 @@ button.status-icon-edit:hover {
   color: var(--muted);
   display: grid;
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 600;
   gap: 0.4rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 .termin-form-full {
@@ -1315,11 +1313,11 @@ button.status-icon-edit:hover {
 
 .termin-form-section legend {
   color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   padding: 0;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .termin-form-tactile .date-month-picker {
@@ -1607,10 +1605,10 @@ button.status-icon-edit:hover {
 .eyebrow {
   color: var(--brand);
   font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0 0 0.35rem;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 h1,
@@ -1660,10 +1658,10 @@ h2 {
   color: var(--muted);
   display: block;
   font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   margin-bottom: 0.45rem;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .hero-card span {
@@ -2013,9 +2011,9 @@ h2 {
 
 .summary-card span {
   font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 .summary-card strong {
@@ -2561,12 +2559,12 @@ td input[data-field="note"] {
   color: var(--brand-dark, var(--brand)) !important;
   cursor: pointer;
   font: inherit !important;
-  font-size: 0.78rem !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.08em;
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em;
   padding: 0.15rem 0 !important;
   text-align: left;
-  text-transform: uppercase;
+  text-transform: none;
   transform: none !important;
 }
 
@@ -3009,8 +3007,8 @@ td input[data-field="note"] {
 }
 
 .app-shell[data-theme="dark"] .app-tabbar-add {
-  background: var(--neon-cyan, var(--brand)) !important;
-  color: var(--on-brand, #1a0020) !important;
+  background: var(--brand) !important;
+  color: var(--on-brand) !important;
 }
 
 .app-shell[data-theme="dark"] .app-tabbar-add:hover,
@@ -8685,6 +8683,21 @@ html[data-theme="dark"] body {
 
 .event-page-form {
   margin: 0;
+  padding: 0;
+}
+
+.event-page-osnovno-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  min-width: 0;
+  padding-bottom: 1rem;
+}
+
+.event-page-lock-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0;
 }
 
 .event-page-stub {
@@ -9025,9 +9038,9 @@ html[data-theme="dark"] body {
 }
 
 .event-day-details-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+  display: grid;
+  gap: 0.35rem 1.15rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
@@ -9038,10 +9051,14 @@ html[data-theme="dark"] body {
   align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   display: grid;
-  gap: 0.45rem 0.75rem;
-  grid-template-columns: minmax(0, 1.35fr) minmax(7.5rem, 1fr);
-  padding: 0.35rem 0;
+  gap: 0.35rem 0.65rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(6.5rem, 1fr);
+  padding: 0.28rem 0;
   width: 100%;
+}
+
+.event-day-details-row.has-duration {
+  grid-column: 1 / -1;
 }
 
 .event-day-details-row:last-child {
@@ -9120,6 +9137,10 @@ html[data-theme="dark"] body {
 }
 
 @media (max-width: 640px) {
+  .event-day-details-list {
+    grid-template-columns: 1fr;
+  }
+
   .event-day-details-row {
     grid-template-columns: 1fr;
   }
@@ -10028,7 +10049,7 @@ html[data-theme="dark"] body {
   border: 1px solid var(--tech-line);
   border-radius: 0.5rem;
   color: var(--tech-ink);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: inherit;
   padding: 0.55rem;
 }
 

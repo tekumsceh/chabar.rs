@@ -7,7 +7,6 @@ import LoginPage from "./LoginPage.jsx";
 import ReportPage from "./ReportPage.jsx";
 import SchedulePage from "./SchedulePage.jsx";
 import SettingsPage from "./SettingsPage.jsx";
-import ButtonShowcasePage from "./ButtonShowcasePage.jsx";
 import BandPills from "./BandPills.jsx";
 import ProfileHub from "./ProfileHub.jsx";
 import {
@@ -31,7 +30,7 @@ const NAV_ITEMS = [
   { id: "profile", labelKey: "nav.profile", icon: ProfileNavIcon },
 ];
 
-const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings", "button-showcase"]);
+const MAIN_PAGE_IDS = new Set(["schedule", "band", "report", "settings"]);
 const DEFAULT_PAGE = "schedule";
 
 function normalizePage(page) {
@@ -1105,9 +1104,8 @@ export default function App() {
   const showBand = activePage === "band";
   const showReport = activePage === "report";
   const showSettings = activePage === "settings";
-  const showButtonShowcase = activePage === "button-showcase";
   const forceSchedule =
-    !showSchedule && !showBand && !showReport && !showSettings && !showButtonShowcase;
+    !showSchedule && !showBand && !showReport && !showSettings;
   const ownedGroupBands = profile?.ownedGroupBands ?? 0;
   const ownerLimit = profile?.ownerLimit ?? ownerBandLimit(0);
   const canCreateBand = ownedGroupBands < ownerLimit;
@@ -1226,12 +1224,7 @@ export default function App() {
           onInvitePreferenceChange={saveInvitePreference}
           showToast={showToast}
           onBack={goToSchedule}
-          onOpenButtonShowcase={() => setPage("button-showcase")}
         />
-      </div>
-
-      <div className={`app-page ${showButtonShowcase ? "is-active" : ""}`} hidden={!showButtonShowcase}>
-        <ButtonShowcasePage onBack={() => setPage("settings")} />
       </div>
 
       <ProfileHub
@@ -1340,7 +1333,7 @@ export default function App() {
 
           const isActive =
             item.id === "profile"
-              ? profileHubOpen || showSettings || showButtonShowcase
+              ? profileHubOpen || showSettings
               : activePage === item.id || (item.id === "schedule" && forceSchedule);
           return (
             <button

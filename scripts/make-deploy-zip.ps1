@@ -17,6 +17,7 @@ $excludeDirs = @(
   "dev-dist",
   "docs",
   "logs",
+  "alt",
   "agent-tools",
   "agent-transcripts",
   ".cursor"
@@ -54,6 +55,28 @@ try {
   if (Test-Path $uiTextsIndex) { Remove-Item $uiTextsIndex -Force }
   $buildUiTexts = Join-Path $temp "scripts\build-ui-texts.js"
   if (Test-Path $buildUiTexts) { Remove-Item $buildUiTexts -Force }
+
+  # Local-only: ledger dumps, spent mutations, one-shot debug/compare/fix scripts
+  $scriptsTemp = Join-Path $temp "scripts"
+  if (Test-Path $scriptsTemp) {
+    $onceDir = Join-Path $scriptsTemp "once"
+    if (Test-Path $onceDir) { Remove-Item $onceDir -Recurse -Force }
+    Get-ChildItem -Path $scriptsTemp -File -Filter "*.csv" -ErrorAction SilentlyContinue |
+      Remove-Item -Force
+    $spentNames = @(
+      "reattach-personal-to-saint-louis.js",
+      "fix-dobrakovo-expense.js",
+      "convert-isplata-to-expenses.js",
+      "convert-prevoz-to-expenses.js"
+    )
+    foreach ($n in $spentNames) {
+      $p = Join-Path $scriptsTemp $n
+      if (Test-Path $p) { Remove-Item $p -Force }
+    }
+    Get-ChildItem -Path $scriptsTemp -File -ErrorAction SilentlyContinue | Where-Object {
+      $_.Name -match '^(fix-|debug-|compare-|patch-|inspect-|held-diff-|simulate-|query-audit-|audit-claim-|audit-spreadsheet-)'
+    } | Remove-Item -Force
+  }
 
   Compress-Archive -Path (Join-Path $temp "*") -DestinationPath $zipPath -Force
 

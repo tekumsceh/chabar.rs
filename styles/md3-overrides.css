@@ -1,109 +1,212 @@
 /**
- * Material Design 3 component overrides — Chabar colors, MD3 shapes.
- * Nav / list neon effects stay in styles.css; avoid flattening those here.
+ * Chabar component kit — three button variants, quiet surfaces, sentence-case type.
+ * Dark refinements that must win live in gemini-dark-ui.css (loaded last).
  */
 
-/* —— MD3 buttons (filled tonal default) —— */
-button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.raspored-row-button):not(.raspored-row-open):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.finansije-tab):not(.finansije-pay-btn) {
-  background: var(--md-primary-container);
-  border: 0;
-  border-radius: var(--radius-pill);
-  box-shadow: none;
-  color: var(--md-on-primary-container);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  min-height: 2.5rem;
+/* —— Type: labels are product UI, not posters —— */
+label,
+legend,
+.termin-form label,
+.termin-form-section legend,
+.field label,
+.hero-card label,
+.login-kicker,
+.eyebrow,
+.summary-card span,
+.finance-detail-kicker,
+.finance-detail-section h3,
+.finance-changelog-title,
+.finansije-bulk-pay-field span,
+.menu-select-bar-kicker,
+.global-search-kind,
+.event-page-fields dt,
+.settings-row small,
+.settings-row-status {
+  font-weight: 600;
+  letter-spacing: -0.01em;
   text-transform: none;
 }
 
-button:not(.icon):not(:disabled):hover {
-  box-shadow: var(--shadow-click);
-  filter: brightness(0.98);
+.app-topbar-brand,
+.top-nav-brand {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  text-transform: none !important;
+}
+
+h1,
+h2,
+h3,
+.page-header-title,
+.event-page-title,
+.band-home-title,
+.panel-heading h2,
+.settings-card h2 {
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  text-transform: none;
+}
+
+/* —— Buttons: default = secondary (ghost). Primary is explicit. —— */
+button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.app-tabbar-add):not(.raspored-row-button):not(.raspored-row-open):not(.raspored-icon-btn):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.settings-switch):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.event-page-tab):not(.event-page-subtab):not(.finansije-tab):not(.finansije-pay-btn):not(.date-row-menu-item):not(.page-header-back):not(.event-page-back):not(.band-home-back):not(.user-avatar-btn):not(.menu-select-bar-trigger) {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  min-height: var(--control-row-min);
+  padding: var(--control-pad-y) var(--control-pad-x);
+  text-transform: none;
+}
+
+button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.app-tabbar-add):not(.raspored-row-button):not(.raspored-row-open):not(.raspored-icon-btn):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.settings-switch):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.event-page-tab):not(.event-page-subtab):not(.finansije-tab):not(.finansije-pay-btn):not(.date-row-menu-item):not(.page-header-back):not(.event-page-back):not(.band-home-back):not(.user-avatar-btn):not(.menu-select-bar-trigger):not(:disabled):hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  box-shadow: none;
+  filter: none;
   transform: none;
 }
 
 button.primary,
-button[type="submit"]:not(.icon),
-.confirm-btn-primary {
-  background: var(--md-primary) !important;
-  color: var(--md-on-primary) !important;
-}
-
-.app-shell[data-theme="dark"] button.primary,
-.app-shell[data-theme="dark"] .confirm-btn-primary {
+button[type="submit"]:not(.icon):not(.band-pill):not(.schedule-event-card-link),
+.confirm-btn-primary,
+.btn-primary,
+.band-fees-save,
+.profile-hub-accept {
   background: var(--brand) !important;
+  border-color: var(--brand) !important;
+  box-shadow: none !important;
   color: var(--on-brand) !important;
 }
 
+button.primary:hover:not(:disabled),
+button[type="submit"]:not(.icon):not(:disabled):hover,
+.confirm-btn-primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled),
+.band-fees-save:hover:not(:disabled),
+.profile-hub-accept:hover:not(:disabled) {
+  background: var(--brand-hover) !important;
+  border-color: var(--brand-hover) !important;
+  filter: none;
+}
+
+.btn-secondary,
+.confirm-btn-ghost,
+.termin-form-secondary,
+.login-google {
+  background: transparent !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink) !important;
+}
+
 button.danger,
-.confirm-btn-danger {
-  background: color-mix(in srgb, var(--md-error) 14%, var(--md-surface-container)) !important;
-  color: var(--md-error) !important;
+.confirm-btn-danger,
+.band-delete-btn {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent) !important;
+  box-shadow: none !important;
+  color: var(--danger) !important;
 }
 
-button.icon {
-  border-radius: var(--radius-pill);
-  color: var(--md-on-surface-variant);
+/* Icon / tool — transparent hit target, not a glass chip */
+button.icon,
+.raspored-icon-btn,
+.page-header-back,
+.event-page-back,
+.band-home-back,
+.band-home-info,
+.band-cal-nav-btn,
+.modal-close,
+.legal-back,
+.date-row-menu-trigger,
+.user-avatar-btn,
+.menu-select-bar-trigger,
+.event-finance-icon-btn:not(.event-finance-icon-btn-accent),
+.tech-rider-icon-btn {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+  color: var(--muted);
 }
 
-button.icon:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
-  color: var(--md-on-surface);
+button.icon:hover:not(:disabled),
+.raspored-icon-btn:hover:not(:disabled),
+.page-header-back:hover,
+.event-page-back:hover,
+.band-home-back:hover,
+.band-cal-nav-btn:hover:not(:disabled),
+.modal-close:hover,
+.legal-back:hover,
+.date-row-menu-trigger:hover,
+.user-avatar-btn:hover,
+.menu-select-bar-trigger:hover,
+.event-finance-icon-btn:not(.event-finance-icon-btn-accent):hover,
+.tech-rider-icon-btn:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent) !important;
+  color: var(--ink);
+  transform: none;
 }
 
-/* —— MD3 text fields —— */
+.raspored-icon-btn.is-active-filter {
+  background: var(--brand-soft) !important;
+  border: 0 !important;
+  color: var(--brand) !important;
+}
+
+/* —— Fields —— */
 input,
 select,
 textarea {
-  background: var(--md-surface-container-highest);
-  border: 1px solid var(--md-outline);
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  color: var(--md-on-surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--control-font);
+  font-weight: 500;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 1px var(--brand);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 28%, transparent);
+  outline: none;
 }
 
 .app-shell[data-theme="dark"] input,
 .app-shell[data-theme="dark"] select,
 .app-shell[data-theme="dark"] textarea {
-  background: color-mix(in srgb, var(--panel) 88%, #000);
+  background: color-mix(in srgb, var(--panel) 70%, #000);
   border-color: var(--line);
   color: var(--ink);
 }
 
-.app-shell[data-theme="dark"] .schedule-event-card-link.is-filled {
-  color: var(--neon-lime);
-}
-
-/* —— Top app bar —— */
+/* —— Top bar / band chips (chips stay pills) —— */
 .app-topbar {
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+  background: transparent;
+  border-bottom: 0;
   box-shadow: none;
-  padding-bottom: 0.4rem;
-}
-
-.app-shell[data-theme="dark"] .app-topbar {
-  background: color-mix(in srgb, var(--panel, #070816) 82%, transparent);
-  border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent);
 }
 
 .band-pill {
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border: 1px solid var(--line);
   color: var(--muted);
+  font-weight: 600;
 }
 
 .band-pill:hover {
-  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
 }
 
 .band-pill.is-active {
   background: var(--brand);
+  border-color: var(--brand);
   color: var(--on-brand);
 }
 
@@ -112,61 +215,36 @@ textarea:focus {
   filter: none;
 }
 
-.app-shell[data-theme="dark"] .band-pill {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.app-shell[data-theme="dark"] .band-pill.is-active {
-  background: var(--brand);
-  color: var(--on-brand);
-}
-
-/* —— Navigation bar —— */
+/* —— Tab bar —— */
 .app-tabbar {
   background: color-mix(in srgb, var(--panel) 92%, transparent);
-  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-top: 1px solid var(--line);
   box-shadow: none;
 }
 
 .app-tabbar-item {
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .app-tabbar-item.is-active {
   color: var(--brand) !important;
 }
 
-.app-shell[data-theme="dark"] .app-tabbar {
-  background: color-mix(in srgb, var(--panel, #070816) 94%, #000);
-}
-
-.app-shell[data-theme="dark"] .app-tabbar-item.is-active {
-  background: transparent !important;
-  color: var(--neon-cyan) !important;
-}
-
 .app-tabbar-add {
-  background: var(--ink) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16) !important;
-  color: var(--on-ink) !important;
+  background: var(--brand) !important;
+  box-shadow: none !important;
+  color: var(--on-brand) !important;
 }
 
 .app-tabbar-add:hover,
 .app-tabbar-add.is-open {
-  background: var(--brand) !important;
+  background: var(--brand-hover) !important;
   color: var(--on-brand) !important;
 }
 
 .app-shell[data-theme="dark"] .app-tabbar-add {
-  background: var(--neon-cyan) !important;
-  color: var(--on-brand, #1a0020) !important;
-}
-
-.app-shell[data-theme="dark"] .app-tabbar-add:hover,
-.app-shell[data-theme="dark"] .app-tabbar-add.is-open {
   background: var(--brand) !important;
   color: var(--on-brand) !important;
 }
@@ -179,51 +257,31 @@ textarea:focus {
 .finance-detail-panel,
 .menu-select-list,
 .user-menu-panel,
-.global-search-list {
-  background: var(--md-surface-container-low);
-  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
-}
-
-.app-shell[data-theme="dark"] .panel,
-.app-shell[data-theme="dark"] .summary-card,
-.app-shell[data-theme="dark"] .toolbar,
-.app-shell[data-theme="dark"] .settings-card,
-.app-shell[data-theme="dark"] .finance-detail-panel {
+.global-search-list,
+.modal-panel,
+.confirm-dialog-panel {
   background: var(--panel);
-  border-color: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-soft);
 }
 
 .schedule-event-card {
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
-  border-color: color-mix(in srgb, var(--line) 68%, transparent);
-  box-shadow: var(--shadow-soft);
+  background: var(--panel);
+  border-color: var(--line);
+  box-shadow: none;
 }
 
-.app-shell[data-theme="dark"] .schedule-event-card {
-  background: color-mix(in srgb, var(--panel, #070816) 96%, #000);
-  box-shadow: var(--shadow-soft);
-}
-
-.app-shell[data-theme="dark"] .schedule-event-card.is-next {
-  box-shadow:
-    var(--shadow-soft),
-    inset 3px 0 0 var(--band-accent, var(--neon-lime));
+.schedule-event-card.is-next {
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 
 .schedule-event-card-link:hover,
 .schedule-event-card-link:focus-visible {
-  background: color-mix(in srgb, var(--brand) 10%, transparent) !important;
+  background: var(--brand-soft) !important;
 }
 
-/* List row spacing — hover / is-next neon: styles.css */
-.raspored-row + .raspored-row {
-  margin-top: 0.35rem;
-}
-
-/* —— Finance chips / badges —— */
+/* —— Finance chips stay text, not traffic lights —— */
 .finansije-paid-badge,
 .finansije-partial-badge {
   background: transparent;
@@ -234,35 +292,25 @@ textarea:focus {
   text-transform: none;
 }
 
-.finansije-partial-badge {
-  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
-}
-
 .finansije .raspored-fee-paid,
-.finansije .raspored-fee-partial,
-.finansije .raspored-fee-unpaid,
 .finansije .raspored-fee-open {
-  background: transparent !important;
-  border-radius: 0;
-  box-shadow: none !important;
-  color: var(--ink) !important;
-  font-weight: 650;
-}
-
-.finansije .raspored-fee-open,
-.finansije .raspored-fee-paid {
   color: var(--muted) !important;
-  font-weight: 600;
 }
 
-.finansije .raspored-fee-partial {
-  color: color-mix(in srgb, var(--ink) 82%, var(--muted)) !important;
+.finansije .raspored-fee-unpaid {
+  color: var(--ink) !important;
 }
 
-/* —— Settings switch —— */
+/* Paid amounts may use lime; never as a button fill */
+.finansije .raspored-fee-paid.is-amount,
+[data-paid="true"] {
+  color: var(--ok);
+}
+
+/* —— Switch / theme options —— */
 .settings-switch-track {
   background: var(--md-surface-container-highest);
-  border: 2px solid var(--md-outline);
+  border: 2px solid var(--line);
   box-shadow: none;
 }
 
@@ -272,53 +320,16 @@ textarea:focus {
   box-shadow: none;
 }
 
-.app-shell[data-theme="dark"] .settings-switch.is-on .settings-switch-track {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--neon-cyan) 85%, #0a2540) 0%,
-    color-mix(in srgb, var(--neon-cyan) 55%, #061018) 100%
-  );
-  border-color: color-mix(in srgb, var(--neon-cyan) 60%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 0 18px color-mix(in srgb, var(--neon-cyan) 45%, transparent);
-}
-
-.app-shell[data-theme="dark"] .settings-theme-option.is-active {
-  background: color-mix(in srgb, var(--neon-cyan) 14%, var(--panel)) !important;
+.settings-theme-option.is-active {
+  background: var(--brand-soft) !important;
   box-shadow: none !important;
   color: var(--ink) !important;
 }
 
-/* —— Modals —— */
 .modal-backdrop {
-  background: color-mix(in srgb, var(--md-on-surface) 32%, transparent);
+  background: color-mix(in srgb, #000 40%, transparent);
 }
 
-.modal-panel,
-.confirm-dialog-panel {
-  background: var(--md-surface-container-high);
-  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--menu-shadow);
-}
-
-.app-shell[data-theme="dark"] .modal-panel,
-.app-shell[data-theme="dark"] .confirm-dialog-panel {
-  background: var(--panel);
-  border-color: var(--line);
-}
-
-/* —— Page header —— */
 .page-header {
-  background: transparent;
-}
-
-.page-header-title {
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
-.app-shell[data-theme="dark"] .page-header {
   background: transparent;
 }

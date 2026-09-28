@@ -10,3 +10,7 @@ logs/
 chabar-deploy.zip
 ioorganize-deploy.zip
 .cursor/
+scripts/*.csv
+scripts/once/*
+!scripts/once/.gitignore
+

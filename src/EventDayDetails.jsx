@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { api } from "./api.js";
 import { useT } from "./i18n/I18nProvider.jsx";
 
@@ -58,22 +58,33 @@ export function formatDayDetailValue(details, field) {
   return time;
 }
 
+function isDayDetailsDirty(form, initial) {
+  return (
+    DAY_TIME_FIELDS.some((field) => form[field.key] !== initial[field.key]) ||
+    String(form.soundcheckDurationMin ?? "") !== String(initial.soundcheckDurationMin ?? "")
+  );
+}
+
 /**
- * Kompletni detalji — day timeline (times + soundcheck duration).
+ * Day timeline — always visible inputs; parent confirms + commits on leave.
  */
-export default function EventDayDetails({
-  eventId,
-  bandId,
-  readOnly = false,
-  showToast,
-  onSaved,
-}) {
+const EventDayDetails = forwardRef(function EventDayDetails(
+  { eventId, bandId, readOnly = false, showToast, onSaved },
+  ref,
+) {
   const t = useT();
   const [form, setForm] = useState(emptyDayDetails);
   const [initial, setInitial] = useState(emptyDayDetails);
   const [loading, setLoading] = useState(Boolean(eventId && bandId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const formRef = useRef(form);
+  const initialRef = useRef(initial);
+  const savingRef = useRef(false);
+
+  formRef.current = form;
+  initialRef.current = initial;
+  savingRef.current = saving;
 
   useEffect(() => {
     let cancelled = false;
@@ -107,32 +118,35 @@ export default function EventDayDetails({
     };
   }, [eventId, bandId, t]);
 
-  const dirty = DAY_TIME_FIELDS.some((field) => form[field.key] !== initial[field.key])
-    || String(form.soundcheckDurationMin ?? "") !== String(initial.soundcheckDurationMin ?? "");
-
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function save(event) {
-    event?.preventDefault?.();
-    if (readOnly || saving || !eventId || !bandId) return;
+  function revert() {
+    setForm(initialRef.current);
+  }
+
+  async function save() {
+    if (readOnly || savingRef.current || !eventId || !bandId) return false;
+    if (!isDayDetailsDirty(formRef.current, initialRef.current)) return true;
 
     setSaving(true);
+    savingRef.current = true;
     try {
-      const durationRaw = String(form.soundcheckDurationMin ?? "").trim();
+      const current = formRef.current;
+      const durationRaw = String(current.soundcheckDurationMin ?? "").trim();
       const body = {
-        gatheringTime: form.gatheringTime,
-        departureTime: form.departureTime,
-        lodgingArrivalTime: form.lodgingArrivalTime,
-        loadInTime: form.loadInTime,
-        setUpTime: form.setUpTime,
-        soundcheckTime: form.soundcheckTime,
+        gatheringTime: current.gatheringTime,
+        departureTime: current.departureTime,
+        lodgingArrivalTime: current.lodgingArrivalTime,
+        loadInTime: current.loadInTime,
+        setUpTime: current.setUpTime,
+        soundcheckTime: current.soundcheckTime,
         soundcheckDurationMin: durationRaw === "" ? null : Number(durationRaw.replace(",", ".")),
-        showStartTime: form.showStartTime,
-        showEndTime: form.showEndTime,
-        curfewTime: form.curfewTime,
-        leaveTime: form.leaveTime,
+        showStartTime: current.showStartTime,
+        showEndTime: current.showEndTime,
+        curfewTime: current.curfewTime,
+        leaveTime: current.leaveTime,
       };
       const saved = await api(`/api/events/${eventId}/day-details`, {
         method: "PUT",
@@ -144,20 +158,25 @@ export default function EventDayDetails({
       setInitial(next);
       setError("");
       onSaved?.(next);
-      showToast?.(t("day.saved"));
+      return true;
     } catch (requestError) {
+      setError(requestError.message || t("day.saveFail"));
       showToast?.(requestError.message || t("day.saveFail"), "error");
+      return false;
     } finally {
       setSaving(false);
+      savingRef.current = false;
     }
   }
 
-  function cancel() {
-    setForm(initial);
-  }
+  useImperativeHandle(ref, () => ({
+    isDirty: () => isDayDetailsDirty(formRef.current, initialRef.current),
+    revert,
+    save,
+  }));
 
   return (
-    <form className={`event-day-details ${readOnly ? "is-readonly" : ""}`} onSubmit={save}>
+    <div className={`event-day-details ${readOnly ? "is-readonly" : ""}`}>
       {loading ? <p className="event-finance-status">{t("day.loading")}</p> : null}
       {error ? <p className="event-finance-status is-error">{error}</p> : null}
       {readOnly ? (
@@ -203,22 +222,8 @@ export default function EventDayDetails({
           </li>
         ))}
       </ul>
-
-      {!readOnly ? (
-        <div className="event-day-details-actions">
-          <button
-            type="button"
-            className="termin-form-ghost"
-            onClick={cancel}
-            disabled={saving || loading || !dirty}
-          >
-            {t("common.cancel")}
-          </button>
-          <button type="submit" disabled={saving || loading || !dirty}>
-            {saving ? t("common.saving") : t("common.save")}
-          </button>
-        </div>
-      ) : null}
-    </form>
+    </div>
   );
-}
+});
+
+export default EventDayDetails;

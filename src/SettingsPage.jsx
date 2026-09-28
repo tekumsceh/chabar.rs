@@ -28,7 +28,6 @@ export default function SettingsPage({
   onInvitePreferenceChange,
   showToast,
   onBack,
-  onOpenButtonShowcase,
 }) {
   const { t, locale, setLocale, locales } = useI18n();
   const [pushOn, setPushOn] = useState(false);
@@ -246,21 +245,6 @@ export default function SettingsPage({
         </section>
       ) : null}
 
-      <section className="settings-card" aria-label={t("settings.lab")}>
-        <h2>{t("settings.lab")}</h2>
-        <div className="settings-row">
-          <span>
-            <strong>{t("settings.buttons")}</strong>
-            <small className="settings-row-status">{t("settings.buttonsStatus")}</small>
-          </span>
-          <button type="button" className="settings-lab-link" onClick={() => onOpenButtonShowcase?.()}>
-            <PaletteIcon />
-            <span>{t("common.open")}</span>
-            <ChevronSmallIcon />
-          </button>
-        </div>
-      </section>
-
       <section className="settings-card" aria-label={t("settings.legal")}>
         <h2>{t("settings.legal")}</h2>
         <div className="settings-legal-links">
@@ -349,27 +333,3 @@ function DocIcon() {
   );
 }
 
-function PaletteIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M12 3.5c-4.2 0-7.5 2.8-7.5 6.5 0 2.4 1.4 4.2 3.5 5.2-.3.9-.9 2.5-1 2.8-.2.5.3.9.8.7.4-.2 2.4-1.4 3.2-1.9 1 .3 2 .5 3 .5 4.2 0 7.5-2.8 7.5-6.5S16.2 3.5 12 3.5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <circle cx="8.5" cy="10" r="0.85" fill="currentColor" />
-      <circle cx="12" cy="8" r="0.85" fill="currentColor" />
-      <circle cx="15.5" cy="10" r="0.85" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ChevronSmallIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}

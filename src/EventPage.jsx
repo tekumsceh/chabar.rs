@@ -12,12 +12,7 @@ import { useConfirm } from "./confirmDialog.jsx";
 import EventFinancePanel from "./EventFinancePanel.jsx";
 import EventFinanceAuditPanel from "./EventFinanceAuditPanel.jsx";
 import EventExpensesPanel from "./EventExpensesPanel.jsx";
-import EventDayDetails, {
-  DAY_TIME_FIELDS,
-  dayDetailsFromApi,
-  emptyDayDetails,
-  formatDayDetailValue,
-} from "./EventDayDetails.jsx";
+import EventDayDetails from "./EventDayDetails.jsx";
 import TechnicalRiderPanel, { prefetchTechRider } from "./TechnicalRiderPanel.jsx";
 import SetListPanel from "./SetListPanel.jsx";
 import EventRackStubPanel from "./EventRackStubPanel.jsx";
@@ -69,7 +64,6 @@ export default function EventPage({
   initialTab = "osnovno",
   initialTechSubTab = "",
   initialShowSubTab = "",
-  initialDetailsOpen = false,
 }) {
   const t = useT();
   const { confirm } = useConfirm();
@@ -77,8 +71,6 @@ export default function EventPage({
   const [techSubTab, setTechSubTab] = useState(TECH_SUBTABS[0].id);
   const [techRiderMounted, setTechRiderMounted] = useState(false);
   const [showSubTab, setShowSubTab] = useState(SHOW_SUBTABS[0].id);
-  const [editing, setEditing] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState(() => formFromEvent(event));
@@ -87,18 +79,20 @@ export default function EventPage({
   const [financeLoading, setFinanceLoading] = useState(false);
   const [financeError, setFinanceError] = useState("");
   const [financeAuditRefresh, setFinanceAuditRefresh] = useState(0);
-  const [dayDetails, setDayDetails] = useState(emptyDayDetails);
 
   function bumpFinanceAudit() {
     setFinanceAuditRefresh((value) => value + 1);
   }
   const lastLeaveSignalRef = useRef(leaveSignal);
-  const editingRef = useRef(editing);
   const dirtyRef = useRef(false);
   const formRef = useRef(form);
+  const initialFormRef = useRef(initialForm);
   const savingRef = useRef(saving);
   const eventRef = useRef(event);
   const backRef = useRef(null);
+  const dayDetailsRef = useRef(null);
+  const committingRef = useRef(false);
+  const commitPromiseRef = useRef(null);
 
   useEffect(() => {
     backRef.current?.focus({ preventScroll: true });
@@ -109,8 +103,7 @@ export default function EventPage({
     setTechSubTab(nextTech);
     setTechRiderMounted(nextTech === "technical-rider" || nextTab === "tehnicki");
     setShowSubTab(nextShow);
-    setDetailsOpen(Boolean(initialDetailsOpen));
-  }, [event?.id, initialTab, initialTechSubTab, initialShowSubTab, initialDetailsOpen]);
+  }, [event?.id, initialTab, initialTechSubTab, initialShowSubTab]);
 
   useEffect(() => {
     if (techSubTab === "technical-rider") setTechRiderMounted(true);
@@ -159,15 +152,6 @@ export default function EventPage({
   const hasFee = myFee > 0;
   const bandName = band?.name || event?.bandName || "—";
   const dayDetailsBandId = event?.bandId || band?.id || "";
-  const filledDayDetails = useMemo(
-    () =>
-      DAY_TIME_FIELDS.map((field) => ({
-        key: field.key,
-        label: t(field.labelKey),
-        value: formatDayDetailValue(dayDetails, field),
-      })).filter((row) => row.value),
-    [dayDetails, t],
-  );
   const bandOptions = useMemo(
     () =>
       (bands || []).map((item) => ({
@@ -185,9 +169,9 @@ export default function EventPage({
     form.mapsUrl !== initialForm.mapsUrl ||
     form.note !== initialForm.note;
 
-  editingRef.current = editing;
   dirtyRef.current = isDirty;
   formRef.current = form;
+  initialFormRef.current = initialForm;
   savingRef.current = saving;
   eventRef.current = event;
 
@@ -195,30 +179,8 @@ export default function EventPage({
     const next = formFromEvent(event);
     setForm(next);
     setInitialForm(next);
-    setEditing(false);
-    setDetailsOpen(false);
     setFormError("");
   }, [event?.id, event?.bandId, event?.date, event?.city, event?.venue, event?.mapsUrl, event?.note, event?.priceEur]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadDayDetails() {
-      if (!event?.id || !dayDetailsBandId) {
-        setDayDetails(emptyDayDetails);
-        return;
-      }
-      try {
-        const data = await api(`/api/events/${event.id}/day-details`, { bandId: dayDetailsBandId });
-        if (!cancelled) setDayDetails(dayDetailsFromApi(data));
-      } catch {
-        if (!cancelled) setDayDetails(emptyDayDetails);
-      }
-    }
-    loadDayDetails();
-    return () => {
-      cancelled = true;
-    };
-  }, [event?.id, dayDetailsBandId]);
 
   useEffect(() => {
     if (tab === "finansije" && !canSeeFinance) setTab("osnovno");
@@ -258,15 +220,6 @@ export default function EventPage({
   }, [canSeeFinance, event?.id, financeBandId, t]);
 
   useEffect(() => {
-    if (locked && editing) {
-      setEditing(false);
-      setForm(formFromEvent(event));
-      setInitialForm(formFromEvent(event));
-      setFormError("");
-    }
-  }, [locked, editing, event]);
-
-  useEffect(() => {
     if (leaveSignal === lastLeaveSignalRef.current) return;
     lastLeaveSignalRef.current = leaveSignal;
     void requestLeave();
@@ -278,31 +231,11 @@ export default function EventPage({
     if (formError) setFormError("");
   }
 
-  function startEdit() {
-    if (locked) return;
-    setForm(formFromEvent(event));
-    setInitialForm(formFromEvent(event));
+  function revertOsnovno() {
+    const snapshot = initialFormRef.current;
+    setForm({ ...snapshot });
+    dayDetailsRef.current?.revert();
     setFormError("");
-    setEditing(true);
-    setTab("osnovno");
-  }
-
-  async function cancelEdit() {
-    if (saving) return;
-    if (isDirty) {
-      const confirmed = await confirm({
-        title: t("event.unsavedTitle"),
-        message: t("event.discardMessage"),
-        confirmLabel: t("event.discard"),
-        cancelLabel: t("event.stay"),
-        danger: true,
-      });
-      if (!confirmed) return;
-    }
-    setForm(formFromEvent(event));
-    setInitialForm(formFromEvent(event));
-    setFormError("");
-    setEditing(false);
   }
 
   function validateForm(current) {
@@ -336,24 +269,20 @@ export default function EventPage({
     }));
   }
 
-  async function persistEdit({ askConfirm = true } = {}) {
+  async function persistEdit() {
     if (savingRef.current || locked) return false;
     const current = formRef.current;
     const validated = validateForm(current);
     if (validated.error) {
       setFormError(validated.error);
       setTab("osnovno");
-      setEditing(true);
       return false;
     }
 
     const { bandId, date, city, venue, mapsUrl, note } = validated;
-    if (!dirtyRef.current) {
-      setEditing(false);
-      return true;
-    }
+    if (!dirtyRef.current) return true;
 
-    const initial = initialForm;
+    const initial = initialFormRef.current;
     const dateOrBandChanged =
       bandId !== initial.bandId ||
       !sameCalendarDay(date, initial.date);
@@ -376,52 +305,84 @@ export default function EventPage({
       }
     }
 
-    if (askConfirm) {
-      const confirmed = await confirm({
-        title: t("event.saveConfirmTitle"),
-        message: `${date}${city ? ` — ${city}` : ""}`,
-        confirmLabel: t("common.save"),
-        cancelLabel: t("common.cancel"),
-      });
-      if (!confirmed) return false;
-    }
-
     try {
       setSaving(true);
       setFormError("");
       await onUpdate?.(eventRef.current.id, { bandId, date, city, venue, mapsUrl, note });
-      setInitialForm({ bandId, date, city, venue, mapsUrl, note });
-      setForm({ bandId, date, city, venue, mapsUrl, note });
-      setEditing(false);
+      const next = { bandId, date, city, venue, mapsUrl, note };
+      setInitialForm(next);
+      setForm(next);
       return true;
     } catch (error) {
       setFormError(error.message || t("event.saveFail"));
       setTab("osnovno");
-      setEditing(true);
       return false;
     } finally {
       setSaving(false);
     }
   }
 
-  /** Back / Raspored: prompt Sačuvaj or Otkaži when Osnovno edits are dirty. */
+  async function commitOsnovno({ askConfirm = true } = {}) {
+    if (savingRef.current) return false;
+    if (locked) return true;
+    if (commitPromiseRef.current) return commitPromiseRef.current;
+
+    const eventDirty = dirtyRef.current;
+    const dayDirty = Boolean(dayDetailsRef.current?.isDirty());
+    if (!eventDirty && !dayDirty) return true;
+
+    const run = (async () => {
+      committingRef.current = true;
+      try {
+        if (askConfirm) {
+          const current = formRef.current;
+          const confirmed = await confirm({
+            title: t("event.saveConfirmTitle"),
+            message: `${current.date}${current.city ? ` — ${current.city}` : ""}`,
+            confirmLabel: t("common.save"),
+            cancelLabel: t("common.cancel"),
+          });
+          if (!confirmed) {
+            revertOsnovno();
+            return false;
+          }
+        }
+
+        if (eventDirty) {
+          const saved = await persistEdit();
+          if (!saved) return false;
+        }
+        if (dayDetailsRef.current?.isDirty()) {
+          const savedDay = await dayDetailsRef.current.save();
+          if (!savedDay) return false;
+        }
+        showToast?.(t("event.saveOk"));
+        return true;
+      } finally {
+        committingRef.current = false;
+      }
+    })();
+
+    commitPromiseRef.current = run;
+    try {
+      return await run;
+    } finally {
+      commitPromiseRef.current = null;
+    }
+  }
+
+  function handleOsnovnoBlur(blurEvent) {
+    if (locked) return;
+    const next = blurEvent.relatedTarget;
+    if (next && blurEvent.currentTarget.contains(next)) return;
+    void commitOsnovno({ askConfirm: true });
+  }
+
+  /** Back / Raspored: confirm + autosave when Osnovno is dirty. */
   async function requestLeave() {
     if (savingRef.current) return false;
-
-    if (editingRef.current && dirtyRef.current) {
-      const save = await confirm({
-        title: t("event.unsavedTitle"),
-        message: t("event.saveBeforeBack"),
-        confirmLabel: t("common.save"),
-        cancelLabel: t("common.cancel"),
-      });
-      if (!save) return false;
-      const saved = await persistEdit({ askConfirm: false });
-      if (!saved) return false;
-    } else if (editingRef.current) {
-      setEditing(false);
-    }
-
+    const saved = await commitOsnovno({ askConfirm: true });
+    if (!saved) return false;
     onBack?.();
     return true;
   }
@@ -430,9 +391,9 @@ export default function EventPage({
     await requestLeave();
   }
 
-  async function saveEdit(submitEvent) {
-    submitEvent?.preventDefault?.();
-    await persistEdit({ askConfirm: true });
+  function handleOsnovnoSubmit(submitEvent) {
+    submitEvent.preventDefault();
+    void commitOsnovno({ askConfirm: true });
   }
 
   if (!event) {
@@ -488,23 +449,10 @@ export default function EventPage({
           <span className="event-page-lock" title={t("event.lockedTitle")} aria-label={t("event.lockedAria")}>
             <LockIcon />
           </span>
-        ) : (
-          <button
-            type="button"
-            className={`raspored-icon-btn ${editing ? "is-active-filter" : ""}`}
-            title={editing ? t("event.editingMode") : t("event.editEvent")}
-            aria-label={editing ? t("event.editingMode") : t("event.editEvent")}
-            aria-pressed={editing}
-            onClick={() => (editing ? cancelEdit() : startEdit())}
-            disabled={saving || detailsOpen}
-          >
-            <PenIcon />
-          </button>
-        )}
+        ) : null}
       </header>
 
-      {!detailsOpen ? (
-        <div className="event-page-tabs-shell">
+      <div className="event-page-tabs-shell">
           <div className="event-page-tabs" role="tablist" aria-label={t("event.tabSections")}>
             {visibleTabs.map((item) => (
               <button
@@ -522,17 +470,16 @@ export default function EventPage({
             ))}
           </div>
 
-      {tab === "osnovno" ? (
-        <>
-        <section
+      <section
           id="event-tabpanel-osnovno"
           className="event-page-panel"
           role="tabpanel"
           aria-labelledby="event-tab-osnovno"
+          hidden={tab !== "osnovno"}
         >
           <FadeScroll viewportClassName="event-page-panel-scroll">
-          {editing ? (
-            <form className="event-page-form termin-form" onSubmit={saveEdit}>
+          <div className="event-page-osnovno-stack" onBlur={handleOsnovnoBlur}>
+            <form className="event-page-form termin-form" onSubmit={handleOsnovnoSubmit}>
               <label htmlFor="eventBand" className="termin-form-full">
                 {t("event.bandPersonal")}
                 <FieldSelect
@@ -541,6 +488,7 @@ export default function EventPage({
                   value={form.bandId}
                   placeholder={t("common.choose")}
                   required
+                  disabled={locked || saving}
                   options={bandOptions}
                   onChange={(id) => updateForm("bandId", id)}
                 />
@@ -555,6 +503,7 @@ export default function EventPage({
                   value={toIsoDate(form.date)}
                   onChange={(e) => updateForm("date", fromIsoDate(e.target.value))}
                   required
+                  disabled={locked || saving}
                 />
               </label>
               <label htmlFor="eventCity">
@@ -567,6 +516,7 @@ export default function EventPage({
                   value={form.city}
                   onChange={(e) => updateForm("city", e.target.value)}
                   autoComplete="address-level2"
+                  disabled={locked || saving}
                 />
               </label>
               <label htmlFor="eventVenue">
@@ -579,6 +529,7 @@ export default function EventPage({
                   value={form.venue}
                   onChange={(e) => updateForm("venue", e.target.value)}
                   autoComplete="organization"
+                  disabled={locked || saving}
                 />
               </label>
               <label htmlFor="eventMapsUrl" className="termin-form-full">
@@ -600,18 +551,21 @@ export default function EventPage({
                     applyMapsLinkInput(pasted);
                   }}
                   autoComplete="off"
+                  disabled={locked || saving}
                 />
               </label>
               {form.mapsUrl ? (
                 <p className="event-venue-maps-hint termin-form-full">
                   {t("event.mapsPinHint")}
-                  <button
-                    type="button"
-                    className="event-venue-maps-clear"
-                    onClick={() => setForm((current) => ({ ...current, mapsUrl: "" }))}
-                  >
-                    {t("event.remove")}
-                  </button>
+                  {locked ? null : (
+                    <button
+                      type="button"
+                      className="event-venue-maps-clear"
+                      onClick={() => setForm((current) => ({ ...current, mapsUrl: "" }))}
+                    >
+                      {t("event.remove")}
+                    </button>
+                  )}
                 </p>
               ) : null}
               <label className="termin-form-full" htmlFor="eventNote">
@@ -624,6 +578,7 @@ export default function EventPage({
                   value={form.note}
                   onChange={(e) => updateForm("note", e.target.value)}
                   autoComplete="off"
+                  disabled={locked || saving}
                 />
               </label>
 
@@ -633,59 +588,22 @@ export default function EventPage({
               </div>
 
               {formError ? <div className="app-alert termin-form-full">{formError}</div> : null}
-
-              <div className="termin-form-actions termin-form-full">
-                <button type="button" className="danger" onClick={cancelEdit} disabled={saving}>
-                  {t("common.cancel")}
-                </button>
-                <button type="submit" disabled={saving}>
-                  {saving ? t("common.saving") : t("event.saveChanges")}
-                </button>
-              </div>
+              {locked ? <p className="event-page-lock-note termin-form-full">{t("event.locked")}</p> : null}
             </form>
-          ) : (
-            <dl className="event-page-fields">
-              {filledDayDetails.map((row) => (
-                <div key={row.key}>
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </div>
-              ))}
-              {event.note ? (
-                <div className="event-page-fields-full">
-                  <dt>{t("event.note")}</dt>
-                  <dd>{event.note}</dd>
-                </div>
-              ) : null}
-              <div className="event-page-fields-full event-page-fee-row">
-                <dt>{t("event.myFee")}</dt>
-                <dd className={hasFee ? "is-set" : "is-empty"}>{hasFee ? formatEur(myFee) : "—"}</dd>
-              </div>
-            </dl>
-          )}
+
+            <h3 className="event-page-section-title">
+              <span>{t("event.timeSchedule")}</span>
+            </h3>
+            <EventDayDetails
+              ref={dayDetailsRef}
+              eventId={event.id}
+              bandId={dayDetailsBandId}
+              readOnly={locked}
+              showToast={showToast}
+            />
+          </div>
           </FadeScroll>
         </section>
-        <div className="event-page-footer">
-          <button
-            type="button"
-            className="event-page-full-details"
-            aria-label={t("event.fullDetails")}
-            aria-expanded={false}
-            title={t("event.fullDetails")}
-            onClick={() => {
-              setEditing(false);
-              setDetailsOpen(true);
-            }}
-          >
-            <DetailsIcon />
-            <span>{t("event.fullDetails")}</span>
-            <em className="event-page-full-details-chevron" aria-hidden="true">
-              ▾
-            </em>
-          </button>
-        </div>
-        </>
-      ) : null}
 
       {tab === "tehnicki" ? (
         <section
@@ -874,40 +792,6 @@ export default function EventPage({
         </section>
       ) : null}
         </div>
-      ) : null}
-
-      {tab === "osnovno" && detailsOpen ? (
-        <>
-          <button
-            type="button"
-            className="event-page-full-details is-open"
-            aria-label={t("event.closeFullDetails")}
-            aria-expanded
-            title={t("event.closeFullDetails")}
-            onClick={() => setDetailsOpen(false)}
-          >
-            <DetailsIcon />
-            <span>{t("event.fullDetails")}</span>
-            <em className="event-page-full-details-chevron" aria-hidden="true">
-              ▴
-            </em>
-          </button>
-          <section className="event-page-panel" role="tabpanel" aria-label={t("event.fullDetails")}>
-            <FadeScroll viewportClassName="event-page-panel-scroll">
-            <h3 className="event-page-section-title">
-              <span>{t("event.timeSchedule")}</span>
-            </h3>
-            <EventDayDetails
-              eventId={event.id}
-              bandId={dayDetailsBandId}
-              readOnly={locked}
-              showToast={showToast}
-              onSaved={setDayDetails}
-            />
-            </FadeScroll>
-          </section>
-        </>
-      ) : null}
     </div>
   );
 }
@@ -938,21 +822,6 @@ function ChevronLeftIcon() {
   );
 }
 
-function PenIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M4 20h4.5L19.2 9.3a1.5 1.5 0 0 0 0-2.1L16.8 4.8a1.5 1.5 0 0 0-2.1 0L4 15.5V20z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M13.8 6.2l4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function LockIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -964,23 +833,6 @@ function LockIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
       />
-    </svg>
-  );
-}
-
-function DetailsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M8 7h11M8 12h11M8 17h7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <circle cx="5" cy="7" r="1.1" fill="currentColor" />
-      <circle cx="5" cy="12" r="1.1" fill="currentColor" />
-      <circle cx="5" cy="17" r="1.1" fill="currentColor" />
     </svg>
   );
 }
