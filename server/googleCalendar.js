@@ -41,8 +41,18 @@ export function googleCalendarConfigured() {
 
 let encKeyWarned = false;
 
-function encKey() {
-  const explicit = String(process.env.GOOGLE_TOKEN_ENC_KEY || "").trim();
+function explicitTokenKey() {
+  return String(process.env.GOOGLE_TOKEN_ENC_KEY || "").trim();
+}
+
+export function assertGoogleTokenKey() {
+  if (process.env.NODE_ENV === "production" && googleCalendarSyncEnabled() && !explicitTokenKey()) {
+    throw new Error("GOOGLE_TOKEN_ENC_KEY is required in production when Google Calendar sync is enabled");
+  }
+}
+
+function legacyKey() {
+  const explicit = explicitTokenKey();
   if (!explicit && !encKeyWarned) {
     encKeyWarned = true;
     logger.warn(
@@ -53,20 +63,42 @@ function encKey() {
   return crypto.createHash("sha256").update(raw).digest();
 }
 
+function derivedKey(info) {
+  const explicit = explicitTokenKey();
+  if (!explicit) return legacyKey();
+  return Buffer.from(crypto.hkdfSync("sha256", Buffer.from(explicit), Buffer.alloc(0), Buffer.from(info), 32));
+}
+
+function encryptionKey() {
+  return explicitTokenKey() ? derivedKey("chabar-google-token-enc") : legacyKey();
+}
+
+function signingKeys() {
+  const keys = [];
+  if (explicitTokenKey()) keys.push(derivedKey("chabar-google-state"));
+  keys.push(legacyKey());
+  return keys;
+}
+
 function encrypt(text) {
   if (!text) return "";
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", encKey(), iv);
+  const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey(), iv);
   const enc = Buffer.concat([cipher.update(String(text), "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return `${iv.toString("base64url")}.${tag.toString("base64url")}.${enc.toString("base64url")}`;
+  const body = `${iv.toString("base64url")}.${tag.toString("base64url")}.${enc.toString("base64url")}`;
+  return explicitTokenKey() ? `v2.${body}` : body;
 }
 
 function decrypt(payload) {
   if (!payload) return "";
-  const [ivB64, tagB64, dataB64] = String(payload).split(".");
+  const raw = String(payload);
+  const versioned = raw.startsWith("v2.");
+  const body = versioned ? raw.slice(3) : raw;
+  const [ivB64, tagB64, dataB64] = body.split(".");
   if (!ivB64 || !tagB64 || !dataB64) return "";
-  const decipher = crypto.createDecipheriv("aes-256-gcm", encKey(), Buffer.from(ivB64, "base64url"));
+  const key = versioned ? encryptionKey() : legacyKey();
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivB64, "base64url"));
   decipher.setAuthTag(Buffer.from(tagB64, "base64url"));
   return Buffer.concat([
     decipher.update(Buffer.from(dataB64, "base64url")),
@@ -76,17 +108,20 @@ function decrypt(payload) {
 
 function signState(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto.createHmac("sha256", encKey()).update(body).digest("base64url");
+  const sig = crypto.createHmac("sha256", signingKeys()[0]).update(body).digest("base64url");
   return `${body}.${sig}`;
 }
 
 function verifyState(token) {
   const [body, sig] = String(token || "").split(".");
   if (!body || !sig) return null;
-  const expected = crypto.createHmac("sha256", encKey()).update(body).digest("base64url");
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  const presented = Buffer.from(sig);
+  const matches = signingKeys().some((key) => {
+    const expected = crypto.createHmac("sha256", key).update(body).digest("base64url");
+    const candidate = Buffer.from(expected);
+    return presented.length === candidate.length && crypto.timingSafeEqual(presented, candidate);
+  });
+  if (!matches) return null;
   try {
     const data = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (!data?.exp || Date.now() > data.exp) return null;

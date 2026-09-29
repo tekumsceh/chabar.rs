@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import { formatEur, numberValue } from "./calculations.js";
+import { moneyInputText, parseMoneyAmount } from "../shared/money.js";
 import FinanceAuditList from "./FinanceAuditList.jsx";
 import { useI18n, useT } from "./i18n/I18nProvider.jsx";
 
@@ -19,10 +20,8 @@ function enrichAuditEntry(entry, members) {
 }
 
 function hasValidDraft(raw) {
-  const trimmed = String(raw ?? "").trim();
-  if (!trimmed) return false;
-  const priceEur = numberValue(trimmed.replace(",", "."));
-  return Number.isFinite(priceEur) && priceEur >= 0;
+  const parsed = parseMoneyAmount(raw);
+  return parsed.ok && !parsed.empty && parsed.value >= 0;
 }
 
 function draftsFromMembers(list) {
@@ -88,11 +87,18 @@ export default function BandMemberFeesPanel({
 
   async function saveDefault(member) {
     if (readOnly || busy || savingId || !bandId) return;
-    const raw = String(drafts[member.id] ?? "").trim().replace(",", ".");
-    const defaultPriceEur = raw === "" ? null : numberValue(raw);
-    if (raw !== "" && (!Number.isFinite(defaultPriceEur) || defaultPriceEur < 0)) {
+    const parsed = parseMoneyAmount(drafts[member.id]);
+    const defaultPriceEur = !String(drafts[member.id] ?? "").trim()
+      ? null
+      : parsed.ok
+        ? parsed.value
+        : Number.NaN;
+    if (defaultPriceEur != null && (!Number.isFinite(defaultPriceEur) || defaultPriceEur < 0)) {
       showToast?.(t("finance.invalidAmount"), "error");
       return;
+    }
+    if (defaultPriceEur != null) {
+      setDrafts((current) => ({ ...current, [member.id]: moneyInputText(defaultPriceEur) }));
     }
 
     setSavingId(member.id);

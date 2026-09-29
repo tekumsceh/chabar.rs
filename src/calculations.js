@@ -1,3 +1,6 @@
+import { parseStrictCalendarDate } from "../shared/calendarDate.js";
+import { parseMoneyAmount } from "../shared/money.js";
+
 /** Fixed EUR→RSD used for all dates through LEGACY_RATE_THROUGH (inclusive). */
 export const DEFAULT_RATE = 116.5;
 
@@ -116,8 +119,97 @@ export function financeLineRemainingEur(line) {
   return Math.max(0, numberValue(line.totalEur));
 }
 
-/** Spreadsheet model: pour total uplate oldest held gig first (one total per date). */
-function applyEventLevelPaymentSettlement(rows, totalPaidEur) {
+/** Sum stored allocation lines onto each date. */
+export function coveredEurByEvent(allocationRows) {
+  const byEvent = new Map();
+  for (const row of allocationRows || []) {
+    const eventId = Number(row.eventId);
+    const amount = numberValue(row.amountEur);
+    if (!eventId || amount <= 0) continue;
+    byEvent.set(eventId, (byEvent.get(eventId) || 0) + amount);
+  }
+  return byEvent;
+}
+
+/**
+ * Paid / partial / unpaid from amounts already stored on each date.
+ * Does not move money between dates.
+ */
+export function applyStoredSettlement(rows, allocationRows) {
+  const covered = coveredEurByEvent(allocationRows);
+  for (const row of rows || []) {
+    if (!isFinanceDueRow(row)) continue;
+    const total = Math.max(0, numberValue(row.totalEur));
+    if (total <= POOL_EPS) {
+      row.paymentStatus = "";
+      row.paymentClass = "none";
+      continue;
+    }
+    const paid = Math.max(0, covered.get(Number(row.id)) || 0);
+    if (paid >= total - 0.009) {
+      row.paymentStatus = "Plaćeno";
+      row.paymentClass = "paid";
+      continue;
+    }
+    if (paid > 0.009) {
+      row.paymentStatus = round(total - paid);
+      row.paymentClass = "partial";
+      continue;
+    }
+    row.paymentStatus = round(total);
+    row.paymentClass = "unpaid";
+  }
+}
+
+/**
+ * Turn the current pool result into allocation lines, oldest payment first.
+ * Used once so existing ledgers keep the same date totals after the switch.
+ */
+export function freezeAllocationsFromRows(rows, payments, settings) {
+  const needs = [];
+  const ordered = [...(rows || [])].filter((row) => isFinanceDueRow(row)).sort(compareFinanceRows);
+  for (const row of ordered) {
+    const total = Math.max(0, numberValue(row.totalEur));
+    let covered = 0;
+    if (row.paymentClass === "paid") covered = total;
+    else if (row.paymentClass === "partial") covered = Math.max(0, total - numberValue(row.paymentStatus));
+    if (covered > 0.009) needs.push({ eventId: row.id, remaining: round(covered) });
+  }
+
+  const lines = [];
+  for (const payment of payments || []) {
+    let left = round(paymentAmountEur(payment, settings));
+    if (left <= 0.009) continue;
+    while (left > 0.009 && needs.length) {
+      const need = needs[0];
+      const take = round(Math.min(left, need.remaining));
+      if (take <= 0.009) {
+        needs.shift();
+        continue;
+      }
+      const existing = lines.find(
+        (line) => Number(line.paymentId) === Number(payment.id) && Number(line.eventId) === Number(need.eventId),
+      );
+      if (existing) existing.amountEur = round(existing.amountEur + take);
+      else {
+        lines.push({
+          paymentId: payment.id,
+          eventId: need.eventId,
+          amountEur: take,
+          lineKind: "event",
+          expenseKey: "",
+        });
+      }
+      left = round(left - take);
+      need.remaining = round(need.remaining - take);
+      if (need.remaining <= 0.009) needs.shift();
+    }
+  }
+  return lines;
+}
+
+/** Old pool pour. Kept so a freeze can be checked against stored lines. Page loads do not use it. */
+export function applyPoolSettlement(rows, totalPaidEur) {
   let pool = Math.max(0, numberValue(totalPaidEur));
   const ordered = [...(rows || [])]
     .filter((row) => isFinanceDueRow(row))
@@ -323,12 +415,12 @@ function compareFinanceRows(a, b) {
 }
 
 /**
- * Member/band ledger (spreadsheet model):
- * - Potražuje = sum(held gig totals) − sum(uplate in EUR).
- * - Row paid/partial/unpaid = oldest gig first (event totals), for UI only.
- * - Line breakdown within a gig = expenses then fee (display only).
+ * Ledger from stored payment lines.
+ * - A date is paid, partial, or open from the amounts saved on it.
+ * - Potražuje is the sum of those open remainders.
+ * - Inside one date, expenses then the fee are display only.
  */
-export function calculate(events, payments, settings, _allocationRows = null, financeContext = null) {
+export function calculate(events, payments, settings, allocationRows = null, financeContext = null) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
   const calculationDate = startOfToday();
   const ctx = financeContext || { mode: "member", userId: "" };
@@ -385,7 +477,8 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
   }
 
   const paidEur = totalPaymentsEur(payments, settings);
-  applyEventLevelPaymentSettlement(enriched, paidEur);
+  const storedLines = Array.isArray(allocationRows) ? allocationRows : flattenPaymentAllocations(payments);
+  applyStoredSettlement(enriched, storedLines);
 
   for (const row of enriched) {
     if (row.held && row.hasDate && !row.financeDue) {
@@ -408,7 +501,7 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
   const rows = [...enriched].sort(compareFinanceRows);
   const paidDin = totalPaymentsDin(payments, settings);
   const heldEur = heldDatesEur(rows);
-  const claimEur = Math.max(0, heldEur - paidEur);
+  const claimEur = waterfallClaimEur(rows);
   const claimRate = rateForDate(calculationDate, settings);
 
   return {
@@ -554,19 +647,9 @@ export function totalPaymentsDin(payments, settingsOrRate) {
 }
 
 export function parseDate(value) {
-  const parts = String(value || "")
-    .trim()
-    .replaceAll(",", ".")
-    .split(".")
-    .filter(Boolean)
-    .map((part) => Number.parseInt(part, 10));
-
-  if (parts.length < 3 || parts.some(Number.isNaN)) {
-    return new Date(Number.NaN);
-  }
-
-  const [day, month, year] = parts;
-  return new Date(year, month - 1, day);
+  const parsed = parseStrictCalendarDate(value);
+  if (!parsed.ok || parsed.empty) return new Date(Number.NaN);
+  return parsed.date;
 }
 
 export function startOfToday() {
@@ -661,8 +744,8 @@ export function pad(value) {
 }
 
 export function numberValue(value) {
-  const parsed = Number.parseFloat(String(value ?? "").replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : 0;
+  const parsed = parseMoneyAmount(value);
+  return parsed.ok ? parsed.value : 0;
 }
 
 export function positiveNumber(value, fallback) {

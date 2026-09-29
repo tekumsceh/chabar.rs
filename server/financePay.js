@@ -88,6 +88,25 @@ function buildFinanceContext(events, payments, settings, financeContext) {
   return { calc, allocationRows };
 }
 
+export async function insertAllocationLines(tx, paymentId, allocations = []) {
+  const savedAllocations = [];
+  for (const item of allocations) {
+    const amountEur = Number(item.amountEur) || 0;
+    if (amountEur <= 0 || !item.eventId) continue;
+    const lineKind = item.lineKind || "event";
+    const expenseKey = item.expenseKey || "";
+    await tx(
+      `INSERT INTO payment_allocations (payment_id, event_id, amount_eur, line_kind, expense_key)
+       VALUES (:paymentId, :eventId, :amountEur, :lineKind, :expenseKey)
+       ON CONFLICT (payment_id, event_id, line_kind, expense_key) DO UPDATE
+       SET amount_eur = EXCLUDED.amount_eur`,
+      { paymentId, eventId: item.eventId, amountEur, lineKind, expenseKey },
+    );
+    savedAllocations.push({ eventId: item.eventId, amountEur, lineKind, expenseKey });
+  }
+  return savedAllocations;
+}
+
 export async function createPaymentWithAllocations({
   tx,
   userId,
@@ -123,26 +142,8 @@ export async function createPaymentWithAllocations({
     },
   );
   const row = created.rows[0];
-  const savedAllocations = [];
-
-  for (const item of allocations) {
-    const amountEur = Number(item.amountEur) || 0;
-    if (amountEur <= 0 || !item.eventId) continue;
-    const lineKind = item.lineKind || "event";
-    const expenseKey = item.expenseKey || "";
-
-    await tx(
-      `INSERT INTO payment_allocations (payment_id, event_id, amount_eur, line_kind, expense_key)
-       VALUES (:paymentId, :eventId, :amountEur, :lineKind, :expenseKey)
-       ON CONFLICT (payment_id, event_id, line_kind, expense_key) DO UPDATE
-       SET amount_eur = EXCLUDED.amount_eur`,
-      { paymentId: row.id, eventId: item.eventId, amountEur, lineKind, expenseKey },
-    );
-
-    savedAllocations.push({ eventId: item.eventId, amountEur, lineKind, expenseKey });
-  }
-
-  const allocatedEur = savedAllocations.reduce((sum, row) => sum + Number(row.amountEur || 0), 0);
+  const savedAllocations = await insertAllocationLines(tx, row.id, allocations);
+  const allocatedEur = savedAllocations.reduce((sum, item) => sum + Number(item.amountEur || 0), 0);
 
   await writeAudit(
     {
@@ -210,7 +211,14 @@ export function payLinePlan(events, payments, settings, eventId, lineKind, expen
   return {
     owedEur,
     line,
-    allocations: [],
+    allocations: [
+      {
+        eventId: Number(eventId),
+        lineKind: "event",
+        expenseKey: "",
+        amountEur: owedEur,
+      },
+    ],
   };
 }
 
@@ -259,7 +267,17 @@ export function payEventPlan(events, payments, settings, eventId, financeContext
     throw err;
   }
 
-  return { owedEur, allocations: [] };
+  return {
+    owedEur,
+    allocations: [
+      {
+        eventId: Number(eventId),
+        lineKind: "event",
+        expenseKey: "",
+        amountEur: owedEur,
+      },
+    ],
+  };
 }
 
 export function bulkPayPlan(events, payments, settings, amount, currency, exchangeRate, financeContext) {

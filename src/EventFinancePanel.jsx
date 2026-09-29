@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 import { formatEur, numberValue } from "./calculations.js";
+import { parseMoneyAmount } from "../shared/money.js";
 import { useT } from "./i18n/I18nProvider.jsx";
 
 function hasValidDraft(raw) {
-  const trimmed = String(raw ?? "").trim();
-  if (!trimmed) return false;
-  const priceEur = numberValue(trimmed.replace(",", "."));
-  return Number.isFinite(priceEur) && priceEur >= 0;
+  const parsed = parseMoneyAmount(raw);
+  return parsed.ok && !parsed.empty && parsed.value >= 0;
 }
 
 function draftsFromMembers(list) {
@@ -20,11 +19,9 @@ function draftsFromMembers(list) {
 }
 
 function parseDraftAmount(raw) {
-  const trimmed = String(raw ?? "").trim().replace(",", ".");
-  if (!trimmed) return null;
-  const priceEur = numberValue(trimmed);
-  if (!Number.isFinite(priceEur) || priceEur < 0) return null;
-  return priceEur;
+  const parsed = parseMoneyAmount(raw);
+  if (!parsed.ok || parsed.empty || parsed.value < 0) return null;
+  return parsed.value;
 }
 
 /**

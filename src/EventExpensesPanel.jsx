@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
-import { numberValue } from "./calculations.js";
+import { moneyInputText, parseMoneyAmount } from "../shared/money.js";
 import FieldSelect from "./FieldSelect.jsx";
 import { useT } from "./i18n/I18nProvider.jsx";
 
@@ -14,7 +14,8 @@ const emptyForm = {
 };
 
 function parseAmount(raw) {
-  return numberValue(String(raw || "").replace(",", "."));
+  const parsed = parseMoneyAmount(raw);
+  return parsed.ok ? parsed.value : Number.NaN;
 }
 
 function hasValidAmount(raw) {
@@ -104,6 +105,9 @@ export default function EventExpensesPanel({
     if (readOnly || saving || !eventId || !bandId || !amountReady) return;
 
     const amount = parseAmount(form.amount);
+    if (Number.isFinite(amount)) {
+      setForm((current) => ({ ...current, amount: moneyInputText(amount) }));
+    }
     const description = String(form.description || "").trim();
     const payee = parsePayee(form.payee);
 

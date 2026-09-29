@@ -1,10 +1,15 @@
+import { parseStrictCalendarDate } from "../shared/calendarDate.js";
+import { isGoogleMapsUrl } from "../src/mapsLink.js";
+import { parseMoneyAmount } from "../shared/money.js";
 import "dotenv/config";
+import helmet from "helmet";
 import cors from "cors";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ensureProfileAndPersonalBand,
+  assertOwnerEmailConfigured,
   getMemberships,
   requireAuth,
   requireBandAdmin,
@@ -80,17 +85,26 @@ import {
   updatePersonalPrefs,
   updateMemberBandCalendarPref,
   deleteGoogleImportedEvents,
+  assertGoogleTokenKey,
 } from "./googleCalendar.js";
 import { rateLimit } from "./rateLimit.js";
 import { getCommunityLyricsById, searchCommunityLyrics } from "./lyricsLookup.js";
 import { canEditSetlist, isBandLead, isBandSaradnik } from "../shared/roles.js";
-import { isPastEventDate, parseDate, startOfToday } from "../src/calculations.js";
+import {
+  calculate,
+  isPastEventDate,
+  parseDate,
+  paymentAmountEur,
+  simulateBulkPayAllocations,
+  startOfToday,
+} from "../src/calculations.js";
 import { normalizeConsoleIds, resolveConsoleLimits } from "../src/mixingConsoles.js";
 import {
   attachAllocationsToPayments,
   bulkPayPlan,
   createPaymentWithAllocations,
   fetchAndPersistExchangeRate,
+  insertAllocationLines,
   payEventPlan,
   payLinePlan,
   paymentSummaryText,
@@ -98,6 +112,39 @@ import {
 } from "./financePay.js";
 
 const app = express();
+app.set("trust proxy", 1);
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+app.use((_req, res, next) => {
+  const supabaseOrigin = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
+  let connectSrc = "'self' https://*.supabase.co wss://*.supabase.co";
+  if (supabaseOrigin) {
+    try {
+      const origin = new URL(supabaseOrigin).origin;
+      connectSrc += ` ${origin} ${origin.replace(/^https:/, "wss:")}`;
+    } catch {
+      // ignore a malformed URL; the wildcard still covers Supabase
+    }
+  }
+  res.setHeader(
+    "Content-Security-Policy-Report-Only",
+    [
+      "default-src 'self'",
+      `connect-src ${connectSrc}`,
+      "img-src 'self' data: https:",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "script-src 'self' 'unsafe-inline'",
+      "worker-src 'self'",
+      "frame-ancestors 'none'",
+    ].join("; "),
+  );
+  next();
+});
 const port = Number(process.env.API_PORT || 3001);
 const host = process.env.API_HOST || (process.env.NODE_ENV === "production" ? "127.0.0.1" : "0.0.0.0");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1231,13 +1278,7 @@ app.put(
         });
       }
 
-      const priceEur = numberValue(req.body?.priceEur);
-      if (priceEur < 0) {
-        return res.status(400).json({
-          error: "Invalid amount",
-          detail: "Iznos ne može biti negativan.",
-        });
-      }
+      const priceEur = readMoney(req.body?.priceEur, "Honorar");
 
       const existingFinance = await query(
         `SELECT transport_rsd FROM event_member_finance
@@ -1246,7 +1287,7 @@ app.put(
       );
       const transportRsd =
         req.body?.transportRsd !== undefined
-          ? numberValue(req.body.transportRsd)
+          ? readMoney(req.body.transportRsd, "Prevoz")
           : Number(existingFinance.rows[0]?.transport_rsd) || 0;
 
       await upsertMemberFinance(eventId, userId, priceEur, transportRsd, {
@@ -1486,15 +1527,12 @@ app.post("/api/events/:id/expenses", requireAuth, requireBandMember, requireBand
       });
     }
 
-    const amount = numberValue(req.body?.amount);
+    const amount = readMoney(req.body?.amount, "Iznos");
     const currency = String(req.body?.currency || "EUR").trim().toUpperCase();
     const description = String(req.body?.description || "").trim();
     const payeeKind = String(req.body?.payeeKind || "").trim().toLowerCase();
     const payeeUserId = req.body?.payeeUserId ? String(req.body.payeeUserId).trim() : null;
 
-    if (!Number.isFinite(amount) || amount < 0) {
-      return res.status(400).json({ error: "Invalid amount", detail: "Iznos nije ispravan." });
-    }
     if (!EXPENSE_CURRENCIES.has(currency)) {
       return res.status(400).json({ error: "Invalid currency", detail: "Valuta nije podržana." });
     }
@@ -3573,6 +3611,7 @@ app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next)
     const payment = normalizePayment(req.body);
     // Creating a payment is always allowed (late bookkeeping); once its date is past, PUT/DELETE lock.
 
+    const allocations = await planMemberPaymentAllocations(req.user.id, payment);
     const created = await withTransaction(async (tx) => {
       const result = await tx(
         `INSERT INTO payments (user_id, band_id, sort_order, payment_date_text, amount, currency)
@@ -3592,6 +3631,8 @@ app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next)
         },
       );
       const row = result.rows[0];
+      const savedAllocations = await insertAllocationLines(tx, row.id, allocations);
+      row.savedAllocations = savedAllocations;
       await writeAudit(
         {
           entityType: "payment",
@@ -3612,7 +3653,12 @@ app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next)
       id: created.id,
       bandId: req.bandId,
       exchangeRate: created.exchange_rate == null ? null : Number(created.exchange_rate),
-      allocations: [],
+      allocations: (created.savedAllocations || []).map((item) => ({
+        eventId: item.eventId,
+        amountEur: item.amountEur,
+        lineKind: item.lineKind,
+        expenseKey: item.expenseKey,
+      })),
     });
 
     const who = await actorLabel(req.user.id);
@@ -3655,6 +3701,7 @@ app.put("/api/payments/:id", requireAuth, async (req, res, next) => {
       });
     }
 
+    const allocations = await planMemberPaymentAllocations(req.user.id, payment, req.params.id);
     const updated = await withTransaction(async (tx) => {
       const result = await tx(
         `UPDATE payments
@@ -3670,6 +3717,9 @@ app.put("/api/payments/:id", requireAuth, async (req, res, next) => {
         err.status = 404;
         throw err;
       }
+      await tx(`DELETE FROM payment_allocations WHERE payment_id = :id`, { id: req.params.id });
+      const savedAllocations = await insertAllocationLines(tx, req.params.id, allocations);
+      result.rows[0].savedAllocations = savedAllocations;
       await writeAudit(
         {
           entityType: "payment",
@@ -3685,7 +3735,17 @@ app.put("/api/payments/:id", requireAuth, async (req, res, next) => {
       return result.rows[0];
     });
 
-    res.json({ ...payment, id: Number(req.params.id), bandId: updated.band_id });
+    res.json({
+      ...payment,
+      id: Number(req.params.id),
+      bandId: updated.band_id,
+      allocations: (updated.savedAllocations || []).map((item) => ({
+        eventId: item.eventId,
+        amountEur: item.amountEur,
+        lineKind: item.lineKind,
+        expenseKey: item.expenseKey,
+      })),
+    });
   } catch (error) {
     next(error);
   }
@@ -3821,7 +3881,7 @@ app.post("/api/finance/pay-line", requireAuth, async (req, res, next) => {
         amount: paymentAmount,
         currency: paymentCurrency,
         exchangeRate: rate,
-        allocations: [],
+        allocations: plan.allocations,
         actorUserId: req.user.id,
       }),
     );
@@ -3890,7 +3950,7 @@ app.post("/api/finance/pay-event", requireAuth, async (req, res, next) => {
         amount: paymentAmount,
         currency: paymentCurrency,
         exchangeRate: rate,
-        allocations: [],
+        allocations: plan.allocations,
         actorUserId: req.user.id,
       }),
     );
@@ -3923,7 +3983,7 @@ app.post("/api/finance/pay-event", requireAuth, async (req, res, next) => {
 app.post("/api/finance/bulk-pay", requireAuth, async (req, res, next) => {
   try {
     const financeMode = req.body?.financeMode === "band" ? "band" : "member";
-    const amount = numberValue(req.body?.amount);
+    const amount = readMoney(req.body?.amount, "Iznos");
     const currency = req.body?.currency === "RSD" ? "RSD" : "EUR";
     const scopedBandId = String(req.body?.bandId || req.bandId || "").trim();
 
@@ -3994,7 +4054,7 @@ app.post("/api/finance/bulk-pay", requireAuth, async (req, res, next) => {
         amount: plan.paymentAmount,
         currency: paymentCurrency,
         exchangeRate: rate,
-        allocations: [],
+        allocations: plan.allocations,
         actorUserId: req.user.id,
         auditMeta: {
           requestedAmount: plan.paymentAmount,
@@ -4057,6 +4117,9 @@ app.use((error, _req, res, _next) => {
   });
 });
 
+assertOwnerEmailConfigured();
+assertGoogleTokenKey();
+
 app.listen(port, host, () => {
   logger.info(`Chabar API running on http://${host}:${port}`);
   startPoolWarmer();
@@ -4101,11 +4164,24 @@ async function getPersonalBandId(userId) {
  * lookback e.g. '18 months' / '5 years'.
  */
 function eventDateWithinLookbackSql(alias = "e", lookback = SCHEDULE_LOOKBACK) {
+  return dateTextWithinLookbackSql(`${alias}.event_date_text`, lookback);
+}
+
+function dateTextWithinLookbackSql(columnSql, lookback) {
+  const trimmed = `regexp_replace(trim(${columnSql}), '\\.+$', '')`;
+  const day = `split_part(${trimmed}, '.', 1)::int`;
+  const month = `split_part(${trimmed}, '.', 2)::int`;
+  const year = `split_part(${trimmed}, '.', 3)::int`;
   return `(
-    NULLIF(trim(${alias}.event_date_text), '') IS NULL
-    OR ${alias}.event_date_text !~ '^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{4}\\.?$'
-    OR to_date(regexp_replace(trim(${alias}.event_date_text), '\\.+$', ''), 'DD.MM.YYYY')
-         >= (CURRENT_DATE - INTERVAL '${lookback}')
+    CASE
+      WHEN NULLIF(trim(${columnSql}), '') IS NULL THEN TRUE
+      WHEN ${columnSql} !~ '^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{4}\\.?$' THEN TRUE
+      WHEN ${month} NOT BETWEEN 1 AND 12
+        OR ${day} NOT BETWEEN 1 AND 31
+        OR ${year} NOT BETWEEN 1900 AND 2200 THEN TRUE
+      WHEN ${day} > EXTRACT(DAY FROM (make_date(${year}, ${month}, 1) + INTERVAL '1 month - 1 day'))::int THEN TRUE
+      ELSE make_date(${year}, ${month}, ${day}) >= (CURRENT_DATE - INTERVAL '${lookback}')
+    END
   )`;
 }
 
@@ -4226,17 +4302,37 @@ async function getMyFinanceEvents(userId) {
   }));
 }
 
+async function planMemberPaymentAllocations(userId, payment, exceptPaymentId = null) {
+  const [events, payments, settings] = await Promise.all([
+    getMyFinanceEvents(userId),
+    getMyPayments(userId),
+    getPersonalSettings(userId),
+  ]);
+  const ledger = payments.map((row) => {
+    if (exceptPaymentId != null && Number(row.id) === Number(exceptPaymentId)) {
+      return { ...row, allocations: [] };
+    }
+    return row;
+  });
+  const calc = calculate(events, ledger, settings, null, { mode: "member", userId });
+  const amountEur = paymentAmountEur(
+    {
+      amount: payment.amount,
+      currency: payment.currency,
+      date: payment.date,
+      exchangeRate: null,
+    },
+    settings,
+  );
+  return simulateBulkPayAllocations(calc.rows, amountEur).allocations;
+}
+
 async function getMyPayments(userId) {
   const result = await query(
     `SELECT id, band_id, payment_date_text, amount, currency, exchange_rate
      FROM payments
      WHERE user_id = :userId
-       AND (
-         NULLIF(trim(payment_date_text), '') IS NULL
-         OR payment_date_text !~ '^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{4}\\.?$'
-         OR to_date(regexp_replace(trim(payment_date_text), '\\.+$', ''), 'DD.MM.YYYY')
-              >= (CURRENT_DATE - INTERVAL '${FINANCE_LOOKBACK}')
-       )
+       AND ${dateTextWithinLookbackSql("payment_date_text", FINANCE_LOOKBACK)}
      ORDER BY sort_order, id`,
     { userId },
   );
@@ -4346,12 +4442,7 @@ async function getBandPayments(bandId) {
     `SELECT id, band_id, payment_date_text, amount, currency, exchange_rate
      FROM payments
      WHERE band_id = :bandId
-       AND (
-         NULLIF(trim(payment_date_text), '') IS NULL
-         OR payment_date_text !~ '^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{4}\\.?$'
-         OR to_date(regexp_replace(trim(payment_date_text), '\\.+$', ''), 'DD.MM.YYYY')
-              >= (CURRENT_DATE - INTERVAL '${FINANCE_LOOKBACK}')
-       )
+       AND ${dateTextWithinLookbackSql("payment_date_text", FINANCE_LOOKBACK)}
      ORDER BY sort_order, id`,
     { bandId },
   );
@@ -4493,28 +4584,64 @@ function normalizeDayDetails(value) {
   };
 }
 
+function badRequest(detail) {
+  const error = new Error(detail);
+  error.status = 400;
+  return error;
+}
+
+function readOptionalDate(value) {
+  const parsed = parseStrictCalendarDate(value);
+  if (!parsed.ok) throw badRequest("Datum nije ispravan.");
+  return parsed.empty ? "" : String(value).trim();
+}
+
+function readMoney(value, label) {
+  const parsed = parseMoneyAmount(value);
+  if (!parsed.ok) throw badRequest(`${label} nije ispravan.`);
+  if (parsed.value < 0) throw badRequest(`${label} ne sme biti negativan.`);
+  return parsed.value;
+}
+
+function readLimitedText(value, max, label) {
+  const text = String(value ?? "");
+  if (text.length > max) throw badRequest(`${label} prelazi dozvoljenu dužinu.`);
+  return text;
+}
+
+function readMapsUrl(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (text.length > 2000) throw badRequest("Link mape je predugačak.");
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    throw badRequest("Link mape nije ispravan.");
+  }
+  if (url.protocol !== "https:" || !isGoogleMapsUrl(url.toString())) {
+    throw badRequest("Link mape mora biti https Google Maps link.");
+  }
+  return url.toString();
+}
+
 function normalizeEvent(value) {
   return {
-    date: String(value.date ?? ""),
-    city: String(value.city ?? "").slice(0, 255),
-    venue: String(value.venue ?? "").slice(0, 255),
-    mapsUrl: String(value.mapsUrl ?? value.maps_url ?? "").trim().slice(0, 2000),
-    note: String(value.note ?? ""),
-    priceEur: numberValue(value.priceEur),
-    transportRsd: numberValue(value.transportRsd),
+    date: readOptionalDate(value.date),
+    city: readLimitedText(value.city, 255, "Grad"),
+    venue: readLimitedText(value.venue, 255, "Lokal"),
+    mapsUrl: readMapsUrl(value.mapsUrl ?? value.maps_url),
+    note: readLimitedText(value.note, 255, "Beleška"),
+    priceEur: readMoney(value.priceEur, "Honorar"),
+    transportRsd: readMoney(value.transportRsd, "Prevoz"),
   };
 }
 
 function normalizePayment(value) {
   return {
-    date: String(value.date ?? ""),
-    amount: numberValue(value.amount),
+    date: readOptionalDate(value.date),
+    amount: readMoney(value.amount, "Iznos"),
     currency: value.currency === "RSD" ? "RSD" : "EUR",
   };
-}
-
-function numberValue(value) {
-  const parsed = Number.parseFloat(String(value ?? "").replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import fs from "node:fs";
 import pg from "pg";
 import { logger } from "./logger.js";
 
@@ -9,6 +10,9 @@ if (!databaseUrl) {
 }
 
 const isLocal = databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1");
+const caPath = String(process.env.DB_SSL_CA || "").trim();
+const ca = !isLocal && caPath ? fs.readFileSync(caPath) : undefined;
+const rejectUnauthorized = process.env.SSL_REJECT_UNAUTHORIZED !== "0";
 
 /** Keep at least one pooled connection alive so the first user request isn't a cold handshake. */
 export const pool = new pg.Pool({
@@ -16,8 +20,8 @@ export const pool = new pg.Pool({
   ssl: isLocal
     ? false
     : {
-        // Supabase pooler uses a cert chain browsers trust differently; override with SSL_REJECT_UNAUTHORIZED=1 if you mount a CA.
-        rejectUnauthorized: process.env.SSL_REJECT_UNAUTHORIZED === "1",
+        rejectUnauthorized,
+        ...(ca ? { ca } : {}),
       },
   max: 10,
   min: 1,

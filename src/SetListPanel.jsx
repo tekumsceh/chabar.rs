@@ -43,8 +43,7 @@ function plainTextFromHtml(html) {
     .replace(/<\/h[1-6]>/gi, "\n")
     .replace(/<\/tr>/gi, "\n");
 
-  const container = document.createElement("div");
-  container.innerHTML = normalized;
+  const container = new DOMParser().parseFromString(normalized, "text/html");
 
   return (container.textContent || "")
     .replace(/\u00a0/g, " ")

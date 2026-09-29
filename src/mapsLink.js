@@ -37,7 +37,7 @@ export function parseMapsVenueInput(raw) {
   }
 }
 
-function isGoogleMapsUrl(text) {
+export function isGoogleMapsUrl(text) {
   try {
     const url = new URL(text.trim());
     const host = url.hostname.replace(/^www\./i, "").toLowerCase();

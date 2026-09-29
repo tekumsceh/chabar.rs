@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import * as jose from "jose";
 import { isBandLead } from "../shared/roles.js";
-import { query } from "./db.js";
+import { query, withTransaction } from "./db.js";
 import { logger } from "./logger.js";
 
 const BAND_COLORS = [
@@ -35,12 +35,6 @@ export function pickBandColor(seed = "", usedColors = []) {
   return pool[hash % pool.length];
 }
 
-async function getUsedBandColors() {
-  const result = await query(`SELECT DISTINCT lower(color) AS color FROM bands WHERE color IS NOT NULL`);
-  return result.rows.map((row) => row.color);
-}
-
-/** Ensure membership list never returns two bands with the same chip color. */
 function uniquifyBandColors(bands) {
   const used = new Set();
   return bands.map((band) => {
@@ -64,6 +58,7 @@ const MEMBERSHIP_CACHE_TTL_MS = 60_000;
 const AUTH_CACHE_MAX = 500;
 const MEMBERSHIP_CACHE_MAX = 2_000;
 const PROFILE_CACHE_MAX = 2_000;
+// These maps live in this process. PM2 is expected to run a single instance.
 const authUserCache = new Map();
 const membershipCache = new Map();
 
@@ -103,10 +98,38 @@ function userFromClaims(payload) {
   return {
     id: payload.sub,
     email: payload.email || "",
+    email_confirmed_at: payload.email_confirmed_at || "",
+    amr: payload.amr || [],
     user_metadata: payload.user_metadata || {},
     app_metadata: payload.app_metadata || {},
     role: payload.role,
   };
+}
+
+export function assertOwnerEmailConfigured() {
+  if (process.env.NODE_ENV === "production" && !ownerEmailConfigured()) {
+    throw new Error("OWNER_EMAIL is required in production");
+  }
+}
+
+function ownerEmailConfigured() {
+  return String(process.env.OWNER_EMAIL || "").trim().toLowerCase();
+}
+
+function emailIsVerified(user) {
+  if (String(user?.email_confirmed_at || "").trim()) return true;
+  const provider = String(user?.app_metadata?.provider || "").toLowerCase();
+  if (provider === "google") return true;
+  const providers = user?.app_metadata?.providers;
+  if (Array.isArray(providers) && providers.some((item) => String(item).toLowerCase() === "google")) {
+    return true;
+  }
+  const amr = user?.amr;
+  if (!Array.isArray(amr)) return false;
+  return amr.some((entry) => {
+    const method = String(entry?.method || entry || "").toLowerCase();
+    return method === "oauth" || method === "google";
+  });
 }
 
 /** Verify JWT locally when possible — avoids a round-trip to Supabase Auth on every API call. */
@@ -236,64 +259,73 @@ export async function ensureProfileAndPersonalBand(user) {
   const meta = user.user_metadata || {};
   const displayName =
     meta.display_name || meta.full_name || meta.name || email.split("@")[0] || "User";
-  const ownerEmail = (process.env.OWNER_EMAIL || "tekumsceh@gmail.com").trim().toLowerCase();
-  const role = email === ownerEmail ? "superadmin" : "member";
+  const ownerEmail = ownerEmailConfigured();
+  const grantSuperadmin = Boolean(ownerEmail) && email === ownerEmail && emailIsVerified(user);
+  const role = grantSuperadmin ? "superadmin" : "member";
 
-  await query(
-    `INSERT INTO profiles (id, email, display_name, role)
-     VALUES (:id, :email, :displayName, :role)
-     ON CONFLICT (id) DO UPDATE
-       SET email = EXCLUDED.email,
-           display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), profiles.display_name),
-           role = CASE
-             WHEN lower(EXCLUDED.email) = :ownerEmail THEN 'superadmin'
-             WHEN profiles.role = 'user' THEN 'member'
-             ELSE profiles.role
-           END,
-           updated_at = NOW()`,
-    { id: user.id, email, displayName, role, ownerEmail },
-  );
+  await withTransaction(async (tx) => {
+    await tx(
+      `INSERT INTO profiles (id, email, display_name, role)
+       VALUES (:id, :email, :displayName, :role)
+       ON CONFLICT (id) DO UPDATE
+         SET email = EXCLUDED.email,
+             display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), profiles.display_name),
+             role = CASE
+               WHEN :grantSuperadmin THEN 'superadmin'
+               WHEN profiles.role = 'user' THEN 'member'
+               ELSE profiles.role
+             END,
+             updated_at = NOW()`,
+      { id: user.id, email, displayName, role, grantSuperadmin },
+    );
 
-  const existing = await query(
-    `SELECT b.id, b.name, b.kind, bm.member_role
-     FROM bands b
-     JOIN band_members bm ON bm.band_id = b.id
-     WHERE bm.user_id = :userId AND b.kind = 'personal'
-     LIMIT 1`,
-    { userId: user.id },
-  );
+    await tx(`SELECT pg_advisory_xact_lock(hashtext(:lockKey)::bigint)`, { lockKey: user.id });
 
-  if (!existing.rows[0]) {
-    const color = pickBandColor(`${user.id}:personal`, await getUsedBandColors());
-    const created = await query(
-      `INSERT INTO bands (name, kind, color, created_by)
-       VALUES ('Personal', 'personal', :color, :userId)
-       RETURNING id, name, kind, color`,
-      { userId: user.id, color },
+    const existing = await tx(
+      `SELECT b.id
+       FROM bands b
+       JOIN band_members bm ON bm.band_id = b.id
+       WHERE bm.user_id = :userId AND b.kind = 'personal'
+       LIMIT 1`,
+      { userId: user.id },
     );
-    const band = created.rows[0];
-    await query(
-      `INSERT INTO band_members (band_id, user_id, member_role)
-       VALUES (:bandId, :userId, 'owner')`,
-      { bandId: band.id, userId: user.id },
-    );
-    await query(
-      `INSERT INTO settings (band_id, setting_key, setting_value)
-       VALUES
-         (:bandId, 'exchangeRate', '116.5'),
-         (:bandId, 'asOfDate', to_char(NOW(), 'DD.MM.YYYY.'))
-       ON CONFLICT DO NOTHING`,
-      { bandId: band.id },
-    );
-    membershipCache.clear();
-  }
+
+    if (!existing.rows[0]) {
+      const used = await tx(`SELECT DISTINCT lower(color) AS color FROM bands WHERE color IS NOT NULL`);
+      const color = pickBandColor(
+        `${user.id}:personal`,
+        used.rows.map((row) => row.color),
+      );
+      const created = await tx(
+        `INSERT INTO bands (name, kind, color, created_by)
+         VALUES ('Personal', 'personal', :color, :userId)
+         RETURNING id`,
+        { userId: user.id, color },
+      );
+      const bandId = created.rows[0].id;
+      await tx(
+        `INSERT INTO band_members (band_id, user_id, member_role)
+         VALUES (:bandId, :userId, 'owner')`,
+        { bandId, userId: user.id },
+      );
+      await tx(
+        `INSERT INTO settings (band_id, setting_key, setting_value)
+         VALUES
+           (:bandId, 'exchangeRate', '116.5'),
+           (:bandId, 'asOfDate', to_char(NOW(), 'DD.MM.YYYY.'))
+         ON CONFLICT DO NOTHING`,
+        { bandId },
+      );
+      membershipCache.clear();
+    }
+  });
 
   setCapped(profileEnsuredAt, user.id, Date.now(), PROFILE_CACHE_MAX);
 }
 
 /** Create profiles + Personal bands for auth.users that never finished app setup. */
 export async function syncMissingProfilesFromAuth() {
-  const ownerEmail = (process.env.OWNER_EMAIL || "tekumsceh@gmail.com").trim().toLowerCase();
+  const ownerEmail = ownerEmailConfigured();
   const missing = await query(
     `SELECT u.id, u.email,
             COALESCE(
@@ -347,6 +379,9 @@ export async function requireBandMember(req, res, next) {
     const bandId = req.headers["x-band-id"] || req.query.bandId || req.body?.bandId;
     if (!bandId) {
       return res.status(400).json({ error: "Missing band", detail: "X-Band-Id header required" });
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(bandId))) {
+      return res.status(400).json({ error: "Invalid band", detail: "Bend nije ispravan." });
     }
 
     const cacheKey = `${req.user.id}:${bandId}`;

@@ -92,7 +92,7 @@ export default function ReportPage({
 
   const DATES_PAGE_SIZE = 20;
 
-  // Row colors + Potražuje: spreadsheet model (held − uplate; event-level badges).
+  // Row colors + Potražuje: stored paid / partial amounts on each date.
   const calculations = useMemo(
     () => calculate(events, payments, settings, null, { mode: financeMode, userId }),
     [events, payments, settings, financeMode, userId],
@@ -792,9 +792,7 @@ function formatExpenseAmount(item, rate) {
 }
 
 function numberish(value) {
-  if (typeof value === "number") return value;
-  const parsed = Number.parseFloat(String(value ?? "").replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : 0;
+  return numberValue(value);
 }
 
 function formatNumberish(value) {

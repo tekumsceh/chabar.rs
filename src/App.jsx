@@ -936,7 +936,12 @@ export default function App() {
 
   async function savePayment(payment) {
     try {
-      await api(`/api/payments/${payment.id}`, { method: "PUT", body: payment });
+      const saved = await api(`/api/payments/${payment.id}`, { method: "PUT", body: payment });
+      if (saved?.id) {
+        setPayments((current) =>
+          current.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)),
+        );
+      }
     } catch (requestError) {
       reportError(requestError, "save payment failed");
     }
