@@ -1,6 +1,7 @@
 /**
- * Chabar tokens — neon palette with quiet surfaces.
- * Magenta = brand + primary CTA. Cyan = focus / today. Lime = paid/success data.
+ * Chabar tokens — magenta, lime, deep purple, and neutrals.
+ * Magenta = brand, focus, selected band, the one primary button.
+ * Lime = paid / success in data only.
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap");
@@ -10,16 +11,17 @@
 
   --chabar-magenta: #ff2bd6;
   --chabar-magenta-soft: #ff7aef;
-  --chabar-cyan: #276ef1;
+  --chabar-cyan: var(--chabar-magenta);
   --chabar-lime: #0b875b;
 
   --md-primary: var(--chabar-magenta);
   --md-on-primary: #ffffff;
   --md-primary-container: color-mix(in srgb, var(--chabar-magenta) 12%, #ffffff);
   --md-on-primary-container: #4a0038;
-  --md-secondary: #565f71;
+  --md-secondary: #5c5f66;
   --md-on-secondary: #ffffff;
   --md-secondary-container: #f1ecf4;
+  --accent: var(--brand);
   --md-on-secondary-container: #131c2b;
   --md-surface: #f7f6f9;
   --md-surface-dim: #ded8e1;
@@ -33,7 +35,7 @@
   --md-on-surface-variant: #5c5f66;
   --md-outline: #c8c6cc;
   --md-outline-variant: #dcdadf;
-  --md-error: #ba1a1a;
+  --md-error: #c400a8;
   --md-on-error: #ffffff;
 
   --bg: var(--md-surface);
@@ -51,13 +53,13 @@
   --surface: var(--md-surface-container);
   --surface-2: var(--md-surface-container-high);
   --ok: var(--chabar-lime);
-  --warn: #7d5700;
-  --danger: var(--md-error);
+  --warn: var(--muted);
+  --danger: var(--brand-dark);
 
-  --neon-cyan: var(--chabar-cyan);
+  --neon-cyan: var(--chabar-magenta);
   --neon-lime: var(--chabar-lime);
   --neon-magenta: var(--chabar-magenta);
-  --focus-ring: var(--chabar-cyan);
+  --focus-ring: var(--chabar-magenta);
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -99,17 +101,17 @@ html[data-theme="dark"] body,
   color-scheme: dark;
 
   --chabar-magenta: #ff2bd6;
-  --chabar-cyan: #00f6ff;
+  --chabar-cyan: var(--chabar-magenta);
   --chabar-lime: #b8ff00;
 
   --md-primary: var(--chabar-magenta);
   --md-on-primary: #1a0020;
   --md-primary-container: rgba(255, 43, 214, 0.18);
   --md-on-primary-container: #ffd6f7;
-  --md-secondary: #c4a8e8;
+  --md-secondary: #f4f0fa;
   --md-on-secondary: #16001f;
-  --md-secondary-container: rgba(0, 246, 255, 0.1);
-  --md-on-secondary-container: #e8f8ff;
+  --md-secondary-container: rgba(255, 255, 255, 0.06);
+  --md-on-secondary-container: #f4f0fa;
   --md-surface: #0a0618;
   --md-surface-dim: #05030c;
   --md-surface-bright: #1a0a28;
@@ -122,7 +124,7 @@ html[data-theme="dark"] body,
   --md-on-surface-variant: rgba(244, 240, 250, 0.58);
   --md-outline: rgba(255, 255, 255, 0.14);
   --md-outline-variant: rgba(255, 255, 255, 0.08);
-  --md-error: #ff3d6e;
+  --md-error: #ff7aef;
   --md-on-error: #1a0020;
 
   --bg: var(--md-surface);
@@ -140,13 +142,14 @@ html[data-theme="dark"] body,
   --surface: #1c0e2a;
   --surface-2: #241236;
   --ok: var(--chabar-lime);
-  --warn: #ffe600;
-  --danger: #ff3d6e;
+  --warn: var(--muted);
+  --danger: #ff7aef;
+  --accent: var(--brand);
 
-  --neon-cyan: var(--chabar-cyan);
+  --neon-cyan: var(--chabar-magenta);
   --neon-lime: var(--chabar-lime);
   --neon-magenta: var(--chabar-magenta);
-  --focus-ring: var(--chabar-cyan);
+  --focus-ring: var(--chabar-magenta);
 
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
   --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.28);
@@ -155,9 +158,7 @@ html[data-theme="dark"] body,
 
 html[data-theme="dark"],
 html[data-theme="dark"] body {
-  background:
-    radial-gradient(ellipse at 50% -20%, rgba(255, 43, 214, 0.1), transparent 42%),
-    #0a0618;
+  background: #0a0618;
   background-attachment: fixed;
   color: var(--ink);
 }

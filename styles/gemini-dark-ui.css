@@ -153,7 +153,7 @@ html[data-theme="dark"] .login-welcome {
   color: var(--brand-dark) !important;
 }
 
-/* Inputs: cyan focus only */
+/* Inputs: magenta focus only */
 html[data-theme="dark"] input,
 html[data-theme="dark"] select,
 html[data-theme="dark"] textarea,
@@ -210,9 +210,9 @@ html[data-theme="dark"] .login-google,
 .app-shell[data-theme="dark"] .confirm-btn-danger,
 .app-shell[data-theme="dark"] .band-home-side-action-danger,
 .app-shell[data-theme="dark"] .profile-hub-decline {
-  background: rgba(255, 61, 110, 0.14) !important;
-  border-color: rgba(255, 61, 110, 0.35) !important;
-  color: #ffb3c4 !important;
+  background: var(--brand-soft) !important;
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent) !important;
+  color: var(--brand-dark) !important;
 }
 
 .app-shell[data-theme="dark"] .settings-row {
