@@ -1373,7 +1373,7 @@
   },
   {
     "key": "ReportPage.aria.datumi",
-    "text": "Datumi",
+    "text": "Dospelo",
     "file": "src/ReportPage.jsx",
     "kind": "aria",
     "note": ""

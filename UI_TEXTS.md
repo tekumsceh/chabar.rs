@@ -1233,7 +1233,7 @@ Generated: 2026-07-21 · 461 entries
 - KEY: ReportPage.aria.datumi
 - FILE: src/ReportPage.jsx
 - KIND: aria
-- TEXT: Datumi
+- TEXT: Dospelo
 
 ### ReportPage.aria.filteri_finansija
 - KEY: ReportPage.aria.filteri_finansija
