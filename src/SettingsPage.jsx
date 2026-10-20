@@ -1,4 +1,4 @@
-import { DEFAULT_RATE, positiveNumber } from "./calculations.js";
+import { DEFAULT_RATE, numberValue, positiveNumber } from "./calculations.js";
 import { useEffect, useState } from "react";
 import PageHeader from "./PageHeader.jsx";
 import {
@@ -15,6 +15,12 @@ import GoogleCalendarPanel from "./GoogleCalendarPanel.jsx";
 
 function isAutoExchangeRate(settings) {
   return settings?.autoExchangeRate !== "0";
+}
+
+function formatRate(value) {
+  const parsed = numberValue(value);
+  if (!(parsed > 0)) return "—";
+  return parsed.toLocaleString("sr-RS", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
 export default function SettingsPage({
@@ -216,24 +222,35 @@ export default function SettingsPage({
             onChange={handleAutoRateToggle}
           />
         </div>
-        {!autoRate ? (
-          <label className="settings-field settings-field-compact" htmlFor="settingsExchangeRate">
-            <span>{t("settings.rateManual")}</span>
-            <input
-              id="settingsExchangeRate"
-              name="exchangeRate"
-              type="number"
-              min="0"
-              step="0.01"
-              value={settings.exchangeRate}
-              onChange={(event) => onSaveSetting("exchangeRate", event.target.value, false)}
-              onBlur={(event) =>
-                onSaveSetting("exchangeRate", positiveNumber(event.target.value, DEFAULT_RATE), true)
-              }
-              autoComplete="off"
-            />
-          </label>
-        ) : null}
+        <div className="settings-rates">
+          {!autoRate ? (
+            <label className="settings-field settings-field-compact" htmlFor="settingsExchangeRate">
+              <span>{t("settings.rateEur")}</span>
+              <input
+                id="settingsExchangeRate"
+                name="exchangeRate"
+                type="number"
+                min="0"
+                step="0.01"
+                value={settings.exchangeRate}
+                onChange={(event) => onSaveSetting("exchangeRate", event.target.value, false)}
+                onBlur={(event) =>
+                  onSaveSetting("exchangeRate", positiveNumber(event.target.value, DEFAULT_RATE), true)
+                }
+                autoComplete="off"
+              />
+            </label>
+          ) : (
+            <div className="settings-rate-line">
+              <span>{t("settings.rateEur")}</span>
+              <strong>{formatRate(settings.exchangeRate)}</strong>
+            </div>
+          )}
+          <div className="settings-rate-line">
+            <span>{t("settings.rateUsd")}</span>
+            <strong>{formatRate(settings.usdExchangeRate)}</strong>
+          </div>
+        </div>
         <p className="settings-note">{t("settings.rateNote")}</p>
         <p className="settings-note settings-note-muted">{t("settings.rateNote2")}</p>
       </section>

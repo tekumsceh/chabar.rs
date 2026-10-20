@@ -763,7 +763,7 @@ app.patch("/api/settings/:key", requireAuth, async (req, res, next) => {
   }
 });
 
-/** Live EUR/RSD: NBS srednji first, Google Finance backup. */
+/** Live EUR/RSD (+ USD/RSD): NBS srednji first, Google Finance backup. */
 app.get("/api/exchange-rate", requireAuth, async (req, res, next) => {
   try {
     const force = String(req.query.force || "") === "1";

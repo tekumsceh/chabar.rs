@@ -101,6 +101,7 @@ export default function App() {
   const [payments, setPayments] = useState([]);
   const [settings, setSettings] = useState({
     exchangeRate: DEFAULT_RATE,
+    usdExchangeRate: null,
     asOfDate: todayText(),
     autoExchangeRate: "1",
   });
@@ -120,6 +121,7 @@ export default function App() {
   const scheduleCacheRef = useRef(readStoredScheduleCache());
   const scheduleRequestIdRef = useRef(0);
   const prefetchStartedRef = useRef(false);
+  const ratesWarmedRef = useRef(false);
 
   useEffect(() => {
     eventsRef.current = events;
@@ -499,14 +501,22 @@ export default function App() {
       setEvents(schedule.events);
       setFinanceEvents(finance.events);
       setPayments(finance.payments);
+      const autoExchangeRate =
+        finance.settings.autoExchangeRate ??
+        schedule.settings.autoExchangeRate ??
+        "1";
       setSettings({
         exchangeRate: finance.settings.exchangeRate || schedule.settings.exchangeRate || DEFAULT_RATE,
+        usdExchangeRate: finance.settings.usdExchangeRate || schedule.settings.usdExchangeRate || null,
         asOfDate: finance.settings.asOfDate || schedule.settings.asOfDate || todayText(),
-        autoExchangeRate:
-          finance.settings.autoExchangeRate ??
-          schedule.settings.autoExchangeRate ??
-          "1",
+        autoExchangeRate,
       });
+      if (autoExchangeRate !== "0" && !ratesWarmedRef.current) {
+        ratesWarmedRef.current = true;
+        fetchExchangeRate({ force: false, silent: true }).catch(() => {
+          ratesWarmedRef.current = false;
+        });
+      }
       queuePrefetchSchedules();
     } catch (requestError) {
       if (requestId !== scheduleRequestIdRef.current) return;
@@ -542,6 +552,7 @@ export default function App() {
       if (finance.settings) {
         setSettings((current) => ({
           exchangeRate: finance.settings.exchangeRate || current.exchangeRate || DEFAULT_RATE,
+          usdExchangeRate: finance.settings.usdExchangeRate || current.usdExchangeRate || null,
           asOfDate: finance.settings.asOfDate || current.asOfDate || todayText(),
           autoExchangeRate: finance.settings.autoExchangeRate ?? current.autoExchangeRate ?? "1",
         }));
@@ -570,6 +581,8 @@ export default function App() {
       setSettings((current) => ({
         ...current,
         exchangeRate: result.settings.exchangeRate || result.exchangeRate || current.exchangeRate,
+        usdExchangeRate:
+          result.settings.usdExchangeRate || result.usdRate || current.usdExchangeRate,
       }));
     }
     await reloadFinance();
@@ -744,13 +757,19 @@ export default function App() {
     }
   }
 
-  async function fetchExchangeRate() {
+  async function fetchExchangeRate(options = {}) {
     try {
-      const result = await api("/api/exchange-rate?force=1");
+      const force = options.force !== false;
+      const result = await api(`/api/exchange-rate${force ? "?force=1" : ""}`);
       const rate = positiveNumber(result.rate, DEFAULT_RATE);
       await saveSetting("exchangeRate", rate, true);
+      const usdRate = numberValue(result.usdRate);
+      if (usdRate > 0) await saveSetting("usdExchangeRate", usdRate, true);
       const label = result.sourceLabel || (result.source === "nbs" ? "NBS" : "Google");
-      showToast(`Kurs: ${rate} (${label}${result.asOf ? `, ${result.asOf}` : ""})`);
+      if (!options.silent) {
+        const usdBit = usdRate > 0 ? ` · USD ${usdRate}` : "";
+        showToast(`Kurs: EUR ${rate}${usdBit} (${label}${result.asOf ? `, ${result.asOf}` : ""})`);
+      }
       return result;
     } catch (error) {
       showToast(error.message || "Kurs nije dostupan", "error");

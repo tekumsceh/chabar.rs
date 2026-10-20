@@ -6,6 +6,7 @@ import {
   financeLineKey,
   financeRemainingEur,
   flattenPaymentAllocations,
+  isClearedEur,
   isFinanceDueRow,
   numberValue,
   positiveNumber,
@@ -29,6 +30,7 @@ export async function fetchAndPersistExchangeRate(userId, query, getPersonalSett
     { userId },
   );
   const bandId = personalBand.rows[0]?.id;
+  const usdRate = positiveNumber(rateResult.usdRate, 0);
   if (bandId) {
     await query(
       `INSERT INTO settings (band_id, setting_key, setting_value)
@@ -37,9 +39,26 @@ export async function fetchAndPersistExchangeRate(userId, query, getPersonalSett
        SET setting_value = EXCLUDED.setting_value`,
       { bandId, value: String(rate) },
     );
+    if (usdRate) {
+      await query(
+        `INSERT INTO settings (band_id, setting_key, setting_value)
+         VALUES (:bandId, 'usdExchangeRate', :value)
+         ON CONFLICT (band_id, setting_key) DO UPDATE
+         SET setting_value = EXCLUDED.setting_value`,
+        { bandId, value: String(usdRate) },
+      );
+    }
   }
   const settings = await getPersonalSettings(userId);
-  return { rate, settings: { ...settings, exchangeRate: rate } };
+  return {
+    rate,
+    usdRate: usdRate || null,
+    settings: {
+      ...settings,
+      exchangeRate: rate,
+      ...(usdRate ? { usdExchangeRate: usdRate } : {}),
+    },
+  };
 }
 
 export function mapPaymentRow(row, allocations = []) {
@@ -91,7 +110,7 @@ function buildFinanceContext(events, payments, settings, financeContext) {
 export async function insertAllocationLines(tx, paymentId, allocations = []) {
   const savedAllocations = [];
   for (const item of allocations) {
-    const amountEur = Number(item.amountEur) || 0;
+    const amountEur = round(Number(item.amountEur) || 0);
     if (amountEur <= 0 || !item.eventId) continue;
     const lineKind = item.lineKind || "event";
     const expenseKey = item.expenseKey || "";
@@ -203,7 +222,7 @@ export function payLinePlan(events, payments, settings, eventId, lineKind, expen
     throw err;
   }
   const owedEur = financeLineRemainingEur(line);
-  if (owedEur <= 0) {
+  if (isClearedEur(owedEur)) {
     const err = new Error("Stavka je već plaćena.");
     err.status = 400;
     throw err;
@@ -216,7 +235,7 @@ export function payLinePlan(events, payments, settings, eventId, lineKind, expen
         eventId: Number(eventId),
         lineKind: "event",
         expenseKey: "",
-        amountEur: owedEur,
+        amountEur: round(owedEur),
       },
     ],
   };
@@ -232,7 +251,7 @@ export function resolvePaymentFromPlan({ owedEur, currency, exchangeRate, line }
     if (itemCurrency === "RSD") {
       const fullEur = expenseItemEur(line.item, rate);
       const nativeAmount = numberValue(line.item.amount);
-      if (fullEur > 0 && owed >= fullEur - 0.009) {
+      if (fullEur > 0 && isClearedEur(fullEur - owed)) {
         return { amount: round(nativeAmount), currency: "RSD" };
       }
       return { amount: eurToPaymentAmount(owed, "RSD", rate), currency: "RSD" };
@@ -261,7 +280,7 @@ export function payEventPlan(events, payments, settings, eventId, financeContext
   }
 
   const owedEur = financeRemainingEur(row);
-  if (owedEur <= 0) {
+  if (isClearedEur(owedEur)) {
     const err = new Error("Datum je već plaćen.");
     err.status = 400;
     throw err;
@@ -274,7 +293,7 @@ export function payEventPlan(events, payments, settings, eventId, financeContext
         eventId: Number(eventId),
         lineKind: "event",
         expenseKey: "",
-        amountEur: owedEur,
+        amountEur: round(owedEur),
       },
     ],
   };
@@ -286,7 +305,7 @@ export function bulkPayPlan(events, payments, settings, amount, currency, exchan
     String(currency).toUpperCase() === "RSD"
       ? Number(amount) / positiveNumber(exchangeRate, DEFAULT_RATE)
       : Number(amount);
-  if (amountEur <= 0) {
+  if (isClearedEur(amountEur) || amountEur <= 0) {
     const err = new Error("Unesi iznos uplate.");
     err.status = 400;
     throw err;
@@ -295,13 +314,14 @@ export function bulkPayPlan(events, payments, settings, amount, currency, exchan
   const previewAllocatedEur = plan.allocations.reduce((sum, row) => sum + Number(row.amountEur), 0);
   const requestedAmount = round(numberValue(amount));
   const paymentCurrency = String(currency).toUpperCase() === "RSD" ? "RSD" : "EUR";
+  const requestedAmountEur = round(amountEur);
   return {
     ...plan,
     paymentAmount: requestedAmount,
     paymentCurrency,
-    requestedAmountEur: round(amountEur),
+    requestedAmountEur,
     previewAllocatedEur: round(previewAllocatedEur),
-    unallocatedEur: round(Math.max(0, amountEur - previewAllocatedEur)),
+    unallocatedEur: round(Math.max(0, requestedAmountEur - previewAllocatedEur)),
   };
 }
 
@@ -315,7 +335,7 @@ export function paymentSummaryText(plan) {
       `poslednja stavka delimično (${plan.partialPaidEur} EUR od ${plan.partialOwedEur} EUR)`,
     );
   }
-  if (plan.unallocatedEur > 0.009) {
+  if (!isClearedEur(plan.unallocatedEur)) {
     parts.push(`neiskorišćeno ${plan.unallocatedEur} EUR`);
   }
   return parts.join("; ") || "Uplata zabeležena";

@@ -12,7 +12,10 @@ if (!databaseUrl) {
 const isLocal = databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1");
 const caPath = String(process.env.DB_SSL_CA || "").trim();
 const ca = !isLocal && caPath ? fs.readFileSync(caPath) : undefined;
-const rejectUnauthorized = process.env.SSL_REJECT_UNAUTHORIZED !== "0";
+const isProduction = process.env.NODE_ENV === "production";
+const sslFlag = process.env.SSL_REJECT_UNAUTHORIZED;
+const rejectUnauthorized =
+  sslFlag === "0" ? false : sslFlag === "1" ? true : isProduction;
 
 /** Keep at least one pooled connection alive so the first user request isn't a cold handshake. */
 export const pool = new pg.Pool({

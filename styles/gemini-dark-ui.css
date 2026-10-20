@@ -187,7 +187,6 @@ html[data-theme="dark"] .login-google,
 .app-shell[data-theme="dark"] .termin-form-secondary,
 .app-shell[data-theme="dark"] .termin-form-ghost,
 .app-shell[data-theme="dark"] .event-finance-toolbar-btn,
-.app-shell[data-theme="dark"] .finansije-bulk-pay-btn,
 .app-shell[data-theme="dark"] .finansije-year-btn,
 .app-shell[data-theme="dark"] .settings-lab-link,
 .app-shell[data-theme="dark"] .settings-legal-link,
@@ -284,6 +283,7 @@ html[data-theme="dark"] .login-google,
   background: rgba(16, 12, 28, 0.4);
   border: 1px solid var(--line);
   border-radius: var(--radius) !important;
+  padding-inline: 0.45rem 0.95rem;
 }
 
 .app-shell[data-theme="dark"] .finansije-mode-tag {

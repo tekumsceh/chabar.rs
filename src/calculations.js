@@ -10,8 +10,6 @@ export const DEFAULT_RATE = 116.5;
  */
 export const LEGACY_RATE_THROUGH_TEXT = "20.07.2026.";
 
-const POOL_EPS = 0.000001;
-
 /**
  * Counts toward Potražuje / pay waterfall: calendar day has started (incl. today)
  * and there is something to settle. Not dospelo-past until after midnight.
@@ -19,7 +17,7 @@ const POOL_EPS = 0.000001;
 export function isFinanceDueRow(row) {
   if (row?.financeDue != null) return Boolean(row.financeDue);
   const held = row?.held != null ? row.held : row?.done;
-  return Boolean(held && row?.hasDate && numberValue(row?.totalEur) > POOL_EPS);
+  return Boolean(held && row?.hasDate && !isClearedEur(row?.totalEur));
 }
 
 export function financeLineKey(eventId, lineKind, expenseKey = "") {
@@ -51,8 +49,8 @@ export function buildFinanceLines(row, context = {}) {
 
   if (bandMode) {
     for (const item of row.expenseItems || financeExpenseItems(row)) {
-      const totalEur = round(expenseItemEur(item, rate));
-      if (totalEur <= 0) continue;
+      const totalEur = expenseItemEur(item, rate);
+      if (isClearedEur(totalEur)) continue;
       expenseLines.push({
         lineKind: "expense",
         expenseKey: String(item.id),
@@ -63,8 +61,8 @@ export function buildFinanceLines(row, context = {}) {
       });
     }
     for (const member of row.memberWages || []) {
-      const totalEur = round(numberValue(member.priceEur));
-      if (totalEur <= 0) continue;
+      const totalEur = numberValue(member.priceEur);
+      if (isClearedEur(totalEur)) continue;
       feeLines.push({
         lineKind: "fee",
         expenseKey: String(member.id || member.name || ""),
@@ -79,16 +77,16 @@ export function buildFinanceLines(row, context = {}) {
         lineKind: "fee",
         expenseKey: "",
         eventId: row.id,
-        totalEur: round(numberValue(row.priceEur)),
+        totalEur: numberValue(row.priceEur),
         label: "Honorar",
       });
     }
-    return [...expenseLines, ...feeLines];
+    return [...feeLines, ...expenseLines];
   }
 
   for (const item of filterMyMemberExpenses(financeExpenseItems(row), userId)) {
-    const totalEur = round(expenseItemEur(item, rate));
-    if (totalEur <= 0) continue;
+    const totalEur = expenseItemEur(item, rate);
+    if (isClearedEur(totalEur)) continue;
     expenseLines.push({
       lineKind: "expense",
       expenseKey: String(item.id),
@@ -98,8 +96,8 @@ export function buildFinanceLines(row, context = {}) {
       item,
     });
   }
-  const feeEur = round(numberValue(row.priceEur));
-  if (feeEur > 0) {
+  const feeEur = numberValue(row.priceEur);
+  if (!isClearedEur(feeEur)) {
     feeLines.push({
       lineKind: "fee",
       expenseKey: "",
@@ -108,15 +106,17 @@ export function buildFinanceLines(row, context = {}) {
       label: "Honorar",
     });
   }
-  return [...expenseLines, ...feeLines];
+  return [...feeLines, ...expenseLines];
 }
 
 export function financeLineRemainingEur(line) {
   if (!line) return 0;
   if (line.lineClass === "paid") return 0;
-  if (line.remainingEur != null) return Math.max(0, numberValue(line.remainingEur));
-  if (line.lineClass === "partial") return Math.max(0, numberValue(line.totalEur) - numberValue(line.paidEur));
-  return Math.max(0, numberValue(line.totalEur));
+  let owed = 0;
+  if (line.remainingEur != null) owed = Math.max(0, numberValue(line.remainingEur));
+  else if (line.lineClass === "partial") owed = Math.max(0, numberValue(line.totalEur) - numberValue(line.paidEur));
+  else owed = Math.max(0, numberValue(line.totalEur));
+  return isSettledRemainderEur(owed) ? 0 : owed;
 }
 
 /** Sum stored allocation lines onto each date. */
@@ -140,24 +140,83 @@ export function applyStoredSettlement(rows, allocationRows) {
   for (const row of rows || []) {
     if (!isFinanceDueRow(row)) continue;
     const total = Math.max(0, numberValue(row.totalEur));
-    if (total <= POOL_EPS) {
+    if (isClearedEur(total)) {
       row.paymentStatus = "";
       row.paymentClass = "none";
       continue;
     }
     const paid = Math.max(0, covered.get(Number(row.id)) || 0);
-    if (paid >= total - 0.009) {
+    const remaining = total - paid;
+    if (isSettledRemainderEur(remaining)) {
       row.paymentStatus = "Plaćeno";
       row.paymentClass = "paid";
       continue;
     }
-    if (paid > 0.009) {
-      row.paymentStatus = round(total - paid);
+    if (!isClearedEur(paid)) {
+      row.paymentStatus = remaining;
       row.paymentClass = "partial";
       continue;
     }
-    row.paymentStatus = round(total);
+    row.paymentStatus = total;
     row.paymentClass = "unpaid";
+  }
+}
+
+function markRowPaid(row) {
+  row.paymentStatus = "Plaćeno";
+  row.paymentClass = "paid";
+}
+
+function applyOpenRemainder(row, remaining) {
+  const total = Math.max(0, numberValue(row.totalEur));
+  if (isSettledRemainderEur(remaining)) {
+    markRowPaid(row);
+    return;
+  }
+  if (toCents(remaining) >= toCents(total)) {
+    row.paymentStatus = total;
+    row.paymentClass = "unpaid";
+    return;
+  }
+  row.paymentStatus = fromCents(toCents(remaining));
+  row.paymentClass = "partial";
+}
+
+/**
+ * Recalculate from ledger totals: owed (dates) − paid (uplate).
+ * Leftover sits on the last unpaid date(s); every older due date is paid.
+ * Remainder under 1 EUR is paid.
+ */
+export function settleRemainderOnLastUnpaid(rows, paidEur) {
+  const due = [...(rows || [])].filter((row) => isFinanceDueRow(row)).sort(compareFinanceRows);
+  const owedCents = due.reduce((sum, row) => sum + toCents(row.totalEur), 0);
+  let leftCents = Math.max(0, owedCents - Math.max(0, toCents(paidEur)));
+
+  if (leftCents < SETTLE_CENTS) {
+    for (const row of due) markRowPaid(row);
+    return;
+  }
+
+  for (let i = due.length - 1; i >= 0; i -= 1) {
+    const row = due[i];
+    const totalCents = toCents(row.totalEur);
+    if (totalCents <= 0) {
+      row.paymentStatus = "";
+      row.paymentClass = "none";
+      continue;
+    }
+    if (leftCents < SETTLE_CENTS) {
+      markRowPaid(row);
+      continue;
+    }
+    if (leftCents >= totalCents) {
+      row.paymentStatus = fromCents(totalCents);
+      row.paymentClass = "unpaid";
+      leftCents -= totalCents;
+      continue;
+    }
+    applyOpenRemainder(row, fromCents(leftCents));
+    leftCents = 0;
   }
 }
 
@@ -173,24 +232,24 @@ export function freezeAllocationsFromRows(rows, payments, settings) {
     let covered = 0;
     if (row.paymentClass === "paid") covered = total;
     else if (row.paymentClass === "partial") covered = Math.max(0, total - numberValue(row.paymentStatus));
-    if (covered > 0.009) needs.push({ eventId: row.id, remaining: round(covered) });
+    if (!isClearedEur(covered)) needs.push({ eventId: row.id, remaining: covered });
   }
 
   const lines = [];
   for (const payment of payments || []) {
-    let left = round(paymentAmountEur(payment, settings));
-    if (left <= 0.009) continue;
-    while (left > 0.009 && needs.length) {
+    let left = paymentAmountEur(payment, settings);
+    if (isClearedEur(left)) continue;
+    while (!isClearedEur(left) && needs.length) {
       const need = needs[0];
-      const take = round(Math.min(left, need.remaining));
-      if (take <= 0.009) {
+      const take = Math.min(left, need.remaining);
+      if (isClearedEur(take)) {
         needs.shift();
         continue;
       }
       const existing = lines.find(
         (line) => Number(line.paymentId) === Number(payment.id) && Number(line.eventId) === Number(need.eventId),
       );
-      if (existing) existing.amountEur = round(existing.amountEur + take);
+      if (existing) existing.amountEur += take;
       else {
         lines.push({
           paymentId: payment.id,
@@ -200,9 +259,9 @@ export function freezeAllocationsFromRows(rows, payments, settings) {
           expenseKey: "",
         });
       }
-      left = round(left - take);
-      need.remaining = round(need.remaining - take);
-      if (need.remaining <= 0.009) needs.shift();
+      left = Math.max(0, left - take);
+      need.remaining = Math.max(0, need.remaining - take);
+      if (isClearedEur(need.remaining)) needs.shift();
     }
   }
   return lines;
@@ -217,24 +276,24 @@ export function applyPoolSettlement(rows, totalPaidEur) {
 
   for (const row of ordered) {
     const total = Math.max(0, numberValue(row.totalEur));
-    if (total <= POOL_EPS) {
+    if (isClearedEur(total)) {
       row.paymentStatus = "";
       row.paymentClass = "none";
       continue;
     }
-    if (pool >= total - POOL_EPS) {
+    if (isSettledRemainderEur(total - pool)) {
       row.paymentStatus = "Plaćeno";
       row.paymentClass = "paid";
       pool = Math.max(0, pool - total);
       continue;
     }
-    if (pool > POOL_EPS) {
-      row.paymentStatus = round(total - pool);
+    if (!isClearedEur(pool)) {
+      row.paymentStatus = total - pool;
       row.paymentClass = "partial";
       pool = 0;
       continue;
     }
-    row.paymentStatus = round(total);
+    row.paymentStatus = total;
     row.paymentClass = "unpaid";
   }
 }
@@ -256,7 +315,7 @@ function applyLineDisplayFromEventSettlement(row) {
   if (row.paymentClass === "unpaid") {
     for (const line of lines) {
       line.paidEur = 0;
-      line.remainingEur = round(line.totalEur);
+      line.remainingEur = line.totalEur;
       line.lineClass = "unpaid";
     }
     return;
@@ -268,22 +327,22 @@ function applyLineDisplayFromEventSettlement(row) {
 
   for (const line of lines) {
     const need = numberValue(line.totalEur);
-    if (paidBudget >= need - POOL_EPS) {
+    if (isSettledRemainderEur(need - paidBudget)) {
       line.paidEur = need;
       line.remainingEur = 0;
       line.lineClass = "paid";
       paidBudget = Math.max(0, paidBudget - need);
       continue;
     }
-    if (paidBudget > POOL_EPS) {
-      line.paidEur = round(paidBudget);
-      line.remainingEur = round(need - paidBudget);
+    if (!isClearedEur(paidBudget)) {
+      line.paidEur = paidBudget;
+      line.remainingEur = need - paidBudget;
       line.lineClass = "partial";
       paidBudget = 0;
       continue;
     }
     line.paidEur = 0;
-    line.remainingEur = round(need);
+    line.remainingEur = need;
     line.lineClass = "unpaid";
   }
 }
@@ -328,14 +387,15 @@ export function eurToPaymentAmount(amountEur, currency, exchangeRate) {
 export function financeRemainingEur(row) {
   if (!isFinanceDueRow(row)) return 0;
   if (row.paymentClass === "paid") return 0;
-  if (row.paymentClass === "partial") return numberValue(row.paymentStatus);
-  if (row.paymentClass === "unpaid") return numberValue(row.totalEur);
-  return 0;
+  let owed = 0;
+  if (row.paymentClass === "partial") owed = numberValue(row.paymentStatus);
+  else if (row.paymentClass === "unpaid") owed = numberValue(row.totalEur);
+  return isSettledRemainderEur(owed) ? 0 : owed;
 }
 
 /** Bulk-pay preview: oldest open gig first (event totals, not line waterfall). */
 export function simulateBulkPayAllocations(rows, amountEur) {
-  let remaining = Math.max(0, numberValue(amountEur));
+  let pool = Math.max(0, toCents(amountEur));
   const allocations = [];
   let fullyPaidCount = 0;
   let partialEventId = null;
@@ -347,32 +407,27 @@ export function simulateBulkPayAllocations(rows, amountEur) {
     .sort(compareFinanceRows);
 
   for (const row of ordered) {
-    if (remaining <= POOL_EPS) break;
-    const owed = financeRemainingEur(row);
-    if (owed <= POOL_EPS) continue;
+    if (pool <= 0) break;
+    const owed = toCents(financeRemainingEur(row));
+    if (owed <= 0) continue;
 
-    if (remaining >= owed - POOL_EPS) {
-      allocations.push({
-        eventId: row.id,
-        lineKind: "event",
-        expenseKey: "",
-        amountEur: round(owed),
-      });
-      remaining = Math.max(0, remaining - owed);
-      fullyPaidCount += 1;
-      continue;
-    }
-
+    const take = Math.min(pool, owed);
     allocations.push({
       eventId: row.id,
       lineKind: "event",
       expenseKey: "",
-      amountEur: round(remaining),
+      amountEur: fromCents(take),
     });
+    pool -= take;
+    if (owed - take < SETTLE_CENTS) {
+      fullyPaidCount += 1;
+      continue;
+    }
+
     partialEventId = row.id;
-    partialPaidEur = round(remaining);
-    partialOwedEur = round(owed);
-    remaining = 0;
+    partialPaidEur = fromCents(take);
+    partialOwedEur = fromCents(owed);
+    pool = 0;
     break;
   }
 
@@ -384,7 +439,7 @@ export function simulateBulkPayAllocations(rows, amountEur) {
     partialOwedEur,
     partialLineKind: null,
     partialExpenseKey: "",
-    unallocatedEur: round(remaining),
+    unallocatedEur: fromCents(pool),
   };
 }
 
@@ -415,12 +470,12 @@ function compareFinanceRows(a, b) {
 }
 
 /**
- * Ledger from stored payment lines.
- * - A date is paid, partial, or open from the amounts saved on it.
- * - Potražuje is the sum of those open remainders.
- * - Inside one date, expenses then the fee are display only.
+ * Ledger from date totals minus uplate.
+ * - Leftover owed sits on the last unpaid date(s); older due dates are paid.
+ * - Remainder under 1 EUR is paid.
+ * - Inside one date, fee then expenses are display only.
  */
-export function calculate(events, payments, settings, allocationRows = null, financeContext = null) {
+export function calculate(events, payments, settings, _allocationRows = null, financeContext = null) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
   const calculationDate = startOfToday();
   const ctx = financeContext || { mode: "member", userId: "" };
@@ -465,9 +520,9 @@ export function calculate(events, payments, settings, allocationRows = null, fin
     if (!row.hasDate) continue;
     row.financeLines = buildFinanceLines(row, ctx);
     if (ctx.mode === "band" && row.financeLines.length) {
-      row.totalEur = round(row.financeLines.reduce((sum, line) => sum + numberValue(line.totalEur), 0));
+      row.totalEur = row.financeLines.reduce((sum, line) => sum + numberValue(line.totalEur), 0);
     }
-    row.financeDue = row.held && numberValue(row.totalEur) > POOL_EPS;
+    row.financeDue = row.held && !isClearedEur(row.totalEur);
     if (row.financeDue) {
       strictEur += row.totalEur;
       strictDin += memberPayeeExpenseRsd(row.expenseItems);
@@ -477,8 +532,7 @@ export function calculate(events, payments, settings, allocationRows = null, fin
   }
 
   const paidEur = totalPaymentsEur(payments, settings);
-  const storedLines = Array.isArray(allocationRows) ? allocationRows : flattenPaymentAllocations(payments);
-  applyStoredSettlement(enriched, storedLines);
+  settleRemainderOnLastUnpaid(enriched, paidEur);
 
   for (const row of enriched) {
     if (row.held && row.hasDate && !row.financeDue) {
@@ -598,17 +652,18 @@ export function heldDatesEur(rows) {
  * Use on filtered rows for band/year Potražuje slices (parts add up).
  */
 export function waterfallClaimEur(rows) {
-  return (rows || []).reduce((sum, row) => {
-    if (!isFinanceDueRow(row)) return sum;
-    if (row.paymentClass === "paid") return sum;
+  const sum = (rows || []).reduce((total, row) => {
+    if (!isFinanceDueRow(row)) return total;
+    if (row.paymentClass === "paid") return total;
     if (row.paymentClass === "partial") {
-      return sum + Math.max(0, numberValue(row.paymentStatus));
+      return total + Math.max(0, numberValue(row.paymentStatus));
     }
     if (row.paymentClass === "unpaid") {
-      return sum + Math.max(0, numberValue(row.totalEur));
+      return total + Math.max(0, numberValue(row.totalEur));
     }
-    return sum;
+    return total;
   }, 0);
+  return round(sum);
 }
 
 /** Potražuje = held done totals − all uplate (spreadsheet). Full ledger only. */
@@ -768,8 +823,28 @@ export function formatRsd(value) {
   return `${formatNumber(value)} RSD`;
 }
 
+export function toCents(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100);
+}
+
+export function fromCents(cents) {
+  return Math.round(Number(cents)) / 100;
+}
+
 export function round(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  return fromCents(toCents(value));
+}
+
+/** True when a leftover would display as 0,00 EUR — round last, then settle. */
+export function isClearedEur(value) {
+  return toCents(value) <= 0;
+}
+
+/** Remaining under 1 EUR is paid — no cent leftovers on a date. */
+export const SETTLE_CENTS = 100;
+
+export function isSettledRemainderEur(value) {
+  return toCents(value) < SETTLE_CENTS;
 }
 
 export function nextFutureRow(rows) {

@@ -1,11 +1,12 @@
 /**
- * EUR/RSD rate: NBS srednji kurs (scrape) → Google Finance backup.
+ * RSD rates: NBS srednji kurs (scrape) → Google Finance backup.
+ * EUR is required (finance math). USD is extra for the settings checker.
  * Cached in-process so Settings / finance don't hammer upstream.
  */
 
 const NBS_MIDDLE_URL =
   "https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/CurrentMiddleRate";
-const GOOGLE_FINANCE_URL = "https://www.google.com/finance/quote/EUR-RSD?hl=en";
+const GOOGLE_FINANCE_QUOTE = "https://www.google.com/finance/quote";
 
 const FETCH_HEADERS = {
   "User-Agent":
@@ -17,6 +18,7 @@ const FETCH_HEADERS = {
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const MIN_RATE = 50;
 const MAX_RATE = 250;
+const RATE_CODES = ["EUR", "USD"];
 
 let cache = null;
 
@@ -42,6 +44,35 @@ function roundRate(rate) {
   return Math.round((rate + Number.EPSILON) * 10000) / 10000;
 }
 
+function parseNbsAsOf(html) {
+  const dateMatch =
+    html.match(/([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4})\.?\s*ГОДИНЕ/i) ||
+    html.match(/FORMIRANA[^0-9]{0,40}([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4})/i) ||
+    html.match(/([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4})/);
+  return dateMatch?.[1] || null;
+}
+
+function parseNbsCurrencyRow(html, code) {
+  const re = new RegExp(
+    `<tr>\\s*<td>\\s*${code}\\s*</td>\\s*<td>\\s*\\d+\\s*</td>\\s*<td>[^<]*</td>\\s*<td>\\s*[\\d.]+\\s*</td>\\s*<td>\\s*([\\d.,]+)\\s*</td>\\s*</tr>`,
+    "i",
+  );
+  const row = html.match(re);
+  if (!row) return NaN;
+  return parseSrNumber(row[1]);
+}
+
+/** Parse NBS middle-rate table HTML for EUR and USD. */
+export function parseNbsMiddleRates(html) {
+  const asOf = parseNbsAsOf(html);
+  const rates = {};
+  for (const code of RATE_CODES) {
+    const rate = parseNbsCurrencyRow(html, code);
+    if (isPlausibleRate(rate)) rates[code] = roundRate(rate);
+  }
+  return { asOf, rates };
+}
+
 async function fetchHtml(url, timeoutMs = 15000) {
   const response = await fetch(url, {
     headers: FETCH_HEADERS,
@@ -54,55 +85,84 @@ async function fetchHtml(url, timeoutMs = 15000) {
   return response.text();
 }
 
-/** Official NBS middle rate (srednji kurs) for EUR. */
-export async function fetchNbsEurRsd() {
-  const html = await fetchHtml(NBS_MIDDLE_URL);
-  const row = html.match(
-    /<tr>\s*<td>\s*EUR\s*<\/td>\s*<td>\s*\d+\s*<\/td>\s*<td>[^<]*<\/td>\s*<td>\s*([\d.]+)\s*<\/td>\s*<td>\s*([\d.,]+)\s*<\/td>\s*<\/tr>/i,
-  );
-  if (!row) {
-    throw new Error("NBS: EUR red nije pronađen");
-  }
-  const rate = parseSrNumber(row[2]);
-  if (!isPlausibleRate(rate)) {
-    throw new Error(`NBS: neverovatan kurs ${row[2]}`);
-  }
-
-  const dateMatch =
-    html.match(/([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4})\.?\s*ГОДИНЕ/i) ||
-    html.match(/FORMIRANA[^0-9]{0,40}([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4})/i) ||
-    html.match(/([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{4})/);
-
+function quoteEntry(code, rate, source, sourceLabel, asOf, url) {
   return {
     rate: roundRate(rate),
-    source: "nbs",
-    sourceLabel: "NBS srednji kurs",
-    asOf: dateMatch?.[1] || null,
-    url: NBS_MIDDLE_URL,
+    source,
+    sourceLabel,
+    asOf,
+    url,
   };
 }
 
-/** Google Finance EUR/RSD as backup market rate. */
-export async function fetchGoogleEurRsd() {
-  const html = await fetchHtml(GOOGLE_FINANCE_URL);
-  const fromDs =
-    html.match(/"EUR \/ RSD",\s*3,\s*null,\s*\[(\d+\.\d+)/) ||
-    html.match(/AF_initDataCallback\(\{key:\s*'ds:2'[\s\S]{0,800}?\[(\d+\.\d+)\s*,/);
-  const rate = Number.parseFloat(fromDs?.[1] || "");
-  if (!isPlausibleRate(rate)) {
-    throw new Error("Google Finance: kurs nije pronađen");
+/** Official NBS middle rates (srednji kurs) for EUR + USD. */
+export async function fetchNbsRsdRates() {
+  const html = await fetchHtml(NBS_MIDDLE_URL);
+  const parsed = parseNbsMiddleRates(html);
+  if (!parsed.rates.EUR) {
+    throw new Error("NBS: EUR red nije pronađen");
   }
+
+  const quotes = {};
+  for (const code of RATE_CODES) {
+    if (!parsed.rates[code]) continue;
+    quotes[code] = quoteEntry(
+      code,
+      parsed.rates[code],
+      "nbs",
+      "NBS srednji kurs",
+      parsed.asOf,
+      NBS_MIDDLE_URL,
+    );
+  }
+  return quotes;
+}
+
+function parseGoogleFinanceRate(html, code) {
+  const label = `${code} / RSD`;
+  const fromDs =
+    html.match(new RegExp(`"${label}",\\s*3,\\s*null,\\s*\\[(\\d+\\.\\d+)`)) ||
+    html.match(/AF_initDataCallback\(\{key:\s*'ds:2'[\s\S]{0,800}?\[(\d+\.\d+)\s*,/);
+  return Number.parseFloat(fromDs?.[1] || "");
+}
+
+/** Google Finance {code}/RSD as backup market rate. */
+export async function fetchGoogleRsdRate(code) {
+  const url = `${GOOGLE_FINANCE_QUOTE}/${code}-RSD?hl=en`;
+  const html = await fetchHtml(url);
+  const rate = parseGoogleFinanceRate(html, code);
+  if (!isPlausibleRate(rate)) {
+    throw new Error(`Google Finance: ${code}/RSD nije pronađen`);
+  }
+  return quoteEntry(code, rate, "google", "Google Finance", null, url);
+}
+
+function toApiPayload(quotes, extra = {}) {
+  const eur = quotes.EUR;
+  const usd = quotes.USD || null;
   return {
-    rate: roundRate(rate),
-    source: "google",
-    sourceLabel: "Google Finance",
-    asOf: null,
-    url: GOOGLE_FINANCE_URL,
+    rate: eur.rate,
+    usdRate: usd?.rate ?? null,
+    source: eur.source,
+    sourceLabel: eur.sourceLabel,
+    asOf: eur.asOf,
+    url: eur.url,
+    usd: usd
+      ? {
+          rate: usd.rate,
+          source: usd.source,
+          sourceLabel: usd.sourceLabel,
+          asOf: usd.asOf,
+          url: usd.url,
+        }
+      : null,
+    ...extra,
   };
 }
 
 /**
- * Prefer NBS; on failure use Google Finance.
+ * Prefer NBS for EUR+USD; fill missing pairs from Google Finance.
+ * `rate` stays EUR/RSD for existing finance callers.
  * @param {{ force?: boolean }} [options]
  */
 export async function getEurRsdRate(options = {}) {
@@ -112,28 +172,36 @@ export async function getEurRsdRate(options = {}) {
   }
 
   const errors = [];
+  let quotes = {};
 
   try {
-    const value = await fetchNbsEurRsd();
-    cache = { expiresAt: Date.now() + CACHE_TTL_MS, value };
-    return { ...value, cached: false };
+    quotes = await fetchNbsRsdRates();
   } catch (error) {
     errors.push(`NBS: ${error.message}`);
   }
 
-  try {
-    const value = await fetchGoogleEurRsd();
-    cache = { expiresAt: Date.now() + CACHE_TTL_MS, value };
-    return { ...value, cached: false, fallbackFrom: "nbs", errors };
-  } catch (error) {
-    errors.push(`Google: ${error.message}`);
+  for (const code of RATE_CODES) {
+    if (quotes[code]) continue;
+    try {
+      quotes[code] = await fetchGoogleRsdRate(code);
+    } catch (error) {
+      errors.push(`Google ${code}: ${error.message}`);
+    }
   }
 
-  if (cache?.value) {
-    return { ...cache.value, cached: true, stale: true, errors };
+  if (!quotes.EUR) {
+    if (cache?.value) {
+      return { ...cache.value, cached: true, stale: true, errors };
+    }
+    const err = new Error(errors.join(" · ") || "Kurs nije dostupan");
+    err.errors = errors;
+    throw err;
   }
 
-  const err = new Error(errors.join(" · ") || "Kurs nije dostupan");
-  err.errors = errors;
-  throw err;
+  const value = toApiPayload(quotes, {
+    cached: false,
+    ...(errors.length ? { errors, fallbackFrom: quotes.EUR.source === "google" ? "nbs" : undefined } : {}),
+  });
+  cache = { expiresAt: Date.now() + CACHE_TTL_MS, value };
+  return value;
 }

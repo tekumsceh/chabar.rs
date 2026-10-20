@@ -49,7 +49,7 @@ h3,
 }
 
 /* —— Buttons: default = secondary (ghost). Primary is explicit. —— */
-button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.app-tabbar-add):not(.raspored-row-button):not(.raspored-row-open):not(.raspored-icon-btn):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.settings-switch):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.event-page-tab):not(.event-page-subtab):not(.finansije-tab):not(.finansije-pay-btn):not(.date-row-menu-item):not(.page-header-back):not(.event-page-back):not(.band-home-back):not(.user-avatar-btn):not(.menu-select-bar-trigger) {
+button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.app-tabbar-add):not(.raspored-row-button):not(.raspored-row-open):not(.raspored-icon-btn):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-item):not(.field-select-item):not(.settings-theme-option):not(.settings-switch):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.event-page-tab):not(.event-page-subtab):not(.finansije-tab):not(.finansije-pay-btn):not(.date-row-menu-item):not(.page-header-back):not(.event-page-back):not(.band-home-back):not(.user-avatar-btn):not(.menu-select-bar-trigger) {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -62,7 +62,7 @@ button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-car
   text-transform: none;
 }
 
-button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.app-tabbar-add):not(.raspored-row-button):not(.raspored-row-open):not(.raspored-icon-btn):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-option):not(.settings-theme-option):not(.settings-switch):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.event-page-tab):not(.event-page-subtab):not(.finansije-tab):not(.finansije-pay-btn):not(.date-row-menu-item):not(.page-header-back):not(.event-page-back):not(.band-home-back):not(.user-avatar-btn):not(.menu-select-bar-trigger):not(:disabled):hover {
+button:not(.icon):not(.app-topbar-brand):not(.band-pill):not(.schedule-event-card-link):not(.schedule-event-card-main):not(.app-tabbar-item):not(.app-tabbar-add):not(.raspored-row-button):not(.raspored-row-open):not(.raspored-icon-btn):not(.global-search-option):not(.app-tabbar-add-item):not(.menu-select-item):not(.field-select-item):not(.settings-theme-option):not(.settings-switch):not(.user-menu-item):not(.profile-hub-item):not(.band-tile-btn):not(.legal-back):not(.modal-close):not(.event-tab):not(.event-page-tab):not(.event-page-subtab):not(.finansije-tab):not(.finansije-pay-btn):not(.date-row-menu-item):not(.page-header-back):not(.event-page-back):not(.band-home-back):not(.user-avatar-btn):not(.menu-select-bar-trigger):not(:disabled):hover {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
   box-shadow: none;
   filter: none;
