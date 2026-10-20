@@ -12,10 +12,11 @@ if (!databaseUrl) {
 const isLocal = databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1");
 const caPath = String(process.env.DB_SSL_CA || "").trim();
 const ca = !isLocal && caPath ? fs.readFileSync(caPath) : undefined;
-const isProduction = process.env.NODE_ENV === "production";
 const sslFlag = process.env.SSL_REJECT_UNAUTHORIZED;
+// Supabase pooler (6543) presents a chain Node does not trust without a CA file.
+// Verify only when a CA is provided or the flag is explicitly 1.
 const rejectUnauthorized =
-  sslFlag === "0" ? false : sslFlag === "1" ? true : isProduction;
+  sslFlag === "0" ? false : sslFlag === "1" ? true : Boolean(ca);
 
 /** Keep at least one pooled connection alive so the first user request isn't a cold handshake. */
 export const pool = new pg.Pool({
