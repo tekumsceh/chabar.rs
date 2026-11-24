@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import FadeScroll from "./FadeScroll.jsx";
 import { useT } from "./i18n/I18nProvider.jsx";
@@ -21,17 +21,49 @@ export default function FieldSelect({
   portal = false,
   portalAlign = "start",
   listClassName = "",
+  searchable = false,
 }) {
   const t = useT();
   const resolvedPlaceholder = placeholder ?? t("field.choose");
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
+  const [query, setQuery] = useState("");
+  const [filtering, setFiltering] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
+  const inputRef = useRef(null);
   const portalAlignRef = useRef(portalAlign);
   portalAlignRef.current = portalAlign;
   const listId = useId();
   const selected = options.find((option) => option.id === value || String(option.id) === String(value));
+  const visibleOptions = useMemo(() => {
+    if (!searchable || !filtering) return options;
+    const needle = fold(query);
+    if (!needle) return options;
+    return options.filter((option) => fold(option.search || option.label).includes(needle));
+  }, [filtering, options, query, searchable]);
+
+  function closeMenu() {
+    setOpen(false);
+    setFiltering(false);
+    setQuery("");
+    setActiveIndex(0);
+  }
+
+  function choose(option) {
+    if (!option || option.disabled) return;
+    onChange(option.id);
+    closeMenu();
+  }
+
+  function openMenu() {
+    if (disabled) return;
+    setOpen(true);
+    setFiltering(false);
+    setQuery("");
+    setActiveIndex(0);
+  }
 
   useEffect(() => {
     if (autoFocus) triggerRef.current?.focus();
@@ -87,6 +119,9 @@ export default function FieldSelect({
 
     function close() {
       setOpen(false);
+      setFiltering(false);
+      setQuery("");
+      setActiveIndex(0);
     }
 
     function onPointerDown(event) {
@@ -124,6 +159,38 @@ export default function FieldSelect({
     };
   }, [open, listId]);
 
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, visibleOptions.length]);
+
+  useEffect(() => {
+    if (!open || !searchable || filtering) return;
+    inputRef.current?.select();
+  }, [open, searchable, filtering]);
+
+  function onSearchKeyDown(event) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!open) openMenu();
+      setActiveIndex((index) => Math.min(visibleOptions.length - 1, index + 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(0, index - 1));
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      choose(visibleOptions[activeIndex] || visibleOptions.find((option) => !option.disabled));
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu();
+    }
+  }
+
   const list = open ? (
     <div
       className={`field-select-list ${portal ? "is-portaled" : ""} ${menuPos?.openUp ? "is-up" : ""} ${listClassName}`.trim()}
@@ -144,23 +211,24 @@ export default function FieldSelect({
     >
       <FadeScroll className="fade-scroll-inset" viewportClassName="field-select-list-viewport">
         <ul role="listbox" aria-label={label}>
-          {options.map((option) => (
+          {visibleOptions.length === 0 ? (
+            <li className="field-select-empty">{t("field.noMatch")}</li>
+          ) : null}
+          {visibleOptions.map((option, index) => (
             <li key={String(option.id)} role="option" aria-selected={String(option.id) === String(value)}>
               <button
                 type="button"
                 className={[
                   "field-select-item",
                   String(option.id) === String(value) ? "is-selected" : "",
+                  index === activeIndex && searchable ? "is-active" : "",
                   option.variant === "clear" ? "is-clear" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
                 disabled={option.disabled}
-                onClick={() => {
-                  if (option.disabled) return;
-                  onChange(option.id);
-                  setOpen(false);
-                }}
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => choose(option)}
               >
                 <span className="field-select-item-main">
                   {option.icon ? <span className="field-select-item-icon">{option.icon}</span> : null}
@@ -180,33 +248,80 @@ export default function FieldSelect({
       className={`field-select ${open ? "is-open" : ""} ${disabled ? "is-disabled" : ""} ${className}`.trim()}
       ref={rootRef}
     >
-      <button
-        type="button"
-        id={id}
-        ref={triggerRef}
-        className="field-select-trigger"
-        disabled={disabled}
-        aria-label={label}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listId}
-        aria-required={required || undefined}
-        onClick={() => {
-          if (!disabled) setOpen((current) => !current);
-        }}
-      >
-        <span className={`field-select-value ${selected ? "" : "is-placeholder"}`.trim()}>
-          {selected?.icon ? <span className="field-select-value-icon">{selected.icon}</span> : null}
-          <span>{selected?.label || resolvedPlaceholder}</span>
-        </span>
-        <ChevronIcon />
-      </button>
+      {searchable ? (
+        <div
+          className="field-select-trigger field-select-combo"
+          ref={triggerRef}
+          onMouseDown={(event) => {
+            if (disabled || event.target === inputRef.current) return;
+            event.preventDefault();
+            if (open) closeMenu();
+            else inputRef.current?.focus();
+          }}
+        >
+          <input
+            id={id}
+            ref={inputRef}
+            role="combobox"
+            aria-label={label}
+            aria-autocomplete="list"
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-required={required || undefined}
+            disabled={disabled}
+            placeholder={resolvedPlaceholder}
+            value={open && filtering ? query : selected?.label || ""}
+            autoComplete="off"
+            onFocus={() => {
+              openMenu();
+            }}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setFiltering(true);
+              setOpen(true);
+            }}
+            onKeyDown={onSearchKeyDown}
+          />
+          <span className="field-select-chevron-btn" aria-hidden="true">
+            <ChevronIcon />
+          </span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          id={id}
+          ref={triggerRef}
+          className="field-select-trigger"
+          disabled={disabled}
+          aria-label={label}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-required={required || undefined}
+          onClick={() => {
+            if (!disabled) setOpen((current) => !current);
+          }}
+        >
+          <span className={`field-select-value ${selected ? "" : "is-placeholder"}`.trim()}>
+            {selected?.icon ? <span className="field-select-value-icon">{selected.icon}</span> : null}
+            <span>{selected?.label || resolvedPlaceholder}</span>
+          </span>
+          <ChevronIcon />
+        </button>
+      )}
 
       {portal && typeof document !== "undefined" && list
         ? createPortal(list, document.body)
         : list}
     </div>
   );
+}
+
+function fold(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase();
 }
 
 function ChevronIcon() {

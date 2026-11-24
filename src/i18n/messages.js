@@ -444,6 +444,11 @@ export const messages = {
     "tech.sheet.outputs": "Output patch",
     "tech.sheet.noInputs": "No inputs.",
     "tech.sheet.noOutputs": "No outputs.",
+    "tech.sheet.print": "Štampaj",
+    "tech.sheet.printTitle": "Štampa na A4",
+    "tech.sheet.printBody": "List može da stane na jednu A4 stranu, ili da ostane pune veličine i pređe na sledeću ako treba.",
+    "tech.sheet.fitA4": "Na jednu A4",
+    "tech.sheet.fullSize": "Puna veličina",
 
     // —— set list ——
     "setlist.title": "Set lists",
@@ -682,6 +687,8 @@ export const messages = {
     "report.bandModeTag": "Bend mod",
     "report.claim": "Potražuje",
     "report.claimTitle": "Neplaćeno na održanim datumima (uplata ide redom po kalendaru, isti filteri)",
+    "report.owedBy": "Po bendu",
+    "report.owedByTitle": "Koliko potražuješ od kog benda",
     "report.expected": "Očekivano",
     "report.expectedTitle": "Samo budući datumi sa postavljenim iznosom",
     "report.tabs": "Finansije sekcije",
@@ -732,11 +739,14 @@ export const messages = {
     "report.bulkPayCancel": "Otkaži",
     "report.bulkPayRateNote": "Kurs se osvežava pre obračuna ({rate} RSD/EUR).",
     "report.bulkPaySummary": "{summary}",
+    "report.bulkPayPayer": "Uplatio",
+    "report.bulkPayBandRequired": "Izaberi bend koji uplaćuje.",
     "report.paymentRateNote": "kurs {rate}",
     "report.paymentRateAria": "Kurs uplate",
     "report.paymentRateMissing": "Nema sačuvanog kursa",
     "report.paymentOpenAria": "Datumi na koje je uplata raspoređena",
     "report.paymentNoAllocations": "Nije vezano za datum.",
+    "report.paymentUnused": "Nije raspoređeno: {amount}",
     "report.paymentAllocExpense": "trošak",
     "report.paymentAllocMissing": "Termin",
     "report.linePartial": "Delimično — {paid} od {total}",
@@ -776,6 +786,7 @@ export const messages = {
     // —— field select ——
     "field.clear": "Clear",
     "field.choose": "— Izaberi —",
+    "field.noMatch": "Nema poklapanja",
 
     // —— global search ——
     "search.placeholder": "Pretraga…",
@@ -840,6 +851,8 @@ export const messages = {
     "toast.paymentAdded": "Uplata dodata",
     "toast.notSaved": "Nije sačuvano",
     "toast.enterAmount": "Unesi EUR ili DIN iznos",
+
+    "event.country": "Država",
   },
 
   en: {
@@ -1264,6 +1277,11 @@ export const messages = {
     "tech.sheet.outputs": "Output patch",
     "tech.sheet.noInputs": "No inputs.",
     "tech.sheet.noOutputs": "No outputs.",
+    "tech.sheet.print": "Print",
+    "tech.sheet.printTitle": "Print on A4",
+    "tech.sheet.printBody": "The sheet can fit on one A4 page, or stay full size and continue on the next page if it needs to.",
+    "tech.sheet.fitA4": "Fit on one A4",
+    "tech.sheet.fullSize": "Full size",
 
     "setlist.title": "Set lists",
     "setlist.loading": "Loading set list…",
@@ -1500,6 +1518,8 @@ export const messages = {
     "report.bandModeTag": "Band mode",
     "report.claim": "Receivable",
     "report.claimTitle": "Unpaid on past dates (payments apply in calendar order, same filters)",
+    "report.owedBy": "By band",
+    "report.owedByTitle": "How much each band owes you",
     "report.expected": "Expected",
     "report.expectedTitle": "Future dates only with amounts set",
     "report.tabs": "Finance sections",
@@ -1550,11 +1570,14 @@ export const messages = {
     "report.bulkPayCancel": "Cancel",
     "report.bulkPayRateNote": "Rate refreshes before calculation ({rate} RSD/EUR).",
     "report.bulkPaySummary": "{summary}",
+    "report.bulkPayPayer": "Paid by",
+    "report.bulkPayBandRequired": "Choose the band that paid.",
     "report.paymentRateNote": "rate {rate}",
     "report.paymentRateAria": "Payment rate",
     "report.paymentRateMissing": "No saved rate",
     "report.paymentOpenAria": "Dates this payment was allocated to",
     "report.paymentNoAllocations": "Not tied to a date.",
+    "report.paymentUnused": "Not allocated: {amount}",
     "report.paymentAllocExpense": "expense",
     "report.paymentAllocMissing": "Date",
     "report.linePartial": "Partial — {paid} of {total}",
@@ -1591,6 +1614,7 @@ export const messages = {
 
     "field.clear": "Clear",
     "field.choose": "— Choose —",
+    "field.noMatch": "No matches",
 
     "search.placeholder": "Search…",
     "search.label": "Search",
@@ -1653,6 +1677,8 @@ export const messages = {
     "toast.paymentAdded": "Payment added",
     "toast.notSaved": "Not saved",
     "toast.enterAmount": "Enter EUR or RSD amount",
+
+    "event.country": "Country",
   },
 };
 

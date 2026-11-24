@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   formatEur,
   formatScheduleDateParts,
@@ -9,24 +9,31 @@ import {
   toIsoDate,
 } from "./calculations.js";
 import { useConfirm } from "./confirmDialog.jsx";
-import EventFinancePanel from "./EventFinancePanel.jsx";
-import EventFinanceAuditPanel from "./EventFinanceAuditPanel.jsx";
-import EventExpensesPanel from "./EventExpensesPanel.jsx";
-import EventDayDetails from "./EventDayDetails.jsx";
-import TechnicalRiderPanel, { prefetchTechRider } from "./TechnicalRiderPanel.jsx";
-import SetListPanel from "./SetListPanel.jsx";
-import EventRackStubPanel from "./EventRackStubPanel.jsx";
 import FieldSelect from "./FieldSelect.jsx";
+import EventDayDetails from "./EventDayDetails.jsx";
+import EventRackStubPanel from "./EventRackStubPanel.jsx";
 import FadeScroll from "./FadeScroll.jsx";
 import { api } from "./api.js";
 import { parseMapsVenueInput, resolveMapsUrl } from "./mapsLink.js";
-import { useT } from "./i18n/I18nProvider.jsx";
+import { useI18n, useT } from "./i18n/I18nProvider.jsx";
+import { countryOptions } from "../shared/countries.js";
 import {
   buildDuplicateConfirmMessage,
   findScheduleDuplicates,
   hasScheduleDuplicates,
   sameCalendarDay,
 } from "./scheduleConflicts.js";
+
+const TechnicalRiderPanel = lazy(() => import("./TechnicalRiderPanel.jsx"));
+const SetListPanel = lazy(() => import("./SetListPanel.jsx"));
+const EventFinancePanel = lazy(() => import("./EventFinancePanel.jsx"));
+const EventExpensesPanel = lazy(() => import("./EventExpensesPanel.jsx"));
+const EventFinanceAuditPanel = lazy(() => import("./EventFinanceAuditPanel.jsx"));
+
+function PanelFallback() {
+  const t = useT();
+  return <p className="event-panel-loading">{t("common.loading")}</p>;
+}
 
 const TABS = [
   { id: "osnovno", labelKey: "event.tab.osnovno" },
@@ -65,7 +72,7 @@ export default function EventPage({
   initialTechSubTab = "",
   initialShowSubTab = "",
 }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const { confirm } = useConfirm();
   const [tab, setTab] = useState("osnovno");
   const [techSubTab, setTechSubTab] = useState(TECH_SUBTABS[0].id);
@@ -109,13 +116,20 @@ export default function EventPage({
     if (techSubTab === "technical-rider") setTechRiderMounted(true);
   }, [techSubTab]);
 
-  // Prefetch rider in the background when Tehnički opens.
+  // Load the rider module only when that subtab is opened.
   useEffect(() => {
-    if (tab !== "tehnicki") return;
+    if (tab !== "tehnicki" || techSubTab !== "technical-rider") return undefined;
     const id = event?.id;
     const bandKey = event?.bandId || band?.id || "";
-    if (id && bandKey) prefetchTechRider(id, bandKey);
-  }, [tab, event?.id, event?.bandId, band?.id]);
+    if (!id || !bandKey) return undefined;
+    let cancelled = false;
+    import("./TechnicalRiderPanel.jsx").then((mod) => {
+      if (!cancelled) mod.prefetchTechRider(id, bandKey);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, techSubTab, event?.id, event?.bandId, band?.id]);
 
   const memberRole = band?.memberRole || "member";
   const isGroupBand = band?.kind === "group";
@@ -167,7 +181,8 @@ export default function EventPage({
     form.city !== initialForm.city ||
     form.venue !== initialForm.venue ||
     form.mapsUrl !== initialForm.mapsUrl ||
-    form.note !== initialForm.note;
+    form.note !== initialForm.note ||
+    form.country !== initialForm.country;
 
   dirtyRef.current = isDirty;
   formRef.current = form;
@@ -180,7 +195,7 @@ export default function EventPage({
     setForm(next);
     setInitialForm(next);
     setFormError("");
-  }, [event?.id, event?.bandId, event?.date, event?.city, event?.venue, event?.mapsUrl, event?.note, event?.priceEur]);
+  }, [event?.id, event?.bandId, event?.date, event?.city, event?.venue, event?.mapsUrl, event?.note, event?.country, event?.priceEur]);
 
   useEffect(() => {
     if (tab === "finansije" && !canSeeFinance) setTab("osnovno");
@@ -245,6 +260,7 @@ export default function EventPage({
     const venue = String(current.venue || "").trim();
     const mapsUrl = String(current.mapsUrl || "").trim();
     const note = String(current.note || "").trim();
+    const country = String(current.country || "").trim().toUpperCase();
 
     if (!bandId) return { error: t("event.validation.band") };
     if (!date) return { error: t("event.validation.dateRequired") };
@@ -258,7 +274,7 @@ export default function EventPage({
     if (!city && !venue && !mapsUrl && !note) {
       return { error: t("event.validation.minField") };
     }
-    return { bandId, date, city, venue, mapsUrl, note };
+    return { bandId, date, city, venue, mapsUrl, note, country };
   }
 
   function applyMapsLinkInput(raw) {
@@ -279,7 +295,7 @@ export default function EventPage({
       return false;
     }
 
-    const { bandId, date, city, venue, mapsUrl, note } = validated;
+    const { bandId, date, city, venue, mapsUrl, note, country } = validated;
     if (!dirtyRef.current) return true;
 
     const initial = initialFormRef.current;
@@ -308,8 +324,8 @@ export default function EventPage({
     try {
       setSaving(true);
       setFormError("");
-      await onUpdate?.(eventRef.current.id, { bandId, date, city, venue, mapsUrl, note });
-      const next = { bandId, date, city, venue, mapsUrl, note };
+      await onUpdate?.(eventRef.current.id, { bandId, date, city, venue, mapsUrl, note, country });
+      const next = { bandId, date, city, venue, mapsUrl, note, country };
       setInitialForm(next);
       setForm(next);
       return true;
@@ -506,6 +522,20 @@ export default function EventPage({
                   disabled={locked || saving}
                 />
               </label>
+              <label htmlFor="eventCountry" className="termin-form-full">
+                {t("event.country")}
+                <FieldSelect
+                  id="eventCountry"
+                  label={t("event.country")}
+                  value={form.country || ""}
+                  options={countryOptions(locale)}
+                  onChange={(id) => updateForm("country", id)}
+                  placeholder={t("common.choose")}
+                  disabled={locked || saving}
+                  searchable
+                  portal
+                />
+              </label>
               <label htmlFor="eventCity">
                 {t("event.form.city")}
                 <input
@@ -642,12 +672,14 @@ export default function EventPage({
                   hidden={!isActive}
                 >
                   {item.id === "technical-rider" ? (
+                    <Suspense fallback={<PanelFallback />}>
                     <TechnicalRiderPanel
                       eventId={event.id}
                       bandId={financeBandId}
                       readOnly={locked}
                       showToast={showToast}
                     />
+                    </Suspense>
                   ) : (
                     <EventRackStubPanel panelId={item.id} readOnly={locked} showToast={showToast} />
                   )}
@@ -691,12 +723,14 @@ export default function EventPage({
                   aria-labelledby={`event-show-tab-${item.id}`}
                 >
                   {item.id === "set-lists" ? (
+                    <Suspense fallback={<PanelFallback />}>
                     <SetListPanel
                       eventId={event.id}
                       bandId={financeBandId}
                       readOnly={locked}
                       showToast={showToast}
                     />
+                    </Suspense>
                   ) : (
                     <EventRackStubPanel panelId={item.id} readOnly={locked} showToast={showToast} />
                   )}
@@ -716,6 +750,8 @@ export default function EventPage({
           hidden={tab !== "finansije"}
         >
           <FadeScroll viewportClassName="event-page-panel-scroll">
+          {tab === "finansije" ? (
+          <Suspense fallback={<PanelFallback />}>
           <h3 className="event-page-section-title">
             <HonorarIcon />
             <span>{canManageMemberFees ? t("finance.fees") : t("event.myFee")}</span>
@@ -788,6 +824,8 @@ export default function EventPage({
             bandId={financeBandId}
             refreshKey={financeAuditRefresh}
           />
+          </Suspense>
+          ) : null}
           </FadeScroll>
         </section>
       ) : null}
@@ -804,6 +842,7 @@ function formFromEvent(event) {
     venue: event?.venue || "",
     mapsUrl: event?.mapsUrl || "",
     note: event?.note || "",
+    country: event?.country || "",
   };
 }
 

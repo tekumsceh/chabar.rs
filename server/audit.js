@@ -61,6 +61,7 @@ export function snapshotEvent(row) {
     venue: row.venue ?? "",
     mapsUrl: row.maps_url ?? row.mapsUrl ?? "",
     note: row.note ?? "",
+    country: row.country_code ?? row.country ?? "",
     priceEur: Number(row.price_eur ?? row.priceEur ?? 0),
     transportRsd: Number(row.transport_rsd ?? row.transportRsd ?? 0),
   };

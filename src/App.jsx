@@ -1,17 +1,16 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, setApiAuth } from "./api.js";
-import BandPage from "./BandPage.jsx";
 import { calculate, DEFAULT_RATE, numberValue, parseDate, positiveNumber, startOfToday, todayText } from "./calculations.js";
 import LegalPage, { isLegalPage } from "./LegalPage.jsx";
 import LoginPage from "./LoginPage.jsx";
-import ReportPage from "./ReportPage.jsx";
 import SchedulePage from "./SchedulePage.jsx";
-import SettingsPage from "./SettingsPage.jsx";
+import RasporedSkeleton from "./RasporedSkeleton.jsx";
 import BandPills from "./BandPills.jsx";
 import ProfileHub from "./ProfileHub.jsx";
 import {
   AddNavIcon,
   CalendarPlusNavIcon,
+  MoneyIcon,
   NewBandNavIcon,
   ProfileNavIcon,
   ScheduleNavIcon,
@@ -24,8 +23,13 @@ import { isBandLead } from "../shared/roles.js";
 import { ownerBandLimit } from "../shared/bandLimits.js";
 import PullToRefresh from "./PullToRefresh.jsx";
 
+const BandPage = lazy(() => import("./BandPage.jsx"));
+const ReportPage = lazy(() => import("./ReportPage.jsx"));
+const SettingsPage = lazy(() => import("./SettingsPage.jsx"));
+
 const NAV_ITEMS = [
   { id: "schedule", labelKey: "nav.schedule", icon: ScheduleNavIcon },
+  { id: "report", labelKey: "nav.report", icon: MoneyIcon },
   { id: "add", labelKey: "nav.add", icon: AddNavIcon, isAction: true },
   { id: "profile", labelKey: "nav.profile", icon: ProfileNavIcon },
 ];
@@ -83,6 +87,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [activeBandId, setActiveBandId] = useState(() => localStorage.getItem(ACTIVE_BAND_KEY) || ALL_BANDS_ID);
   const [page, setPageState] = useState(DEFAULT_PAGE);
+  const [mountedPages, setMountedPages] = useState(() => new Set([DEFAULT_PAGE]));
   const [scheduleFocusEventId, setScheduleFocusEventId] = useState(null);
   const [reportFocusEventId, setReportFocusEventId] = useState(null);
   const [reportFocusTab, setReportFocusTab] = useState(null);
@@ -90,7 +95,14 @@ export default function App() {
   const [scheduleLeaveNonce, setScheduleLeaveNonce] = useState(0);
 
   function setPage(next) {
-    setPageState(normalizePage(next));
+    const pageId = normalizePage(next);
+    setPageState(pageId);
+    setMountedPages((current) => {
+      if (current.has(pageId)) return current;
+      const pages = new Set(current);
+      pages.add(pageId);
+      return pages;
+    });
   }
 
   const activePage = normalizePage(page);
@@ -109,6 +121,7 @@ export default function App() {
   const [payingEventId, setPayingEventId] = useState(null);
   const [payingLineKey, setPayingLineKey] = useState("");
   const [bulkPayBusy, setBulkPayBusy] = useState(false);
+  const financePayLockRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
@@ -234,6 +247,11 @@ export default function App() {
     if (id === "schedule") {
       setProfileHubOpen(false);
       goToSchedule();
+      return;
+    }
+    if (id === "report") {
+      setProfileHubOpen(false);
+      goToMoney();
       return;
     }
     if (id === "profile") {
@@ -663,9 +681,9 @@ export default function App() {
 
   async function refreshNotifications() {
     try {
-      const me = await api("/api/me");
-      setPendingInvites(me.pendingInvites || []);
-      setNotifications(me.notifications || []);
+      const data = await api("/api/me/notices");
+      setPendingInvites(data.pendingInvites || []);
+      setNotifications(data.notifications || []);
     } catch {
       // ignore — menu can stay on last known list
     }
@@ -828,6 +846,7 @@ export default function App() {
           venue: event.venue ?? "",
           mapsUrl: event.mapsUrl ?? "",
           note: event.note ?? "",
+          country: event.country ?? "",
           priceEur: numberValue(event.priceEur),
           transportRsd: numberValue(event.transportRsd),
         },
@@ -854,6 +873,7 @@ export default function App() {
         venue: payload.venue || "",
         mapsUrl: payload.mapsUrl || "",
         note: payload.note || "",
+        country: payload.country || "",
         priceEur: numberValue(payload.priceEur),
         transportRsd: numberValue(payload.transportRsd),
       },
@@ -888,6 +908,7 @@ export default function App() {
       venue: fields.venue ?? current.venue,
       mapsUrl: fields.mapsUrl !== undefined ? fields.mapsUrl : current.mapsUrl,
       note: fields.note ?? current.note,
+      country: fields.country !== undefined ? fields.country : current.country,
       priceEur: fields.priceEur !== undefined ? numberValue(fields.priceEur) : numberValue(current.priceEur),
       transportRsd:
         fields.transportRsd !== undefined ? numberValue(fields.transportRsd) : numberValue(current.transportRsd),
@@ -911,6 +932,7 @@ export default function App() {
           venue: nextEvent.venue ?? "",
           mapsUrl: nextEvent.mapsUrl ?? "",
           note: nextEvent.note ?? "",
+          country: nextEvent.country ?? "",
           priceEur: numberValue(nextEvent.priceEur),
           transportRsd: numberValue(nextEvent.transportRsd),
         },
@@ -974,7 +996,8 @@ export default function App() {
   }
 
   async function payFinanceEvent(eventId, bandId) {
-    if (!eventId || payingEventId) return;
+    if (!eventId || financePayLockRef.current) return;
+    financePayLockRef.current = true;
     setPayingEventId(eventId);
     try {
       const band = bands.find((item) => item.id === (bandId || activeBandId));
@@ -995,14 +1018,17 @@ export default function App() {
       showToast(t("toast.paymentAdded"));
     } catch (requestError) {
       showToast(requestError.message || t("toast.notSaved"), "error");
+      await reloadFinance();
     } finally {
+      financePayLockRef.current = false;
       setPayingEventId(null);
     }
   }
 
   async function payFinanceLine(eventId, bandId, lineKind, expenseKey = "") {
     const lineKey = `${eventId}:${lineKind}:${expenseKey || ""}`;
-    if (!eventId || payingLineKey) return;
+    if (!eventId || financePayLockRef.current) return;
+    financePayLockRef.current = true;
     setPayingLineKey(lineKey);
     try {
       const band = bands.find((item) => item.id === (bandId || activeBandId));
@@ -1023,38 +1049,43 @@ export default function App() {
       showToast(t("toast.paymentAdded"));
     } catch (requestError) {
       showToast(requestError.message || t("toast.notSaved"), "error");
+      await reloadFinance();
     } finally {
+      financePayLockRef.current = false;
       setPayingLineKey("");
     }
   }
 
-  async function bulkPayFinance({ amount, currency }) {
-    if (bulkPayBusy) return;
+  async function bulkPayFinance({ amount, currency, bandId }) {
+    if (financePayLockRef.current || bulkPayBusy) return false;
     const parsed = numberValue(amount);
     if (parsed <= 0) {
       showToast(t("toast.enterAmount"), "error");
       return;
     }
+    const band = bands.find((item) => item.id === activeBandId);
+    const useBandBooks =
+      financeMode === "band" &&
+      band &&
+      band.kind === "group" &&
+      (band.memberRole === "owner" || band.memberRole === "lead") &&
+      activeBandId !== ALL_BANDS_ID;
+    const payerBandId = useBandBooks ? activeBandId : String(bandId || "");
+    if (!payerBandId || payerBandId === ALL_BANDS_ID) {
+      showToast(t("report.bulkPayBandRequired"), "error");
+      return;
+    }
+    financePayLockRef.current = true;
     setBulkPayBusy(true);
     try {
-      const band = bands.find((item) => item.id === activeBandId);
-      const financeModePayload =
-        financeMode === "band" &&
-        band &&
-        band.kind === "group" &&
-        (band.memberRole === "owner" || band.memberRole === "lead") &&
-        activeBandId !== ALL_BANDS_ID
-          ? "band"
-          : "member";
-
       const result = await api("/api/finance/bulk-pay", {
         method: "POST",
-        bandId: activeBandId !== ALL_BANDS_ID ? activeBandId : undefined,
+        bandId: payerBandId,
         body: {
           amount: parsed,
           currency: currency === "RSD" ? "RSD" : "EUR",
-          financeMode: financeModePayload,
-          bandId: activeBandId !== ALL_BANDS_ID ? activeBandId : undefined,
+          financeMode: useBandBooks ? "band" : "member",
+          bandId: payerBandId,
         },
       });
       await afterFinancePayment(result);
@@ -1063,8 +1094,10 @@ export default function App() {
       return true;
     } catch (requestError) {
       showToast(requestError.message || t("toast.notSaved"), "error");
+      await reloadFinance();
       return false;
     } finally {
+      financePayLockRef.current = false;
       setBulkPayBusy(false);
     }
   }
@@ -1128,8 +1161,7 @@ export default function App() {
   const showBand = activePage === "band";
   const showReport = activePage === "report";
   const showSettings = activePage === "settings";
-  const forceSchedule =
-    !showSchedule && !showBand && !showReport && !showSettings;
+  const forceSchedule = !showSchedule && !showBand && !showReport && !showSettings;
   const ownedGroupBands = profile?.ownedGroupBands ?? 0;
   const ownerLimit = profile?.ownerLimit ?? ownerBandLimit(0);
   const canCreateBand = ownedGroupBands < ownerLimit;
@@ -1183,7 +1215,9 @@ export default function App() {
         />
       </div>
 
+      {mountedPages.has("band") ? (
       <div className={`app-page ${showBand ? "is-active" : ""}`} hidden={!showBand}>
+        <Suspense fallback={<RasporedSkeleton rows={6} />}>
         <BandPage
           bands={bands}
           activeBandId={activeBandId}
@@ -1201,9 +1235,13 @@ export default function App() {
           }}
           showToast={showToast}
         />
+        </Suspense>
       </div>
+      ) : null}
 
+      {mountedPages.has("report") ? (
       <div className={`app-page ${showReport ? "is-active" : ""}`} hidden={!showReport}>
+        <Suspense fallback={<RasporedSkeleton rows={6} variant="finance" />}>
         <ReportPage
           events={financeEvents}
           payments={payments}
@@ -1234,9 +1272,13 @@ export default function App() {
           payingLineKey={payingLineKey}
           bulkPayBusy={bulkPayBusy}
         />
+        </Suspense>
       </div>
+      ) : null}
 
+      {mountedPages.has("settings") ? (
       <div className={`app-page ${showSettings ? "is-active" : ""}`} hidden={!showSettings}>
+        <Suspense fallback={<RasporedSkeleton rows={4} />}>
         <SettingsPage
           theme={theme}
           onThemeChange={setTheme}
@@ -1249,7 +1291,9 @@ export default function App() {
           showToast={showToast}
           onBack={goToSchedule}
         />
+        </Suspense>
       </div>
+      ) : null}
 
       <ProfileHub
         open={profileHubOpen}

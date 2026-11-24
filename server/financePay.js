@@ -6,6 +6,7 @@ import {
   financeLineKey,
   financeRemainingEur,
   flattenPaymentAllocations,
+  mergeEventAllocations,
   isClearedEur,
   isFinanceDueRow,
   numberValue,
@@ -105,6 +106,23 @@ function buildFinanceContext(events, payments, settings, financeContext) {
   const allocationRows = flattenPaymentAllocations(payments);
   const calc = calculate(events, payments, settings, allocationRows, financeContext);
   return { calc, allocationRows };
+}
+
+/** Lock the dates, then return allocations already stored on them. */
+export async function lockFinanceEvents(tx, eventIds) {
+  const ids = [...new Set((eventIds || []).map((id) => Number(id)).filter((id) => id > 0))].sort(
+    (a, b) => a - b,
+  );
+  if (!ids.length) return [];
+  await tx(`SELECT id FROM events WHERE id = ANY(:ids::int[]) ORDER BY id FOR UPDATE`, { ids });
+  const result = await tx(
+    `SELECT pa.payment_id, pa.event_id, pa.amount_eur, pa.line_kind, pa.expense_key, p.user_id
+     FROM payment_allocations pa
+     JOIN payments p ON p.id = pa.payment_id
+     WHERE pa.event_id = ANY(:ids::int[])`,
+    { ids },
+  );
+  return result.rows;
 }
 
 export async function insertAllocationLines(tx, paymentId, allocations = []) {
@@ -221,9 +239,9 @@ export function payLinePlan(events, payments, settings, eventId, lineKind, expen
     err.status = 400;
     throw err;
   }
-  const owedEur = financeLineRemainingEur(line);
+  const owedEur = Math.min(financeLineRemainingEur(line), financeRemainingEur(row));
   if (isClearedEur(owedEur)) {
-    const err = new Error("Stavka je već plaćena.");
+    const err = new Error(isClearedEur(financeRemainingEur(row)) ? "Datum je već plaćen." : "Stavka je već plaćena.");
     err.status = 400;
     throw err;
   }
@@ -233,8 +251,8 @@ export function payLinePlan(events, payments, settings, eventId, lineKind, expen
     allocations: [
       {
         eventId: Number(eventId),
-        lineKind: "event",
-        expenseKey: "",
+        lineKind: line.lineKind || "event",
+        expenseKey: line.expenseKey || "",
         amountEur: round(owedEur),
       },
     ],
@@ -341,4 +359,4 @@ export function paymentSummaryText(plan) {
   return parts.join("; ") || "Uplata zabeležena";
 }
 
-export { financeLineKey };
+export { financeLineKey, mergeEventAllocations };

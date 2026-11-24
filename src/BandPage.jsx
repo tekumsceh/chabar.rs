@@ -1178,7 +1178,8 @@ export default function BandPage({
               >
                 {isAllBands ? (
                   <p className="band-home-note">{t("band.selectForSettings")}</p>
-                ) : GOOGLE_CALENDAR_SYNC ? (
+                ) : null}
+                {isAllBands || !GOOGLE_CALENDAR_SYNC ? null : (
                   <GoogleCalendarPanel
                     mode="band"
                     bandId={activeBandId}
@@ -1193,8 +1194,6 @@ export default function BandPage({
                       }
                     }}
                   />
-                ) : (
-                  <p className="band-home-note">{t("band.settingsSoon")}</p>
                 )}
               </BandAccordionSection>
             </div>

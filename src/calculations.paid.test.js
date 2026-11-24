@@ -3,8 +3,12 @@ import test from "node:test";
 import {
   applyPoolSettlement,
   calculate,
+  filterLedgerAllocations,
+  financeLineRemainingEur,
+  financeRemainingEur,
   freezeAllocationsFromRows,
   isClearedEur,
+  mergeEventAllocations,
   numberValue,
   parseDate,
   round,
@@ -20,7 +24,62 @@ test("numberValue reads a Serbian amount", () => {
   assert.equal(numberValue("1.200,50"), 1200.5);
 });
 
-test("leftover owed sits on the last unpaid date; older dates are paid", () => {
+test("someone else's payment does not close my fee, and my second pay is closed", () => {
+  const events = [{ id: 87, date: "14.11.2026.", priceEur: 150, expenseItems: [] }];
+  const stored = [
+    {
+      payment_id: 1,
+      event_id: 87,
+      amount_eur: 150,
+      line_kind: "event",
+      expense_key: "",
+      user_id: "person-a",
+    },
+  ];
+  const mine = calculate(
+    events,
+    mergeEventAllocations([], filterLedgerAllocations(stored, { mode: "member", userId: "person-b" })),
+    { exchangeRate: 117 },
+  );
+  assert.equal(mine.rows[0].paymentClass, "unpaid");
+
+  const again = calculate(
+    events,
+    mergeEventAllocations([], filterLedgerAllocations(stored, { mode: "member", userId: "person-a" })),
+    { exchangeRate: 117 },
+  );
+  assert.equal(again.rows[0].paymentClass, "paid");
+  assert.equal(financeRemainingEur(again.rows[0]), 0);
+
+  const band = filterLedgerAllocations(stored, { mode: "band", userId: "person-b" });
+  assert.equal(band.length, 1);
+});
+
+test("a date that already has its fee stored cannot be paid again", () => {
+  const events = [
+    { id: 87, date: "14.11.2026.", priceEur: 150, expenseItems: [] },
+    { id: 88, date: "01.11.2026.", priceEur: 80, expenseItems: [] },
+  ];
+  const payments = mergeEventAllocations(
+    [],
+    [{ payment_id: 36, event_id: 87, amount_eur: 150, line_kind: "event", expense_key: "" }],
+  );
+  const calc = calculate(events, payments, { exchangeRate: 117 });
+  const gig = calc.rows.find((row) => row.id === 87);
+  const other = calc.rows.find((row) => row.id === 88);
+  assert.equal(gig.paymentClass, "paid");
+  assert.equal(financeRemainingEur(gig), 0);
+  assert.equal(other.paymentClass, "unpaid");
+  const plan = simulateBulkPayAllocations(calc.rows, 150);
+  assert.deepEqual(
+    plan.allocations.map((row) => row.eventId),
+    [88],
+  );
+  const again = simulateBulkPayAllocations([gig], 150);
+  assert.equal(again.allocations.length, 0);
+});
+
+test("paying one date marks that date paid and leaves the other open", () => {
   const events = [
     { id: 1, date: "12.01.2020.", priceEur: 100, expenseItems: [] },
     { id: 2, date: "15.01.2020.", priceEur: 100, expenseItems: [] },
@@ -38,8 +97,8 @@ test("leftover owed sits on the last unpaid date; older dates are paid", () => {
   const calc = calculate(events, payments, { exchangeRate: 117 });
   const older = calc.rows.find((row) => row.id === 1);
   const newer = calc.rows.find((row) => row.id === 2);
-  assert.equal(older.paymentClass, "paid");
-  assert.equal(newer.paymentClass, "unpaid");
+  assert.equal(older.paymentClass, "unpaid");
+  assert.equal(newer.paymentClass, "paid");
   assert.equal(calc.claimEur, 100);
 });
 
@@ -225,7 +284,7 @@ test("a real bulk shortfall stays on the last date only", () => {
   assert.equal(stored.claimEur, 25);
 });
 
-test("if leftover is larger than the last date, older dates reopen from the end", () => {
+test("money with no date does not mark any date paid", () => {
   const events = [
     { id: 1, date: "01.01.2020.", priceEur: 100, expenseItems: [] },
     { id: 2, date: "02.01.2020.", priceEur: 100, expenseItems: [] },
@@ -242,11 +301,39 @@ test("if leftover is larger than the last date, older dates reopen from the end"
     },
   ];
   const calc = calculate(events, payments, { exchangeRate: 117 });
-  assert.equal(calc.rows.find((row) => row.id === 1).paymentClass, "partial");
-  assert.equal(round(calc.rows.find((row) => row.id === 1).paymentStatus), 50);
-  assert.equal(calc.rows.find((row) => row.id === 2).paymentClass, "unpaid");
-  assert.equal(calc.rows.find((row) => row.id === 3).paymentClass, "unpaid");
-  assert.equal(calc.claimEur, 250);
+  assert.equal(calc.rows.every((row) => row.paymentClass === "unpaid"), true);
+  assert.equal(calc.claimEur, 300);
+});
+
+test("an expense payment stays on that expense", () => {
+  const events = [
+    {
+      id: 1,
+      date: "01.01.2020.",
+      priceEur: 150,
+      expenseItems: [{ id: 9, amount: 20, currency: "EUR", description: "Prevoz", payeeKind: "member" }],
+    },
+  ];
+  const payments = [
+    {
+      id: 1,
+      date: "02.01.2020.",
+      amount: 20,
+      currency: "EUR",
+      exchangeRate: 117,
+      allocations: [{ eventId: 1, amountEur: 20, lineKind: "expense", expenseKey: "9" }],
+    },
+  ];
+  const calc = calculate(events, payments, { exchangeRate: 117 }, null, { mode: "member", userId: "" });
+  const row = calc.rows[0];
+  const expense = row.financeLines.find((line) => line.lineKind === "expense");
+  const fee = row.financeLines.find((line) => line.lineKind === "fee");
+  assert.equal(row.paymentClass, "partial");
+  assert.equal(expense.lineClass, "paid");
+  assert.equal(financeLineRemainingEur(expense), 0);
+  assert.equal(fee.lineClass, "unpaid");
+  assert.equal(financeLineRemainingEur(fee), 150);
+  assert.equal(financeRemainingEur(row), 150);
 });
 
 test("bulk pay short by under 1 EUR still closes the date", () => {

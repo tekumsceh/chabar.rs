@@ -12,6 +12,8 @@ import {
   isFinanceDueRow,
   memberPayeeExpenseEur,
   numberValue,
+  paymentAmountEur,
+  round,
   waterfallClaimEur,
   parseDate,
 } from "./calculations.js";
@@ -69,8 +71,10 @@ export default function ReportPage({
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
   const [bulkAmount, setBulkAmount] = useState("");
   const [bulkCurrency, setBulkCurrency] = useState("EUR");
+  const [bulkPayerId, setBulkPayerId] = useState("");
   const [historyRow, setHistoryRow] = useState(null);
   const [expandedPaymentId, setExpandedPaymentId] = useState(null);
+  const payBusy = Boolean(payingEventId) || Boolean(payingLineKey) || bulkPayBusy;
 
   useEffect(() => {
     if (focusEventId == null || focusEventId === "") return;
@@ -169,14 +173,59 @@ export default function ReportPage({
   /**
    * Filtered Potražuje = sum of row remainders on held rows in view (matches slices of global claim).
    */
-  const claimEur = useMemo(() => {
-    const pastRows = bandRows.filter((row) => {
+  const viewClaimRows = useMemo(() => {
+    return bandRows.filter((row) => {
       if (!isFinanceDueRow(row)) return false;
       if (yearFromDate(row.date, row.parsedDate) !== viewYear) return false;
       return matchesFilters(row, search, "all");
     });
-    return waterfallClaimEur(pastRows);
   }, [bandRows, viewYear, search]);
+
+  const claimEur = useMemo(() => waterfallClaimEur(viewClaimRows), [viewClaimRows]);
+
+  const claimByBand = useMemo(() => {
+    if (financeMode === "band") return [];
+    const groups = new Map();
+    for (const row of viewClaimRows) {
+      const id = String(row.bandId || "");
+      if (!id) continue;
+      const group = groups.get(id) || { rows: [], sample: row };
+      group.rows.push(row);
+      groups.set(id, group);
+    }
+    return [...groups.values()]
+      .map(({ rows, sample }) => ({
+        bandId: String(sample.bandId),
+        name: financeBandLabel(bandsById.get(sample.bandId), sample, t),
+        amountEur: waterfallClaimEur(rows),
+      }))
+      .filter((item) => item.name && item.amountEur > 0)
+      .sort((a, b) => b.amountEur - a.amountEur || a.name.localeCompare(b.name, "sr"));
+  }, [financeMode, viewClaimRows, bandsById, t]);
+
+  const owedBandOptions = useMemo(() => {
+    if (financeMode === "band") return [];
+    const groups = new Map();
+    for (const row of calculations.rows) {
+      const id = String(row.bandId || "");
+      if (!id) continue;
+      const group = groups.get(id) || { rows: [], sample: row };
+      group.rows.push(row);
+      groups.set(id, group);
+    }
+    return [...groups.values()]
+      .map(({ rows, sample }) => {
+        const name = financeBandLabel(bandsById.get(sample.bandId), sample, t);
+        const amountEur = waterfallClaimEur(rows);
+        return {
+          id: String(sample.bandId),
+          label: name ? `${name} — ${formatEur(amountEur)}` : formatEur(amountEur),
+          amountEur,
+        };
+      })
+      .filter((item) => item.amountEur > 0)
+      .sort((a, b) => a.label.localeCompare(b.label, "sr"));
+  }, [financeMode, calculations.rows, bandsById, t]);
 
   useEffect(() => {
     if (statusFilter === "future" || statusFilter === "done") {
@@ -287,15 +336,21 @@ export default function ReportPage({
           <button
             type="button"
             className="finansije-bulk-pay-btn btn-primary"
-            disabled={bulkPayBusy}
+            disabled={payBusy}
             title={t("report.bulkPayTitle")}
-            onClick={() => setBulkPayOpen(true)}
+            onClick={() => {
+              const current = owedBandOptions.find((option) => option.id === String(activeBandId));
+              const only = owedBandOptions.length === 1 ? owedBandOptions[0] : null;
+              setBulkPayerId(current?.id || only?.id || "");
+              setBulkPayOpen(true);
+            }}
           >
             {bulkPayBusy ? "…" : t("report.bulkPay")}
           </button>
         ) : null}
         <span className="finansije-year-meta">
           {financeMode === "band" ? <em className="finansije-mode-tag">{t("report.bandModeTag")}</em> : null}
+          {claimByBand.length ? <OwedByMenu items={claimByBand} /> : null}
           <span
             className="finansije-meta-item finansije-meta-owed"
             title={t("report.claimTitle")}
@@ -409,7 +464,7 @@ export default function ReportPage({
                               <button
                                 type="button"
                                 className="finansije-pay-btn"
-                                disabled={Boolean(payingEventId)}
+                                disabled={payBusy}
                                 aria-label={t("report.payBtnAria", { amount: formatEur(owed) })}
                                 title={t("report.payBtnTitle", { amount: formatEur(owed) })}
                                 onClick={(event) => {
@@ -510,6 +565,7 @@ export default function ReportPage({
           onClose={() => setSelectedId(null)}
           onPayLine={onPayLine}
           payingLineKey={payingLineKey}
+          payBusy={payBusy}
         />
       ) : null}
 
@@ -525,16 +581,26 @@ export default function ReportPage({
         <BulkPayModal
           amount={bulkAmount}
           currency={bulkCurrency}
+          payerId={bulkPayerId}
+          payerOptions={owedBandOptions}
+          payerRequired={financeMode !== "band"}
           exchangeRate={settings?.exchangeRate}
           busy={bulkPayBusy}
           onAmountChange={setBulkAmount}
           onCurrencyChange={setBulkCurrency}
+          onPayerChange={setBulkPayerId}
           onClose={() => setBulkPayOpen(false)}
           onSubmit={async () => {
-            const ok = await onBulkPay?.({ amount: bulkAmount, currency: bulkCurrency });
+            if (financeMode !== "band" && !bulkPayerId) return;
+            const ok = await onBulkPay?.({
+              amount: bulkAmount,
+              currency: bulkCurrency,
+              bandId: financeMode === "band" ? activeBandId : bulkPayerId,
+            });
             if (ok) {
               setBulkPayOpen(false);
               setBulkAmount("");
+              setBulkPayerId("");
             }
           }}
         />
@@ -552,6 +618,7 @@ function FinanceDetailModal({
   onClose,
   onPayLine,
   payingLineKey = "",
+  payBusy = false,
 }) {
   const t = useT();
   const isBandMode = financeMode === "band";
@@ -667,7 +734,7 @@ function FinanceDetailModal({
                                   <button
                                     type="button"
                                     className="finansije-pay-btn is-compact"
-                                    disabled={Boolean(payingLineKey)}
+                                    disabled={payBusy}
                                     onClick={() =>
                                       onPayLine(row.id, row.bandId, line.lineKind, line.expenseKey || "")
                                     }
@@ -868,6 +935,11 @@ function PaymentRow({ payment, eventsById, expanded, onToggle }) {
     ? t("report.paymentRateNote", { rate: rateText })
     : t("report.paymentRateMissing");
   const allocs = paymentAllocationLines(payment, eventsById, t);
+  const allocatedEur = (payment.allocations || []).reduce(
+    (sum, item) => sum + numberValue(item.amountEur),
+    0,
+  );
+  const unusedEur = round(paymentAmountEur(payment) - allocatedEur);
 
   useEffect(() => {
     if (!rateOpen) return undefined;
@@ -941,23 +1013,83 @@ function PaymentRow({ payment, eventsById, expanded, onToggle }) {
               </li>
             ))
           )}
+          {unusedEur >= 1 ? (
+            <li className="finansije-payment-alloc-empty">
+              {t("report.paymentUnused", { amount: formatEur(unusedEur) })}
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </li>
   );
 }
 
+function OwedByMenu({ items }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function onPointerDown(event) {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    }
+
+    function onKeyDown(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className={`finansije-owed-by ${open ? "is-open" : ""}`} ref={rootRef}>
+      <button
+        type="button"
+        className="finansije-owed-by-trigger"
+        aria-expanded={open}
+        aria-haspopup="true"
+        title={t("report.owedByTitle")}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {t("report.owedBy")}
+      </button>
+      {open ? (
+        <ul className="finansije-owed-by-list" aria-label={t("report.owedByTitle")}>
+          {items.map((item) => (
+            <li key={item.bandId}>
+              <span>{item.name}</span>
+              <strong>{formatEur(item.amountEur)}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function BulkPayModal({
   amount,
   currency,
+  payerId = "",
+  payerOptions = [],
+  payerRequired = false,
   exchangeRate,
   busy,
   onAmountChange,
   onCurrencyChange,
+  onPayerChange,
   onClose,
   onSubmit,
 }) {
   const t = useT();
+  const payerMissing = payerRequired && !payerId;
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -1003,12 +1135,25 @@ function BulkPayModal({
               <option value="RSD">RSD</option>
             </select>
           </label>
+          {payerRequired ? (
+            <label className="finansije-bulk-pay-field">
+              <span>{t("report.bulkPayPayer")}</span>
+              <select value={payerId} onChange={(event) => onPayerChange?.(event.target.value)} required>
+                <option value="">{t("field.choose")}</option>
+                {payerOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
         <footer className="modal-foot">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>
             {t("report.bulkPayCancel")}
           </button>
-          <button type="button" className="btn-primary" disabled={busy} onClick={onSubmit}>
+          <button type="button" className="btn-primary" disabled={busy || payerMissing} onClick={onSubmit}>
             {busy ? "…" : t("report.bulkPaySubmit")}
           </button>
         </footer>

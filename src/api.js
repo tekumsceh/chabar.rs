@@ -66,6 +66,7 @@ export async function api(url, options = {}) {
           : `Zahtev nije uspeo (${response.status})`;
       const error = new Error(data.detail || data.error || fallback);
       error.status = response.status;
+      error.errors = data.errors || null;
       lastError = error;
       const retryStatus = response.status === 502 || response.status === 503 || response.status === 504;
       if (retryStatus && attempt + 1 < attempts) continue;
@@ -77,4 +78,16 @@ export async function api(url, options = {}) {
   }
 
   throw lastError || new Error("Zahtev nije uspeo");
+}
+
+export async function apiBlob(url) {
+  const headers = {};
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const error = new Error(`Zahtev nije uspeo (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.blob();
 }

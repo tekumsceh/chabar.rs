@@ -28,7 +28,6 @@ $excludeFiles = @(
   ".env.example",
   "chabar-deploy.zip",
   "ioorganize-deploy.zip",
-  "UI_TEXTS.md",
   "AUTH-SETUP.txt",
   "HOSTINGER-DEPLOY.txt"
 )
@@ -49,12 +48,6 @@ try {
   if (Test-Path $studioPath) {
     Remove-Item $studioPath -Recurse -Force
   }
-
-  # Dev/copy tooling — not needed on the VPS runtime
-  $uiTextsIndex = Join-Path $temp "scripts\_ui-texts-index.json"
-  if (Test-Path $uiTextsIndex) { Remove-Item $uiTextsIndex -Force }
-  $buildUiTexts = Join-Path $temp "scripts\build-ui-texts.js"
-  if (Test-Path $buildUiTexts) { Remove-Item $buildUiTexts -Force }
 
   # Local-only: ledger dumps, spent mutations, one-shot debug/compare/fix scripts
   $scriptsTemp = Join-Path $temp "scripts"

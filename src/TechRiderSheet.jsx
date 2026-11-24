@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "./i18n/I18nProvider.jsx";
 
@@ -24,37 +24,133 @@ export default function TechRiderSheet({
 }) {
   const t = useT();
   const notesText = String(notes || "").trim();
+  const onCloseRef = useRef(onClose);
+  const pageRef = useRef(null);
+  const printAskRef = useRef(false);
+  const [printAsk, setPrintAsk] = useState(false);
+  onCloseRef.current = onClose;
+  printAskRef.current = printAsk;
 
   useEffect(() => {
     if (!open) return undefined;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (event) => {
-      if (event.key === "Escape") onClose?.();
+      if (event.key !== "Escape") return;
+      if (printAskRef.current) {
+        setPrintAsk(false);
+        return;
+      }
+      leaveSheet();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    if (!window.history.state?.chabarRiderSheet) {
+      window.history.pushState({ chabarRiderSheet: true }, "");
+    }
+    function onPop() {
+      onCloseRef.current?.();
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [open]);
+
+  function leaveSheet() {
+    if (window.history.state?.chabarRiderSheet) {
+      window.history.back();
+      return;
+    }
+    onClose?.();
+  }
+
+  function clearFit() {
+    const page = pageRef.current;
+    if (!page) return;
+    page.classList.remove("is-fit-a4");
+    page.style.removeProperty("--sheet-fit");
+  }
+
+  function startPrint(fit) {
+    const page = pageRef.current;
+    setPrintAsk(false);
+    if (page) {
+      if (fit) {
+        const availablePx = ((297 - 28) * 96) / 25.4;
+        const scale = Math.min(1, availablePx / Math.max(page.scrollHeight, 1));
+        page.style.setProperty("--sheet-fit", scale.toFixed(4));
+        page.classList.add("is-fit-a4");
+      } else {
+        clearFit();
+      }
+    }
+    window.requestAnimationFrame(() => window.print());
+  }
+
+  useEffect(() => {
+    if (!open) return undefined;
+    window.addEventListener("afterprint", clearFit);
+    return () => window.removeEventListener("afterprint", clearFit);
+  }, [open]);
 
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
     <div className="tech-rider-sheet" role="dialog" aria-modal="true" aria-label={t("tech.sheet.title")}>
-      <button
-        type="button"
-        className="tech-rider-sheet-back"
-        aria-label={t("common.back")}
-        title={t("common.back")}
-        onClick={onClose}
-      >
-        <SheetBackIcon />
-      </button>
+      <div className="tech-rider-sheet-bar">
+        <button
+          type="button"
+          className="tech-rider-sheet-back"
+          aria-label={t("common.back")}
+          title={t("common.back")}
+          onClick={leaveSheet}
+        >
+          <SheetBackIcon />
+          <span>{t("common.back")}</span>
+        </button>
+        <button
+          type="button"
+          className="tech-rider-sheet-print"
+          aria-label={t("tech.sheet.print")}
+          title={t("tech.sheet.print")}
+          onClick={() => setPrintAsk(true)}
+        >
+          <PrintIcon />
+          <span>{t("tech.sheet.print")}</span>
+        </button>
+      </div>
+
+      {printAsk ? (
+        <div className="tech-rider-print-ask" role="presentation" onClick={() => setPrintAsk(false)}>
+          <div
+            className="tech-rider-print-ask-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tech-sheet-print-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="tech-sheet-print-title">{t("tech.sheet.printTitle")}</h2>
+            <p>{t("tech.sheet.printBody")}</p>
+            <div className="tech-rider-print-ask-actions">
+              <button type="button" className="confirm-btn confirm-btn-ghost" onClick={() => startPrint(false)}>
+                {t("tech.sheet.fullSize")}
+              </button>
+              <button type="button" className="confirm-btn confirm-btn-primary" onClick={() => startPrint(true)}>
+                {t("tech.sheet.fitA4")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="tech-rider-sheet-scroller">
-        <div className="tech-rider-sheet-page">
+        <div className="tech-rider-sheet-page" ref={pageRef}>
           {notesText ? (
             <section className="tech-rider-sheet-notes" aria-label={t("tech.notes")}>
               <h1>{t("tech.notes")}</h1>
@@ -148,6 +244,34 @@ export default function TechRiderSheet({
       </div>
     </div>,
     document.body,
+  );
+}
+
+function PrintIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+      <path
+        d="M7 9V3.8h10V9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 17H4.8A1.8 1.8 0 0 1 3 15.2v-4.4A1.8 1.8 0 0 1 4.8 9h14.4A1.8 1.8 0 0 1 21 10.8v4.4a1.8 1.8 0 0 1-1.8 1.8H18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 14.5h10V20.2H7z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

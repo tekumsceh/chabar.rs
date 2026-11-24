@@ -92,6 +92,7 @@ import { getCommunityLyricsById, searchCommunityLyrics } from "./lyricsLookup.js
 import { canEditSetlist, isBandLead, isBandSaradnik } from "../shared/roles.js";
 import {
   calculate,
+  filterLedgerAllocations,
   isPastEventDate,
   parseDate,
   paymentAmountEur,
@@ -105,6 +106,8 @@ import {
   createPaymentWithAllocations,
   fetchAndPersistExchangeRate,
   insertAllocationLines,
+  lockFinanceEvents,
+  mergeEventAllocations,
   payEventPlan,
   payLinePlan,
   paymentSummaryText,
@@ -268,6 +271,19 @@ app.get("/api/me", requireAuth, async (req, res, next) => {
       pendingInvites,
       notifications,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+app.get("/api/me/notices", requireAuth, async (req, res, next) => {
+  try {
+    const [pendingInvites, notifications] = await Promise.all([
+      listPendingInvitesForUser(req.user),
+      listNotificationsForUser(req.user),
+    ]);
+    res.json({ pendingInvites, notifications });
   } catch (error) {
     next(error);
   }
@@ -796,15 +812,15 @@ app.post("/api/events", requireAuth, requireBandMember, async (req, res, next) =
     const created = await withTransaction(async (tx) => {
       const result = await tx(
         `INSERT INTO events
-          (band_id, sort_order, event_date_text, city, venue, maps_url, note, price_eur, transport_rsd)
+          (band_id, sort_order, event_date_text, city, venue, maps_url, note, country_code, price_eur, transport_rsd)
          VALUES (
           :bandId,
           COALESCE((SELECT max_order + 1 FROM (
             SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM events WHERE band_id = :bandId
           ) AS t), 1),
-          :date, :city, :venue, :mapsUrl, :note, :priceEur, :transportRsd
+          :date, :city, :venue, :mapsUrl, :note, :country, :priceEur, :transportRsd
          )
-         RETURNING id, band_id, event_date_text, city, venue, maps_url, note, price_eur, transport_rsd`,
+         RETURNING id, band_id, event_date_text, city, venue, maps_url, note, country_code, price_eur, transport_rsd`,
         { ...event, bandId: req.bandId },
       );
       const row = result.rows[0];
@@ -930,6 +946,7 @@ app.put("/api/events/:id", requireAuth, requireBandMember, async (req, res, next
              venue = :venue,
              maps_url = :mapsUrl,
              note = :note,
+             country_code = :country,
              price_eur = :priceEur,
              transport_rsd = :transportRsd
          WHERE id = :id AND band_id = :bandId
@@ -3611,8 +3628,21 @@ app.post("/api/payments", requireAuth, requireBandMember, async (req, res, next)
     const payment = normalizePayment(req.body);
     // Creating a payment is always allowed (late bookkeeping); once its date is past, PUT/DELETE lock.
 
-    const allocations = await planMemberPaymentAllocations(req.user.id, payment);
+    const [events, existingPayments, settings] = await Promise.all([
+      getMyFinanceEvents(req.user.id),
+      getMyPayments(req.user.id),
+      getPersonalSettings(req.user.id),
+    ]);
     const created = await withTransaction(async (tx) => {
+      const freshRows = await lockFinanceEvents(
+        tx,
+        events.map((row) => row.id),
+      );
+      const freshPayments = mergeEventAllocations(
+        existingPayments,
+        filterLedgerAllocations(freshRows, { mode: "member", userId: req.user.id }),
+      );
+      const allocations = waterfallAllocations(events, freshPayments, settings, payment, req.user.id);
       const result = await tx(
         `INSERT INTO payments (user_id, band_id, sort_order, payment_date_text, amount, currency)
          VALUES (
@@ -3701,8 +3731,23 @@ app.put("/api/payments/:id", requireAuth, async (req, res, next) => {
       });
     }
 
-    const allocations = await planMemberPaymentAllocations(req.user.id, payment, req.params.id);
+    const [events, existingPayments, settings] = await Promise.all([
+      getMyFinanceEvents(req.user.id),
+      getMyPayments(req.user.id),
+      getPersonalSettings(req.user.id),
+    ]);
     const updated = await withTransaction(async (tx) => {
+      const freshRows = await lockFinanceEvents(
+        tx,
+        events.map((row) => row.id),
+      );
+      const freshPayments = mergeEventAllocations(
+        existingPayments,
+        filterLedgerAllocations(freshRows, { mode: "member", userId: req.user.id }),
+      ).map((row) =>
+        Number(row.id) === Number(req.params.id) ? { ...row, allocations: [] } : row,
+      );
+      const allocations = waterfallAllocations(events, freshPayments, settings, payment, req.user.id);
       const result = await tx(
         `UPDATE payments
          SET payment_date_text = :date,
@@ -3863,34 +3908,48 @@ app.post("/api/finance/pay-line", requireAuth, async (req, res, next) => {
     );
     const financeContext = financeContextFromRequest(req, financeMode);
     const [events, payments] = await loadFinanceLedger(req, financeMode, bandId);
-    const plan = payLinePlan(events, payments, settings, eventId, lineKind, expenseKey, financeContext);
     const requestedCurrency =
       req.body?.currency === "RSD" ? "RSD" : req.body?.currency === "EUR" ? "EUR" : undefined;
-    const { amount: paymentAmount, currency: paymentCurrency } = resolvePaymentFromPlan({
-      owedEur: plan.owedEur,
-      currency: requestedCurrency,
-      exchangeRate: rate,
-      line: plan.line,
-    });
 
-    const payment = await withTransaction(async (tx) =>
-      createPaymentWithAllocations({
+    const outcome = await withTransaction(async (tx) => {
+      const freshRows = await lockFinanceEvents(tx, [eventId]);
+      const freshPayments = mergeEventAllocations(
+        payments,
+        filterLedgerAllocations(freshRows, financeContext),
+      );
+      const plan = payLinePlan(
+        events,
+        freshPayments,
+        settings,
+        eventId,
+        lineKind,
+        expenseKey,
+        financeContext,
+      );
+      const resolved = resolvePaymentFromPlan({
+        owedEur: plan.owedEur,
+        currency: requestedCurrency,
+        exchangeRate: rate,
+        line: plan.line,
+      });
+      const payment = await createPaymentWithAllocations({
         tx,
         userId: req.user.id,
         bandId,
-        amount: paymentAmount,
-        currency: paymentCurrency,
+        amount: resolved.amount,
+        currency: resolved.currency,
         exchangeRate: rate,
         allocations: plan.allocations,
         actorUserId: req.user.id,
-      }),
-    );
+      });
+      return { payment, owedEur: plan.owedEur };
+    });
 
     res.status(201).json({
-      payment,
+      payment: outcome.payment,
       settings,
       exchangeRate: rate,
-      owedEur: plan.owedEur,
+      owedEur: outcome.owedEur,
     });
   } catch (error) {
     if (error.status) {
@@ -3933,33 +3992,43 @@ app.post("/api/finance/pay-event", requireAuth, async (req, res, next) => {
 
     const financeContext = financeContextFromRequest(req, financeMode);
     const [events, payments] = await loadFinanceLedger(req, financeMode, bandId);
-
-    const plan = payEventPlan(events, payments, settings, eventId, financeContext);
     const requestedCurrency = req.body?.currency === "RSD" ? "RSD" : "EUR";
-    const { amount: paymentAmount, currency: paymentCurrency } = resolvePaymentFromPlan({
-      owedEur: plan.owedEur,
-      currency: requestedCurrency,
-      exchangeRate: rate,
-    });
 
-    const payment = await withTransaction(async (tx) =>
-      createPaymentWithAllocations({
+    const outcome = await withTransaction(async (tx) => {
+      const freshRows = await lockFinanceEvents(tx, [eventId]);
+      const freshPayments = mergeEventAllocations(
+        payments,
+        filterLedgerAllocations(freshRows, financeContext),
+      );
+      const plan = payEventPlan(events, freshPayments, settings, eventId, financeContext);
+      const resolved = resolvePaymentFromPlan({
+        owedEur: plan.owedEur,
+        currency: requestedCurrency,
+        exchangeRate: rate,
+      });
+      const payment = await createPaymentWithAllocations({
         tx,
         userId: req.user.id,
         bandId,
-        amount: paymentAmount,
-        currency: paymentCurrency,
+        amount: resolved.amount,
+        currency: resolved.currency,
         exchangeRate: rate,
         allocations: plan.allocations,
         actorUserId: req.user.id,
-      }),
-    );
+      });
+      return {
+        payment,
+        owedEur: plan.owedEur,
+        amount: resolved.amount,
+        currency: resolved.currency,
+      };
+    });
 
     res.status(201).json({
-      payment,
+      payment: outcome.payment,
       settings,
       exchangeRate: rate,
-      owedEur: plan.owedEur,
+      owedEur: outcome.owedEur,
     });
 
     const who = await actorLabel(req.user.id);
@@ -3969,7 +4038,7 @@ app.post("/api/finance/pay-event", requireAuth, async (req, res, next) => {
       actorUserId: req.user.id,
       audience: "finance",
       subjectUserId: req.user.id,
-      message: `${who} je platio/la datum: ${paymentAmount} ${paymentCurrency}${paymentCurrency === "RSD" ? ` (kurs ${rate})` : ""}`,
+      message: `${who} je platio/la datum: ${outcome.amount} ${outcome.currency}${outcome.currency === "RSD" ? ` (kurs ${rate})` : ""}`,
       payload: { page: "report", bandId },
     });
   } catch (error) {
@@ -4027,27 +4096,48 @@ app.post("/api/finance/bulk-pay", requireAuth, async (req, res, next) => {
       bandId = scopedBandId;
       [events, payments] = await loadFinanceLedger(req, financeMode, bandId);
     } else {
+      if (!scopedBandId) {
+        return res.status(400).json({
+          error: "Invalid band",
+          detail: "Izaberi bend koji uplaćuje.",
+        });
+      }
+      const membership = await query(
+        `SELECT 1 AS ok FROM band_members WHERE band_id = :bandId AND user_id = :userId LIMIT 1`,
+        { bandId: scopedBandId, userId: req.user.id },
+      );
+      if (!membership.rows[0]) {
+        return res.status(403).json({ error: "Forbidden", detail: "Nisi član tog benda." });
+      }
       [events, payments] = await Promise.all([
         getMyFinanceEvents(req.user.id),
         getMyPayments(req.user.id),
       ]);
-      if (scopedBandId) {
-        events = events.filter((row) => String(row.bandId) === String(scopedBandId));
-      }
-      bandId =
-        scopedBandId ||
-        events.find((row) => row.bandId)?.bandId ||
-        (await getPersonalBandId(req.user.id));
+      events = events.filter((row) => String(row.bandId) === String(scopedBandId));
+      bandId = scopedBandId;
     }
 
     if (!bandId) {
       return res.status(400).json({ error: "Invalid band", detail: "Nema aktivnog benda." });
     }
 
-    const plan = bulkPayPlan(events, payments, settings, amount, currency, rate, financeContext);
-    const paymentCurrency = plan.paymentCurrency || currency;
-    const payment = await withTransaction(async (tx) =>
-      createPaymentWithAllocations({
+    const outcome = await withTransaction(async (tx) => {
+      const freshRows = await lockFinanceEvents(
+        tx,
+        events.map((row) => row.id),
+      );
+      const freshPayments = mergeEventAllocations(
+        payments,
+        filterLedgerAllocations(freshRows, financeContext),
+      );
+      const plan = bulkPayPlan(events, freshPayments, settings, amount, currency, rate, financeContext);
+      if (!plan.allocations.length) {
+        const err = new Error("Nema otvorenog duga za uplatu.");
+        err.status = 400;
+        throw err;
+      }
+      const paymentCurrency = plan.paymentCurrency || currency;
+      const payment = await createPaymentWithAllocations({
         tx,
         userId: req.user.id,
         bandId,
@@ -4062,20 +4152,21 @@ app.post("/api/finance/bulk-pay", requireAuth, async (req, res, next) => {
           unallocatedEur: plan.unallocatedEur,
           preview: plan.allocations,
         },
-      }),
-    );
+      });
+      return { payment, plan };
+    });
 
     res.status(201).json({
-      payment,
+      payment: outcome.payment,
       settings,
       exchangeRate: rate,
       summary: {
-        fullyPaidCount: plan.fullyPaidCount,
-        partialEventId: plan.partialEventId,
-        partialPaidEur: plan.partialPaidEur,
-        partialOwedEur: plan.partialOwedEur,
-        unallocatedEur: plan.unallocatedEur,
-        text: paymentSummaryText(plan),
+        fullyPaidCount: outcome.plan.fullyPaidCount,
+        partialEventId: outcome.plan.partialEventId,
+        partialPaidEur: outcome.plan.partialPaidEur,
+        partialOwedEur: outcome.plan.partialOwedEur,
+        unallocatedEur: outcome.plan.unallocatedEur,
+        text: paymentSummaryText(outcome.plan),
       },
     });
 
@@ -4086,7 +4177,7 @@ app.post("/api/finance/bulk-pay", requireAuth, async (req, res, next) => {
       actorUserId: req.user.id,
       audience: "finance",
       subjectUserId: req.user.id,
-      message: `${who} bulk uplata: ${plan.paymentAmount} ${currency} (kurs ${rate}) — ${paymentSummaryText(plan)}`,
+      message: `${who} bulk uplata: ${outcome.plan.paymentAmount} ${currency} (kurs ${rate}) — ${paymentSummaryText(outcome.plan)}`,
       payload: { page: "report", bandId },
     });
   } catch (error) {
@@ -4187,7 +4278,7 @@ function dateTextWithinLookbackSql(columnSql, lookback) {
 
 async function getBandEventsForUser(bandId, userId) {
   const result = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note,
+    `SELECT e.id, e.band_id, b.name AS band_name, b.country_code AS band_country, e.event_date_text, e.city, e.venue, e.maps_url, e.note, e.country_code,
             COALESCE(f.price_eur, 0) AS price_eur,
             COALESCE(f.transport_rsd, 0) AS transport_rsd
      FROM events e
@@ -4212,7 +4303,7 @@ async function getBandEventsForUser(bandId, userId) {
 
 async function getAllScheduleEventsForUser(userId) {
   const result = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note,
+    `SELECT e.id, e.band_id, b.name AS band_name, b.country_code AS band_country, e.event_date_text, e.city, e.venue, e.maps_url, e.note, e.country_code,
             COALESCE(f.price_eur, 0) AS price_eur,
             COALESCE(f.transport_rsd, 0) AS transport_rsd
      FROM events e
@@ -4236,7 +4327,7 @@ async function getAllScheduleEventsForUser(userId) {
 
 async function getMyFinanceEvents(userId) {
   const result = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note,
+    `SELECT e.id, e.band_id, b.name AS band_name, b.country_code AS band_country, e.event_date_text, e.city, e.venue, e.maps_url, e.note, e.country_code,
             COALESCE(f.price_eur, 0) AS price_eur,
             COALESCE(f.transport_rsd, 0) AS transport_rsd
      FROM events e
@@ -4302,25 +4393,14 @@ async function getMyFinanceEvents(userId) {
   }));
 }
 
-async function planMemberPaymentAllocations(userId, payment, exceptPaymentId = null) {
-  const [events, payments, settings] = await Promise.all([
-    getMyFinanceEvents(userId),
-    getMyPayments(userId),
-    getPersonalSettings(userId),
-  ]);
-  const ledger = payments.map((row) => {
-    if (exceptPaymentId != null && Number(row.id) === Number(exceptPaymentId)) {
-      return { ...row, allocations: [] };
-    }
-    return row;
-  });
-  const calc = calculate(events, ledger, settings, null, { mode: "member", userId });
+function waterfallAllocations(events, payments, settings, payment, userId) {
+  const calc = calculate(events, payments, settings, null, { mode: "member", userId });
   const amountEur = paymentAmountEur(
     {
       amount: payment.amount,
       currency: payment.currency,
       date: payment.date,
-      exchangeRate: null,
+      exchangeRate: payment.exchangeRate ?? null,
     },
     settings,
   );
@@ -4329,11 +4409,21 @@ async function planMemberPaymentAllocations(userId, payment, exceptPaymentId = n
 
 async function getMyPayments(userId) {
   const result = await query(
-    `SELECT id, band_id, payment_date_text, amount, currency, exchange_rate
-     FROM payments
-     WHERE user_id = :userId
-       AND ${dateTextWithinLookbackSql("payment_date_text", FINANCE_LOOKBACK)}
-     ORDER BY sort_order, id`,
+    `SELECT p.id, p.band_id, p.payment_date_text, p.amount, p.currency, p.exchange_rate
+     FROM payments p
+     WHERE p.user_id = :userId
+       AND (
+         ${dateTextWithinLookbackSql("p.payment_date_text", FINANCE_LOOKBACK)}
+         OR EXISTS (
+           SELECT 1
+           FROM payment_allocations pa
+           JOIN events e ON e.id = pa.event_id
+           JOIN band_members m ON m.band_id = e.band_id AND m.user_id = :userId
+           WHERE pa.payment_id = p.id
+             AND ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
+         )
+       )
+     ORDER BY p.sort_order, p.id`,
     { userId },
   );
   return attachAllocationsToPayments(result.rows, query);
@@ -4346,7 +4436,7 @@ async function getBandMeta(bandId) {
 
 async function getBandFinanceEvents(bandId) {
   const eventsResult = await query(
-    `SELECT e.id, e.band_id, b.name AS band_name, e.event_date_text, e.city, e.venue, e.maps_url, e.note
+    `SELECT e.id, e.band_id, b.name AS band_name, b.country_code AS band_country, e.event_date_text, e.city, e.venue, e.maps_url, e.note, e.country_code
      FROM events e
      JOIN bands b ON b.id = e.band_id
      WHERE e.band_id = :bandId
@@ -4429,6 +4519,8 @@ async function getBandFinanceEvents(bandId) {
       venue: row.venue,
       mapsUrl: row.maps_url || "",
       note: row.note,
+      country: row.country_code || "",
+      bandCountry: row.band_country || "",
       priceEur,
       transportRsd,
       memberWages: memberWages.map(({ id, name, priceEur: wage }) => ({ id, name, priceEur: wage })),
@@ -4439,11 +4531,21 @@ async function getBandFinanceEvents(bandId) {
 
 async function getBandPayments(bandId) {
   const result = await query(
-    `SELECT id, band_id, payment_date_text, amount, currency, exchange_rate
-     FROM payments
-     WHERE band_id = :bandId
-       AND ${dateTextWithinLookbackSql("payment_date_text", FINANCE_LOOKBACK)}
-     ORDER BY sort_order, id`,
+    `SELECT p.id, p.band_id, p.payment_date_text, p.amount, p.currency, p.exchange_rate
+     FROM payments p
+     WHERE p.band_id = :bandId
+       AND (
+         ${dateTextWithinLookbackSql("p.payment_date_text", FINANCE_LOOKBACK)}
+         OR EXISTS (
+           SELECT 1
+           FROM payment_allocations pa
+           JOIN events e ON e.id = pa.event_id
+           WHERE pa.payment_id = p.id
+             AND e.band_id = :bandId
+             AND ${eventDateWithinLookbackSql("e", FINANCE_LOOKBACK)}
+         )
+       )
+     ORDER BY p.sort_order, p.id`,
     { bandId },
   );
   const rows = await attachAllocationsToPayments(result.rows, query);
@@ -4525,6 +4627,8 @@ function mapEventRow(row) {
     venue: row.venue,
     mapsUrl: row.maps_url || "",
     note: row.note,
+    country: row.country_code || "",
+    bandCountry: row.band_country || "",
     priceEur: Number(row.price_eur),
     transportRsd: Number(row.transport_rsd),
   };
@@ -4625,6 +4729,13 @@ function readMapsUrl(value) {
   return url.toString();
 }
 
+function normalizeCountryCode(value) {
+  const code = String(value ?? "").trim().toUpperCase();
+  if (!code) return "";
+  if (!/^[A-Z]{2}$/.test(code)) throw badRequest("Država termina nije ispravna.");
+  return code;
+}
+
 function normalizeEvent(value) {
   return {
     date: readOptionalDate(value.date),
@@ -4632,6 +4743,7 @@ function normalizeEvent(value) {
     venue: readLimitedText(value.venue, 255, "Lokal"),
     mapsUrl: readMapsUrl(value.mapsUrl ?? value.maps_url),
     note: readLimitedText(value.note, 255, "Beleška"),
+    country: normalizeCountryCode(value.country),
     priceEur: readMoney(value.priceEur, "Honorar"),
     transportRsd: readMoney(value.transportRsd, "Prevoz"),
   };

@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS bands (
   name TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'group' CHECK (kind IN ('personal', 'group')),
   color TEXT NOT NULL DEFAULT '#276ef1',
+  country_code TEXT NOT NULL DEFAULT '',
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS events (
     CHECK (tech_rider_origin IN ('none', 'default', 'custom')),
   tech_rider_notes TEXT NOT NULL DEFAULT '',
   note VARCHAR(255) NOT NULL DEFAULT '',
+  country_code TEXT NOT NULL DEFAULT '',
   price_eur NUMERIC(12, 2) NOT NULL DEFAULT 0,
   transport_rsd NUMERIC(12, 2) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

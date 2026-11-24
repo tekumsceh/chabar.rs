@@ -298,8 +298,14 @@ export function applyPoolSettlement(rows, totalPaidEur) {
   }
 }
 
-/** Line badges within a gig: expenses first, then fee (display only). */
-function applyLineDisplayFromEventSettlement(row) {
+function lineMatchesAllocation(line, allocation) {
+  const kind = allocation?.lineKind || "event";
+  if (kind === "event") return false;
+  return kind === line.lineKind && String(allocation.expenseKey || "") === String(line.expenseKey || "");
+}
+
+/** Line badges from money stored on this date. Named lines stay on that line; extra stays on this date. */
+function applyLineDisplayFromEventSettlement(row, allocationRows) {
   const lines = row.financeLines || [];
   if (!lines.length) return;
 
@@ -312,39 +318,55 @@ function applyLineDisplayFromEventSettlement(row) {
     return;
   }
 
-  if (row.paymentClass === "unpaid") {
-    for (const line of lines) {
-      line.paidEur = 0;
-      line.remainingEur = line.totalEur;
-      line.lineClass = "unpaid";
+  const eventAllocs = (allocationRows || []).filter((item) => Number(item.eventId) === Number(row.id));
+  const specificCents = lines.map((line) =>
+    eventAllocs.reduce((sum, item) => {
+      if (!lineMatchesAllocation(line, item)) return sum;
+      return sum + Math.max(0, toCents(item.amountEur));
+    }, 0),
+  );
+  let dateBudget = eventAllocs.reduce((sum, item) => {
+    if ((item.lineKind || "event") !== "event") return sum;
+    return sum + Math.max(0, toCents(item.amountEur));
+  }, 0);
+  lines.forEach((line, index) => {
+    const need = Math.max(0, toCents(line.totalEur));
+    dateBudget += Math.max(0, specificCents[index] - need);
+  });
+
+  lines.forEach((line, index) => {
+    const need = Math.max(0, toCents(line.totalEur));
+    let covered = Math.min(need, specificCents[index]);
+    if (covered < need && dateBudget > 0) {
+      const take = Math.min(dateBudget, need - covered);
+      covered += take;
+      dateBudget -= take;
     }
-    return;
-  }
-
-  const rowTotal = numberValue(row.totalEur);
-  const rowRemaining = numberValue(row.paymentStatus);
-  let paidBudget = Math.max(0, rowTotal - rowRemaining);
-
-  for (const line of lines) {
-    const need = numberValue(line.totalEur);
-    if (isSettledRemainderEur(need - paidBudget)) {
-      line.paidEur = need;
+    if (need - covered < SETTLE_CENTS) {
+      line.paidEur = line.totalEur;
       line.remainingEur = 0;
       line.lineClass = "paid";
-      paidBudget = Math.max(0, paidBudget - need);
-      continue;
+      return;
     }
-    if (!isClearedEur(paidBudget)) {
-      line.paidEur = paidBudget;
-      line.remainingEur = need - paidBudget;
+    if (covered > 0) {
+      line.paidEur = fromCents(covered);
+      line.remainingEur = fromCents(need - covered);
       line.lineClass = "partial";
-      paidBudget = 0;
-      continue;
+      return;
     }
     line.paidEur = 0;
-    line.remainingEur = need;
+    line.remainingEur = line.totalEur;
     line.lineClass = "unpaid";
-  }
+  });
+}
+
+/** Member books count that person's payments. Band books count every payment on the date. */
+export function filterLedgerAllocations(rows, financeContext) {
+  const list = rows || [];
+  if (financeContext?.mode === "band") return list;
+  const userId = String(financeContext?.userId || "");
+  if (!userId) return list;
+  return list.filter((row) => String(row.user_id ?? row.userId ?? "") === userId);
 }
 
 export function flattenPaymentAllocations(payments) {
@@ -361,6 +383,52 @@ export function flattenPaymentAllocations(payments) {
     }
   }
   return out;
+}
+
+/**
+ * Swap in allocation rows just read from the database.
+ * A payment the in-memory list has not seen yet is added, so a second pay
+ * sees the first one and does not cover the same date again.
+ */
+export function mergeEventAllocations(payments, dbRows) {
+  const freshByPayment = new Map();
+  const touchedEvents = new Set();
+  for (const row of dbRows || []) {
+    const eventId = Number(row.event_id ?? row.eventId);
+    const paymentId = Number(row.payment_id ?? row.paymentId);
+    const amountEur = numberValue(row.amount_eur ?? row.amountEur);
+    if (!eventId || !paymentId || amountEur <= 0) continue;
+    touchedEvents.add(eventId);
+    const list = freshByPayment.get(paymentId) || [];
+    list.push({
+      eventId,
+      amountEur,
+      lineKind: row.line_kind || row.lineKind || "event",
+      expenseKey: row.expense_key ?? row.expenseKey ?? "",
+    });
+    freshByPayment.set(paymentId, list);
+  }
+
+  const seen = new Set();
+  const next = (payments || []).map((payment) => {
+    const id = Number(payment.id);
+    seen.add(id);
+    const kept = (payment.allocations || []).filter((item) => !touchedEvents.has(Number(item.eventId)));
+    const fresh = freshByPayment.get(id) || [];
+    return { ...payment, allocations: [...kept, ...fresh] };
+  });
+
+  for (const [id, fresh] of freshByPayment) {
+    if (seen.has(id)) continue;
+    next.push({
+      id,
+      amount: 0,
+      currency: "EUR",
+      date: "",
+      allocations: fresh,
+    });
+  }
+  return next;
 }
 
 /** EUR value of a payment row, using snapshotted rate when present. */
@@ -470,10 +538,9 @@ function compareFinanceRows(a, b) {
 }
 
 /**
- * Ledger from date totals minus uplate.
- * - Leftover owed sits on the last unpaid date(s); older due dates are paid.
- * - Remainder under 1 EUR is paid.
- * - Inside one date, fee then expenses are display only.
+ * Ledger from money stored on each date.
+ * A date is paid only by allocations on that date. Money with no date does not mark other dates paid.
+ * Remainder under 1 EUR is paid.
  */
 export function calculate(events, payments, settings, _allocationRows = null, financeContext = null) {
   const dynamicRate = positiveNumber(settings.exchangeRate, DEFAULT_RATE);
@@ -532,7 +599,8 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
   }
 
   const paidEur = totalPaymentsEur(payments, settings);
-  settleRemainderOnLastUnpaid(enriched, paidEur);
+  const allocationRows = flattenPaymentAllocations(payments);
+  applyStoredSettlement(enriched, allocationRows);
 
   for (const row of enriched) {
     if (row.held && row.hasDate && !row.financeDue) {
@@ -543,7 +611,7 @@ export function calculate(events, payments, settings, _allocationRows = null, fi
 
   for (const row of enriched) {
     if (!isFinanceDueRow(row)) continue;
-    applyLineDisplayFromEventSettlement(row);
+    applyLineDisplayFromEventSettlement(row, allocationRows);
     if (row.paymentClass === "partial") {
       partialCount += 1;
       unpaidCount += 1;
